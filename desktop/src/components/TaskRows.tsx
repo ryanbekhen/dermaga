@@ -48,7 +48,7 @@ export function TaskRows({ kind }: { kind: TaskKind }) {
               </div>
 
               {task.status === 'running' && (
-                <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
+                <div className="mt-1 h-0.75 w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
                   <div
                     className={`h-full rounded-full bg-brand-600 transition-[width] duration-300 ${
                       task.total ? '' : 'w-1/3 animate-pulse'

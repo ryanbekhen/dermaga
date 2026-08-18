@@ -95,7 +95,7 @@ function Detail({ status, scanned }: { status: ScannerStatus; scanned: number })
       )}
 
       {percent > 0 && (
-        <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
+        <div className="mt-2 h-0.75 w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
           <div
             className="h-full rounded-full bg-brand-600 transition-[width] duration-300"
             style={{ width: `${percent}%` }}

@@ -240,7 +240,7 @@ function MeterCell({ value, label, sub }: { value: number; label: string; sub: s
         <span className="truncate text-xs font-semibold">{label}</span>
         {sub && <span className="truncate text-tiny text-ink-500">{sub}</span>}
       </span>
-      <span className="block h-[3px] w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
+      <span className="block h-0.75 w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
         <span
           className={`block h-full rounded-full transition-[width] duration-500 ${fill}`}
           style={{ width: `${pct}%` }}

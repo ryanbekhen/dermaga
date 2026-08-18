@@ -54,7 +54,7 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full border-[3px] border-solid border-transparent bg-clip-padding;
+    @apply rounded-full border-3 border-solid border-transparent bg-clip-padding;
   }
 
   ::-webkit-scrollbar-track {
