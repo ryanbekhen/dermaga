@@ -116,6 +116,21 @@ export function TaskRows({ kind }: { kind: TaskKind }) {
 const FAILURE = /(^|\s)(ERROR|Error):\s|(^|\s)failed to solve|^\s*(ERROR|FATAL)\b/;
 
 /**
+ * Rewrites the failures whose own wording explains nothing.
+ *
+ * A registry that speaks plain HTTP answers a TLS handshake with
+ * "-9836: bad protocol version", which tells the reader neither what happened
+ * nor what to do about it.
+ */
+function explain(problem: string): string {
+  if (/bad protocol version|handshake|SSL|TLS/i.test(problem)) {
+    return `${problem} — the registry answered without TLS. Tick "Plain HTTP" if it is running on this machine.`;
+  }
+
+  return problem;
+}
+
+/**
  * Runs a streaming agent method as a task: progress lands in the list, and the
  * caller never sees a log window unless it fails.
  */
@@ -150,7 +165,7 @@ export async function runTask({
         const problem = error ?? task?.lines.find((line) => FAILURE.test(line));
 
         if (problem) {
-          fail(id, problem.trim().slice(0, 160));
+          fail(id, explain(problem).trim().slice(0, 160));
           onDone?.(true);
         } else {
           finish(id);

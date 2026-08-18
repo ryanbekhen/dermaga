@@ -265,10 +265,15 @@ func (m *Manager) Inspect(ctx context.Context, reference string) (*ImageDetail, 
 
 // PullImage builds the pull command. Progress is relayed to the client as an
 // SSE stream, so the caller owns starting it.
-func (m *Manager) PullCommand(ctx context.Context, reference, platform string) *exec.Cmd {
+func (m *Manager) PullCommand(ctx context.Context, reference, platform, scheme string) *exec.Cmd {
 	args := []string{"image", "pull", "--progress", "plain"}
 	if platform != "" {
 		args = append(args, "--platform", platform)
+	}
+	// A registry on this machine has no TLS, and without being told so the CLI
+	// fails the handshake with "-9836: bad protocol version".
+	if scheme != "" {
+		args = append(args, "--scheme", scheme)
 	}
 	args = append(args, reference)
 

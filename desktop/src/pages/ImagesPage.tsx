@@ -491,8 +491,19 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
 }
 
 /** Just the reference: the pull itself reports progress in the list. */
+// A registry on this machine is almost never behind TLS, and the failure when
+// it is not -- "-9836: bad protocol version" -- explains nothing at all.
+function isLocalRegistry(reference: string): boolean {
+  const host = reference.split('/')[0];
+  return /^(localhost|127\.0\.0\.1|\[::1\]|host\.docker\.internal)(:\d+)?$/.test(host);
+}
+
 function PullDialog({ onClose }: { onClose: () => void }) {
   const [reference, setReference] = useState('');
+  const [insecure, setInsecure] = useState(false);
+  const [decided, setDecided] = useState(false);
+
+  const plainHttp = decided ? insecure : isLocalRegistry(reference);
 
   const pull = () => {
     const target = reference.trim();
@@ -502,7 +513,7 @@ function PullDialog({ onClose }: { onClose: () => void }) {
       kind: 'image',
       label: target,
       method: 'images.pull',
-      params: { reference: target },
+      params: { reference: target, scheme: plainHttp ? 'http' : undefined },
     });
   };
 
@@ -532,6 +543,24 @@ function PullDialog({ onClose }: { onClose: () => void }) {
           className="input"
         />
       </Field>
+
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={plainHttp}
+          onChange={(e) => {
+            setDecided(true);
+            setInsecure(e.target.checked);
+          }}
+          className="h-4 w-4 accent-brand-600"
+        />
+        Plain HTTP
+        {!decided && isLocalRegistry(reference) && (
+          <span className="text-tiny text-ink-500">
+            · set for you, this looks like a local registry
+          </span>
+        )}
+      </label>
     </Modal>
   );
 }
