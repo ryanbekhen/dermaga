@@ -5,12 +5,14 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os/exec"
 	"strings"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/containers"
+	"github.com/ryanbekhen/dermaga/internal/files"
 	"github.com/ryanbekhen/dermaga/internal/images"
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
@@ -40,6 +42,7 @@ type Agent struct {
 	streams *streams
 
 	containers *containers.Manager
+	files      *files.Manager
 	images     *images.Manager
 	volumes    *volumes.Manager
 	networks   *networks.Manager
@@ -81,6 +84,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 
 	agent.containers = containers.NewManager(runner, logger, changed)
 	agent.images = images.NewManager(runner, logger, changed)
+	agent.files = files.NewManager(runner, logger)
 	agent.volumes = volumes.NewManager(runner, logger, changed)
 	agent.networks = networks.NewManager(runner, logger, changed)
 	agent.machines = machines.NewManager(runner, logger, changed)
@@ -181,6 +185,7 @@ func (a *Agent) register() {
 	a.registerSettings()
 	a.registerToolchain()
 	a.registerScanner()
+	a.registerFiles()
 	a.registerRegistry()
 	a.registerContainers()
 	a.registerImages()
@@ -290,6 +295,70 @@ func (a *Agent) registerToolchain() {
 		}
 
 		return map[string]any{"streamId": id}, nil
+	})
+}
+
+// --- files inside a container ----------------------------------------------
+
+func (a *Agent) registerFiles() {
+	a.server.Register("files.list", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Container string `json:"container"`
+			Path      string `json:"path"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		entries, err := a.files.List(ctx, args.Container, args.Path)
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return entries, nil
+	})
+
+	a.server.Register("files.copyIn", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Container string   `json:"container"`
+			Sources   []string `json:"sources"`
+			Path      string   `json:"path"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		// One failure should not hide the ones that worked: a drop of ten
+		// files where one is unreadable still moved nine.
+		var failed []string
+		for _, source := range args.Sources {
+			if err := a.files.CopyIn(ctx, args.Container, source, args.Path); err != nil {
+				failed = append(failed, source)
+			}
+		}
+
+		if len(failed) > 0 {
+			return nil, rpc.Fail(fmt.Sprintf("could not copy %s", strings.Join(failed, ", ")))
+		}
+
+		return map[string]any{"copied": len(args.Sources)}, nil
+	})
+
+	a.server.Register("files.copyOut", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Container string `json:"container"`
+			Path      string `json:"path"`
+			Target    string `json:"target"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.files.CopyOut(ctx, args.Container, args.Path, args.Target); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"path": args.Target}, nil
 	})
 }
 

@@ -284,6 +284,19 @@ export interface BuildSpec {
   noCache?: boolean;
 }
 
+/** One entry in a container's filesystem. */
+export interface FileEntry {
+  name: string;
+  path: string;
+  size: number;
+  mode: string;
+  owner?: string;
+  modified?: string;
+  isDir: boolean;
+  isLink: boolean;
+  target?: string;
+}
+
 /** A registry the user is signed in to. Credentials live with Apple's CLI. */
 export interface RegistryLogin {
   server: string;
@@ -359,7 +372,7 @@ export interface NetworkSpec {
   internal?: boolean;
 }
 
-export type ContainerTab = 'overview' | 'logs' | 'terminal';
+export type ContainerTab = 'overview' | 'logs' | 'files' | 'terminal';
 export type MachineTab = 'overview' | 'logs' | 'terminal';
 
 export type Route =

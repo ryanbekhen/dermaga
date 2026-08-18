@@ -17,6 +17,8 @@ interface Bridge {
   isFullScreen?: () => Promise<boolean>;
   onFullScreenChange?: (callback: (value: boolean) => void) => () => void;
   pickDirectory?: (title?: string) => Promise<string | null>;
+  pathForFile?: (file: File) => string;
+  dragOut?: (container: string, path: string) => Promise<void>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
   fetchLicence?: (key: string) => Promise<string>;
@@ -62,6 +64,21 @@ export function invoke<T>(method: string, params?: unknown): Promise<T> {
 /** Subscribes to everything the agent pushes; the caller filters by method. */
 export function onNotify(callback: (message: Notification) => void): () => void {
   return bridge().onNotify(callback);
+}
+
+/**
+ * The path of a file dropped from Finder. Electron stopped putting it on the
+ * File object, so only the preload can answer.
+ */
+export function pathForFile(file: File): string | null {
+  return bridge().pathForFile?.(file) ?? null;
+}
+
+/** Copies an entry out and hands it to Finder as a drag. */
+export function dragOut(container: string, path: string): Promise<void> {
+  const drag = bridge().dragOut;
+  if (!drag) return Promise.reject(new Error('Only the desktop app can do this'));
+  return drag(container, path);
 }
 
 /** Keeps the main process in step with preferences it acts on by itself. */

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  FolderTree,
   Info,
   Pencil,
   Play,
@@ -12,6 +13,7 @@ import {
   TerminalSquare,
   Trash2,
 } from 'lucide-react';
+import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
 import { Meter } from '../components/Meter';
 import { StatusBadge } from '../components/StatusBadge';
@@ -38,6 +40,7 @@ const TerminalPane = lazy(() =>
 const TABS: TabDefinition[] = [
   { id: 'overview', label: 'Overview', icon: Info },
   { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'files', label: 'Files', icon: FolderTree },
   { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
 ];
 
@@ -186,6 +189,12 @@ export function ContainerDetailPage({ container, tab }: ContainerDetailPageProps
       {tab === 'logs' && (
         <DetailPane>
           <LogPane method="containers.logs" params={{ id: container.id, tail: logTail }} />
+        </DetailPane>
+      )}
+
+      {tab === 'files' && (
+        <DetailPane>
+          <FileBrowser container={container.id} running={running} />
         </DetailPane>
       )}
 

@@ -6,6 +6,7 @@ import type {
   Container,
   ContainerSpec,
   DiskUsage,
+  FileEntry,
   Image,
   ImageDetail,
   Machine,
@@ -71,6 +72,21 @@ export const api = {
   /** Whether the buildkit container is up; every build needs it running. */
   async getBuilder(): Promise<BuilderStatus> {
     return invoke('images.builderStatus');
+  },
+
+  // --- files inside a container --------------------------------------------
+
+  async listFiles(container: string, path: string): Promise<FileEntry[]> {
+    return (await invoke<FileEntry[]>('files.list', { container, path })) ?? [];
+  },
+
+  /** Copies things from the host into a directory in the container. */
+  async copyIntoContainer(container: string, sources: string[], path: string): Promise<void> {
+    await invoke('files.copyIn', { container, sources, path });
+  },
+
+  async copyOutOfContainer(container: string, path: string, target: string): Promise<void> {
+    await invoke('files.copyOut', { container, path, target });
   },
 
   // --- registries ----------------------------------------------------------

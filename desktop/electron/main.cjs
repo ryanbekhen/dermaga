@@ -13,6 +13,7 @@ const {
 } = require('electron');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
+const os = require('node:os');
 const path = require('node:path');
 
 const { Agent } = require('./agent.cjs');
@@ -296,6 +297,31 @@ function alertIfUnattended() {
 // Mirrors the stored preferences, so a notification can be suppressed without
 // asking the agent first -- it arrives at the moment it is needed.
 const settings = { notifyOnExit: true };
+
+/**
+ * Hands a file from inside a container to Finder as a native drag.
+ *
+ * A drag can only carry something that exists on disk, so the file is copied
+ * out to a temporary directory first and dragged from there. The copy is the
+ * slow part; it happens before the drag starts rather than during it, because
+ * a drag that begins with nothing under the cursor is worse than a short wait.
+ */
+ipcMain.handle('dermaga:drag-out', async (event, { container, path: source }) => {
+  if (!agent) throw new Error('The Dermaga agent is not running');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dermaga-drag-'));
+  const name = source.split('/').filter(Boolean).pop() || 'file';
+  const target = path.join(dir, name);
+
+  await agent.invoke('files.copyOut', { container, path: source, target });
+
+  event.sender.startDrag({
+    file: target,
+    // Electron insists on an icon; the file's own is not available to us, so
+    // the app icon stands in.
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+  });
+});
 
 ipcMain.on('dermaga:settings', (_event, next) => {
   if (typeof next?.notifyOnExit === 'boolean') settings.notifyOnExit = next.notifyOnExit;

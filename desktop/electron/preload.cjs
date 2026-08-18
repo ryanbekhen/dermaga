@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // The renderer has no network access of its own: every call goes through the
 // main process to the agent, and everything the agent pushes comes back on one
@@ -32,6 +32,13 @@ contextBridge.exposeInMainWorld('dermaga', {
 
   // Returns the chosen path, or null if the dialog was dismissed.
   pickDirectory: (title) => ipcRenderer.invoke('dermaga:pick-directory', title),
+
+  // A dropped File carries no path of its own any more; only the main process
+  // can resolve one, and only for files the user actually dropped.
+  pathForFile: (file) => webUtils.getPathForFile(file),
+
+  // Copies the entry out to a temporary file and hands it to Finder as a drag.
+  dragOut: (container, path) => ipcRenderer.invoke('dermaga:drag-out', { container, path }),
 
   // Fetches a licence that is too large to ship, by key rather than by URL.
   fetchLicence: (key) => ipcRenderer.invoke('dermaga:fetch-licence', key),
