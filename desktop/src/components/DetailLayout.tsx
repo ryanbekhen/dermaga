@@ -32,7 +32,11 @@ export function DetailLayout({
   children,
 }: DetailLayoutProps) {
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    // flex-1, not just min-h-0: without it the layout is only as tall as its
+    // content, so every pane inside it -- logs, terminal, files -- collapses to
+    // the height of whatever it happens to contain, and the empty space below
+    // belongs to the page rather than to the pane.
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <PageHeader
         onBack={onBack}
         title={title}
