@@ -283,6 +283,14 @@ export interface BuildSpec {
   noCache?: boolean;
 }
 
+/** A registry the user is signed in to. Credentials live with Apple's CLI. */
+export interface RegistryLogin {
+  server: string;
+  username?: string;
+  created?: string;
+  modified?: string;
+}
+
 /** What the background vulnerability scanner is doing. */
 export interface ScannerStatus {
   installed: boolean;
@@ -360,6 +368,7 @@ export type Route =
   | { name: 'image'; reference: string }
   | { name: 'volumes' }
   | { name: 'networks' }
+  | { name: 'registries' }
   | { name: 'machines' }
   | { name: 'machine'; id: string; tab: MachineTab }
   | { name: 'system' }

@@ -16,6 +16,7 @@ import type {
   Settings,
   SystemStatus,
   ToolchainStatus,
+  RegistryLogin,
   ScannerStatus,
   Volume,
   VolumeSpec,
@@ -70,6 +71,26 @@ export const api = {
   /** Whether the buildkit container is up; every build needs it running. */
   async getBuilder(): Promise<BuilderStatus> {
     return invoke('images.builderStatus');
+  },
+
+  // --- registries ----------------------------------------------------------
+
+  async getRegistries(): Promise<RegistryLogin[]> {
+    return (await invoke<RegistryLogin[]>('registry.list')) ?? [];
+  },
+
+  /** The password goes straight to the CLI, which owns it; nothing is kept here. */
+  async registryLogin(server: string, username: string, password: string, scheme?: string) {
+    await invoke('registry.login', { server, username, password, scheme });
+  },
+
+  async registryLogout(server: string): Promise<void> {
+    await invoke('registry.logout', { server });
+  },
+
+  /** Gives an image a second reference, usually the one it will be pushed as. */
+  async tagImage(source: string, target: string): Promise<void> {
+    await invoke('images.tag', { source, target });
   },
 
   // --- vulnerability scanning ---------------------------------------------
@@ -222,9 +243,11 @@ export const streams = {
   machineLogs: (id: string, tail: number, boot: boolean) =>
     ['machines.logs', { id, tail, follow: true, boot }] as const,
   systemLogs: (last = '30m') => ['system.logs', { last, follow: true }] as const,
-  pullImage: (reference: string, platform?: string) =>
-    ['images.pull', { reference, platform }] as const,
+  pullImage: (reference: string, platform?: string, scheme?: string) =>
+    ['images.pull', { reference, platform, scheme }] as const,
   buildImage: (spec: BuildSpec) => ['images.build', spec] as const,
+  pushImage: (reference: string, scheme?: string) =>
+    ['images.push', { reference, scheme }] as const,
   createMachine: (spec: MachineSpec) => ['machines.create', spec] as const,
   createContainer: (spec: ContainerSpec) => ['containers.create', spec] as const,
 };

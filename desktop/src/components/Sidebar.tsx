@@ -2,6 +2,7 @@ import {
   Boxes,
   ChevronsLeft,
   CircleHelp,
+  CloudUpload,
   Scale,
   Cpu,
   Database,
@@ -38,6 +39,7 @@ const PRIMARY_NAV: NavEntry[] = [
   { target: { name: 'images' }, owns: ['images', 'image'], icon: Layers, label: 'Images' },
   { target: { name: 'volumes' }, owns: ['volumes'], icon: Database, label: 'Volumes' },
   { target: { name: 'networks' }, owns: ['networks'], icon: Network, label: 'Networks' },
+  { target: { name: 'registries' }, owns: ['registries'], icon: CloudUpload, label: 'Registries' },
   { target: { name: 'machines' }, owns: ['machines', 'machine'], icon: Server, label: 'Machines' },
   { target: { name: 'system' }, owns: ['system'], icon: Cpu, label: 'System' },
 ];

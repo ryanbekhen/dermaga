@@ -14,6 +14,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/images"
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
+	"github.com/ryanbekhen/dermaga/internal/registry"
 	"github.com/ryanbekhen/dermaga/internal/rpc"
 	"github.com/ryanbekhen/dermaga/internal/scanner"
 	"github.com/ryanbekhen/dermaga/internal/settings"
@@ -44,6 +45,7 @@ type Agent struct {
 	networks   *networks.Manager
 	machines   *machines.Manager
 	system     *system.Manager
+	registry   *registry.Manager
 	scanner    *scanner.Manager
 	toolchain  *toolchain.Manager
 	settings   *settings.Store
@@ -82,6 +84,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.machines = machines.NewManager(runner, logger, changed)
 	agent.system = system.NewManager(runner, logger, changed)
 	agent.toolchain = toolchain.NewManager(runner, logger)
+	agent.registry = registry.NewManager(runner, logger)
 	agent.scanner = scanner.NewManager(runner, logger)
 
 	// The scanner works on its own goroutine and reports where it has got to;
@@ -169,6 +172,7 @@ func (a *Agent) register() {
 	a.registerSettings()
 	a.registerToolchain()
 	a.registerScanner()
+	a.registerRegistry()
 	a.registerContainers()
 	a.registerImages()
 	a.registerVolumes()
@@ -271,6 +275,92 @@ func (a *Agent) registerToolchain() {
 
 		id, err := a.streams.runCommand(ctx, "update", func(ctx context.Context) (*exec.Cmd, error) {
 			return a.toolchain.UpgradeCommand(ctx), nil
+		})
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"streamId": id}, nil
+	})
+}
+
+// --- registries -----------------------------------------------------------
+
+func (a *Agent) registerRegistry() {
+	a.server.Register("registry.list", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return a.registry.List(ctx)
+	})
+
+	a.server.Register("registry.login", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Server   string `json:"server"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Scheme   string `json:"scheme"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if strings.TrimSpace(args.Server) == "" {
+			return nil, rpc.Fail("a login needs a registry address")
+		}
+
+		if err := a.registry.Login(ctx, args.Server, args.Username, args.Password, args.Scheme); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{}, nil
+	})
+
+	a.server.Register("registry.logout", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Server string `json:"server"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.registry.Logout(ctx, args.Server); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{}, nil
+	})
+
+	a.server.Register("images.tag", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Source string `json:"source"`
+			Target string `json:"target"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if strings.TrimSpace(args.Target) == "" {
+			return nil, rpc.Fail("a tag needs a new reference")
+		}
+
+		if err := a.registry.Tag(ctx, args.Source, args.Target); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		a.watcher.Changed()
+
+		return map[string]any{}, nil
+	})
+
+	a.server.Register("images.push", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Reference string `json:"reference"`
+			Scheme    string `json:"scheme"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		id, err := a.streams.runCommand(ctx, "push", func(ctx context.Context) (*exec.Cmd, error) {
+			return a.registry.PushCommand(ctx, args.Reference, args.Scheme), nil
 		})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
@@ -525,13 +615,14 @@ func (a *Agent) registerImages() {
 		args, err := decodeParams[struct {
 			Reference string `json:"reference"`
 			Platform  string `json:"platform"`
+			Scheme    string `json:"scheme"`
 		}](params)
 		if err != nil {
 			return nil, err
 		}
 
 		id, err := a.streams.runCommand(ctx, "pull", func(ctx context.Context) (*exec.Cmd, error) {
-			return a.images.PullCommand(ctx, args.Reference, args.Platform), nil
+			return a.images.PullCommand(ctx, args.Reference, args.Platform, args.Scheme), nil
 		})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
