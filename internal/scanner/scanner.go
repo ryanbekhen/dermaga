@@ -270,10 +270,16 @@ func (m *Manager) run(ctx context.Context) {
 			// A pull publishes the image before its layers have finished
 			// unpacking, and scanning it then finds an image that is not all
 			// there yet -- which reads as "no vulnerabilities". So the sweep
-			// waits for the dust to settle. Waiting on a timer channel rather
-			// than sleeping keeps the loop answering: a scan the user asked for
-			// by hand should not sit behind half a minute of quiet.
-			settle = time.After(settleDelay)
+			// waits for the dust to settle first.
+			//
+			// The countdown starts on the first change and is never pushed
+			// back by later ones. Restarting it looked tidier, but the watcher
+			// reports something changed every couple of seconds -- container
+			// stats alone see to that -- so the deadline never arrived and no
+			// image was ever scanned automatically.
+			if settle == nil {
+				settle = time.After(settleDelay)
+			}
 
 		case <-settle:
 			settle = nil
