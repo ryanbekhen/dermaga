@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { openNotificationSettings } from '../services/ipc';
 import { useSettingsStore, type Theme } from '../store/settingsStore';
 import { SegmentedControl, type Segment } from './SegmentedControl';
 
@@ -65,6 +66,19 @@ export function SettingsPanel() {
               onChange={settings.setNotifyOnExit}
               label="Notify when a container stops on its own"
             />
+
+            {settings.notifyOnExit && (
+              <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
+                Shown by macOS, which can refuse them.{' '}
+                <button
+                  onClick={() => void openNotificationSettings()}
+                  className="text-brand-700 hover:underline dark:text-brand-400"
+                >
+                  Open notification settings
+                </button>{' '}
+                if they are not arriving.
+              </p>
+            )}
           </Card>
         </div>
       </div>

@@ -12,7 +12,6 @@ const {
   session,
 } = require('electron');
 const fs = require('node:fs');
-const { spawn } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -252,12 +251,6 @@ function notifyExit(exit) {
 
   console.log('[dermaga] notifying about', exit.name);
 
-  // macOS accepts notifications only from apps signed with a Developer ID and
-  // drops the rest without a word, so this may well go nowhere. The window has
-  // its own message either way; what it cannot do is reach someone who is
-  // looking at another app, which is what the sound is for.
-  alertIfUnattended();
-
   const notification = new Notification({
     title: `${exit.name} stopped`,
     body: exit.image ? `Running ${exit.image}. Nothing asked it to stop.` : 'Nothing asked it to stop.',
@@ -271,27 +264,6 @@ function notifyExit(exit) {
   });
 
   notification.show();
-}
-
-/**
- * Makes a sound when a container dies while nobody is watching the window.
- *
- * The app keeps running with its window closed, and an in-window message is no
- * use then. A system sound needs neither permission nor a signature, which is
- * more than can be said for the notification itself.
- */
-function alertIfUnattended() {
-  const watching = mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
-  if (watching) return;
-
-  const sound = '/System/Library/Sounds/Submarine.aiff';
-  if (process.platform !== 'darwin' || !fs.existsSync(sound)) return;
-
-  try {
-    spawn('afplay', [sound], { stdio: 'ignore', detached: true }).unref();
-  } catch (error) {
-    console.warn('[dermaga] could not play the alert:', error.message);
-  }
 }
 
 // Mirrors the stored preferences, so a notification can be suppressed without
@@ -322,6 +294,13 @@ ipcMain.handle('dermaga:drag-out', async (event, { container, path: source }) =>
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
   });
 });
+
+// Notifications are macOS's to allow or refuse, and its settings are the only
+// place that can be changed -- so the app offers the door rather than pretending
+// it can open it.
+ipcMain.handle('dermaga:open-notification-settings', () =>
+  shell.openExternal('x-apple.systempreferences:com.apple.preference.notifications')
+);
 
 ipcMain.on('dermaga:settings', (_event, next) => {
   if (typeof next?.notifyOnExit === 'boolean') settings.notifyOnExit = next.notifyOnExit;

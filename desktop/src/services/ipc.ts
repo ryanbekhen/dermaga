@@ -20,6 +20,7 @@ interface Bridge {
   pathForFile?: (file: File) => string;
   dragOut?: (container: string, path: string) => Promise<void>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
+  openNotificationSettings?: () => Promise<void>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
   fetchLicence?: (key: string) => Promise<string>;
   checkUpdate?: () => Promise<UpdateCheck>;
@@ -84,6 +85,11 @@ export function dragOut(container: string, path: string): Promise<void> {
 /** Keeps the main process in step with preferences it acts on by itself. */
 export function syncSettings(settings: { notifyOnExit: boolean }): void {
   bridge().syncSettings?.(settings);
+}
+
+/** Opens the macOS pane where notifications are allowed or refused. */
+export function openNotificationSettings(): Promise<void> {
+  return bridge().openNotificationSettings?.() ?? Promise.resolve();
 }
 
 /** Fires when a notification about a stopped container is clicked. */

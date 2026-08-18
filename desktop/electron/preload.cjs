@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('dermaga', {
   // asking, such as whether to raise a notification.
   syncSettings: (settings) => ipcRenderer.send('dermaga:settings', settings),
 
+  openNotificationSettings: () => ipcRenderer.invoke('dermaga:open-notification-settings'),
+
 
   onOpenContainer: (callback) => {
     const handler = (_event, id) => callback(id);

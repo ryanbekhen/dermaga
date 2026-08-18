@@ -30,9 +30,10 @@ export function useEventStream() {
 
   useEffect(() => {
     const unsubscribe = onNotify((message) => {
-      // A container that stopped on its own is also announced by macOS, but
-      // that needs permission the app may not have been granted -- and in
-      // development it never is. The toast is the part that always arrives.
+      // macOS announces this too, and makes the sound. This is the version for
+      // someone already looking at the window, where a system notification is
+      // the wrong shape -- and the one that still arrives if macOS is set to
+      // refuse them.
       if (message.method === 'containers.exited') {
         const exit = message.params as { name?: string };
         if (exit?.name) {
