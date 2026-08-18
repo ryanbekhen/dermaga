@@ -6,7 +6,9 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { Toasts } from './components/Toasts';
+import { onOpenContainer, syncSettings } from './services/ipc';
 import { subscribeToScanner } from './store/scannerStore';
+import { useSettingsStore } from './store/settingsStore';
 import { useEventStream } from './hooks/useEventStream';
 import { useFullScreen } from './hooks/useFullScreen';
 import { useTheme } from './hooks/useTheme';
@@ -37,6 +39,16 @@ export function App() {
 
   const route = useUIStore((s) => s.route);
   const navigate = useUIStore((s) => s.navigate);
+  const openContainer = useUIStore((s) => s.openContainer);
+  const notifyOnExit = useSettingsStore((s) => s.notifyOnExit);
+
+  // Clicking a "container stopped" notification opens that container.
+  useEffect(() => onOpenContainer((id) => openContainer(id)), [openContainer]);
+
+  // The main process raises notifications itself, so it needs to know when the
+  // user has asked it not to.
+  useEffect(() => syncSettings({ notifyOnExit }), [notifyOnExit]);
+
   const containers = useResourceStore((s) => s.containers);
   const machines = useResourceStore((s) => s.machines);
   const error = useResourceStore((s) => s.error);

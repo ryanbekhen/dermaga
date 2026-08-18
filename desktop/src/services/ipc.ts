@@ -17,6 +17,8 @@ interface Bridge {
   isFullScreen?: () => Promise<boolean>;
   onFullScreenChange?: (callback: (value: boolean) => void) => () => void;
   pickDirectory?: (title?: string) => Promise<string | null>;
+  syncSettings?: (settings: { notifyOnExit: boolean }) => void;
+  onOpenContainer?: (callback: (id: string) => void) => () => void;
   fetchLicence?: (key: string) => Promise<string>;
   checkUpdate?: () => Promise<UpdateCheck>;
   downloadUpdate?: (assetUrl: string, version: string) => Promise<string>;
@@ -60,6 +62,16 @@ export function invoke<T>(method: string, params?: unknown): Promise<T> {
 /** Subscribes to everything the agent pushes; the caller filters by method. */
 export function onNotify(callback: (message: Notification) => void): () => void {
   return bridge().onNotify(callback);
+}
+
+/** Keeps the main process in step with preferences it acts on by itself. */
+export function syncSettings(settings: { notifyOnExit: boolean }): void {
+  bridge().syncSettings?.(settings);
+}
+
+/** Fires when a notification about a stopped container is clicked. */
+export function onOpenContainer(callback: (id: string) => void): () => void {
+  return bridge().onOpenContainer?.(callback) ?? (() => {});
 }
 
 /** Opens the native folder chooser; null if the user dismissed it. */

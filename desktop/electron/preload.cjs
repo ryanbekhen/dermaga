@@ -19,6 +19,17 @@ contextBridge.exposeInMainWorld('dermaga', {
 
   isFullScreen: () => ipcRenderer.invoke('dermaga:is-fullscreen'),
 
+  // Keeps the main process in step with preferences it has to act on without
+  // asking, such as whether to raise a notification.
+  syncSettings: (settings) => ipcRenderer.send('dermaga:settings', settings),
+
+
+  onOpenContainer: (callback) => {
+    const handler = (_event, id) => callback(id);
+    ipcRenderer.on('dermaga:open-container', handler);
+    return () => ipcRenderer.removeListener('dermaga:open-container', handler);
+  },
+
   // Returns the chosen path, or null if the dialog was dismissed.
   pickDirectory: (title) => ipcRenderer.invoke('dermaga:pick-directory', title),
 

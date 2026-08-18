@@ -17,7 +17,9 @@ type Settings struct {
 	ShowStopped        bool   `json:"showStopped"`
 	LogTail            int    `json:"logTail"`
 	ConfirmDestructive bool   `json:"confirmDestructive"`
-	SidebarCollapsed   bool   `json:"sidebarCollapsed"`
+	// Whether to raise a macOS notification when a container stops on its own.
+	NotifyOnExit     bool `json:"notifyOnExit"`
+	SidebarCollapsed bool `json:"sidebarCollapsed"`
 }
 
 func Defaults() Settings {
@@ -26,6 +28,7 @@ func Defaults() Settings {
 		ShowStopped:        true,
 		LogTail:            200,
 		ConfirmDestructive: true,
+		NotifyOnExit:       true,
 	}
 }
 

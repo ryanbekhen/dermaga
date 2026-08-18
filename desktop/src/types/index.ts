@@ -216,6 +216,7 @@ export interface Settings {
   showStopped: boolean;
   logTail: number;
   confirmDestructive: boolean;
+  notifyOnExit: boolean;
   sidebarCollapsed: boolean;
 }
 

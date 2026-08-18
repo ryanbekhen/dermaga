@@ -50,6 +50,7 @@ type Agent struct {
 	toolchain  *toolchain.Manager
 	settings   *settings.Store
 	watcher    *watcher.Watcher
+	exits      *exitWatch
 }
 
 func New(server *rpc.Server, logger *slog.Logger) *Agent {
@@ -61,6 +62,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		server:   server,
 		streams:  newStreams(server),
 		settings: settings.NewStore(logger),
+		exits:    newExitWatch(),
 	}
 
 	// The watcher is what "something changed" means, but the managers only see
@@ -129,8 +131,15 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	// Images pulled in a terminal never touch a Dermaga manager, so the only
 	// place they show up is the watcher. Scanning follows what is actually
 	// there, not only what this app did.
-	pending.OnChange(func(watcher.Snapshot) {
+	pending.OnChange(func(snapshot watcher.Snapshot) {
 		agent.scanner.Sweep()
+
+		// A container that stopped without being asked to is worth saying out
+		// loud: the window is often not the thing the user is looking at.
+		for _, exit := range agent.exits.Check(snapshot.Containers) {
+			logger.Info("Container exited on its own", "container", exit.Name)
+			server.Notify("containers.exited", exit)
+		}
 	})
 
 	return agent
@@ -516,6 +525,9 @@ func (a *Agent) registerContainers() {
 			args.Timeout = 10
 		}
 
+		// Asked for, so it stops quietly.
+		a.exits.Expect(args.ID)
+
 		return a.containers.Stop(ctx, args.ID, args.Timeout)
 	})
 
@@ -527,6 +539,8 @@ func (a *Agent) registerContainers() {
 		if err != nil {
 			return nil, err
 		}
+
+		a.exits.Expect(args.ID)
 
 		if err := a.containers.Remove(ctx, args.ID, args.Force); err != nil {
 			return nil, rpc.Fail(err.Error())
@@ -543,6 +557,10 @@ func (a *Agent) registerContainers() {
 		if err != nil {
 			return nil, err
 		}
+
+		// Editing recreates: the container stops as part of the job, which is
+		// not something to be told about.
+		a.exits.Expect(args.ID)
 
 		container, err := a.containers.Update(ctx, args.ID, args.Spec)
 		if err != nil {

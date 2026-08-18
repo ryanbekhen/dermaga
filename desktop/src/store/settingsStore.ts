@@ -10,6 +10,7 @@ interface SettingsState extends Settings {
   setShowStopped: (show: boolean) => void;
   setLogTail: (lines: number) => void;
   setConfirmDestructive: (confirm: boolean) => void;
+  setNotifyOnExit: (notify: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 }
 
@@ -47,11 +48,13 @@ export const useSettingsStore = create<SettingsState>()(
       showStopped: true,
       logTail: 200,
       confirmDestructive: true,
+      notifyOnExit: true,
       sidebarCollapsed: false,
       setTheme: (theme) => set({ theme }),
       setShowStopped: (showStopped) => set({ showStopped }),
       setLogTail: (logTail) => set({ logTail }),
       setConfirmDestructive: (confirmDestructive) => set({ confirmDestructive }),
+      setNotifyOnExit: (notifyOnExit) => set({ notifyOnExit }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
     }),
     {
@@ -63,6 +66,7 @@ export const useSettingsStore = create<SettingsState>()(
         showStopped: state.showStopped,
         logTail: state.logTail,
         confirmDestructive: state.confirmDestructive,
+        notifyOnExit: state.notifyOnExit,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
     }

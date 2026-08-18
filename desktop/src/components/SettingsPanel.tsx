@@ -60,6 +60,11 @@ export function SettingsPanel() {
               onChange={settings.setConfirmDestructive}
               label="Ask before removing a container"
             />
+            <Toggle
+              checked={settings.notifyOnExit}
+              onChange={settings.setNotifyOnExit}
+              label="Notify when a container stops on its own"
+            />
           </Card>
         </div>
       </div>

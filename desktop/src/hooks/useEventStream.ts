@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke, onNotify } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
+import { useToastStore } from '../store/toastStore';
 import type { Container, Image, Machine, Network, Volume } from '../types';
 
 export type ConnectionState = 'connecting' | 'live' | 'disconnected';
@@ -29,6 +30,17 @@ export function useEventStream() {
 
   useEffect(() => {
     const unsubscribe = onNotify((message) => {
+      // A container that stopped on its own is also announced by macOS, but
+      // that needs permission the app may not have been granted -- and in
+      // development it never is. The toast is the part that always arrives.
+      if (message.method === 'containers.exited') {
+        const exit = message.params as { name?: string };
+        if (exit?.name) {
+          useToastStore.getState().push(`${exit.name} stopped on its own`, 'error');
+        }
+        return;
+      }
+
       if (message.method !== 'events.snapshot') return;
 
       const snapshot = message.params as Snapshot;

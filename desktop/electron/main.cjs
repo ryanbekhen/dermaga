@@ -4,6 +4,7 @@ const {
   app,
   BrowserWindow,
   dialog,
+  Notification,
   ipcMain,
   nativeTheme,
   screen,
@@ -11,6 +12,7 @@ const {
   session,
 } = require('electron');
 const fs = require('node:fs');
+const { spawn } = require('node:child_process');
 const path = require('node:path');
 
 const { Agent } = require('./agent.cjs');
@@ -214,6 +216,8 @@ function startAgent() {
         streamListeners.get(params.id)(message.method, params);
       }
 
+      if (message?.method === 'containers.exited') notifyExit(message.params);
+
       mainWindow?.webContents.send('dermaga:notify', message);
     },
     onExit: (code) => console.warn('[dermaga] agent exited with code', code),
@@ -221,6 +225,81 @@ function startAgent() {
 
   agent.start();
 }
+
+/**
+ * Tells the user a container stopped without being asked to.
+ *
+ * The app usually sits in the background, so this is the one thing it has to
+ * say unprompted -- a container that died while nobody was looking is exactly
+ * what a window cannot report. Deliberate stops are filtered out by the agent,
+ * so anything reaching here is genuinely unexpected.
+ */
+function notifyExit(exit) {
+  if (!exit?.name) return;
+
+  // Notifications fail quietly on macOS -- an app that has not been granted
+  // permission simply never shows one -- so the reason is written down.
+  if (!Notification.isSupported()) {
+    console.warn('[dermaga] notifications are not supported here');
+    return;
+  }
+
+  if (!settings.notifyOnExit) {
+    console.warn('[dermaga] exit notification suppressed by settings');
+    return;
+  }
+
+  console.log('[dermaga] notifying about', exit.name);
+
+  // macOS accepts notifications only from apps signed with a Developer ID and
+  // drops the rest without a word, so this may well go nowhere. The window has
+  // its own message either way; what it cannot do is reach someone who is
+  // looking at another app, which is what the sound is for.
+  alertIfUnattended();
+
+  const notification = new Notification({
+    title: `${exit.name} stopped`,
+    body: exit.image ? `Running ${exit.image}. Nothing asked it to stop.` : 'Nothing asked it to stop.',
+    silent: false,
+  });
+
+  notification.on('click', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+    mainWindow?.webContents.send('dermaga:open-container', exit.id);
+  });
+
+  notification.show();
+}
+
+/**
+ * Makes a sound when a container dies while nobody is watching the window.
+ *
+ * The app keeps running with its window closed, and an in-window message is no
+ * use then. A system sound needs neither permission nor a signature, which is
+ * more than can be said for the notification itself.
+ */
+function alertIfUnattended() {
+  const watching = mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
+  if (watching) return;
+
+  const sound = '/System/Library/Sounds/Submarine.aiff';
+  if (process.platform !== 'darwin' || !fs.existsSync(sound)) return;
+
+  try {
+    spawn('afplay', [sound], { stdio: 'ignore', detached: true }).unref();
+  } catch (error) {
+    console.warn('[dermaga] could not play the alert:', error.message);
+  }
+}
+
+// Mirrors the stored preferences, so a notification can be suppressed without
+// asking the agent first -- it arrives at the moment it is needed.
+const settings = { notifyOnExit: true };
+
+ipcMain.on('dermaga:settings', (_event, next) => {
+  if (typeof next?.notifyOnExit === 'boolean') settings.notifyOnExit = next.notifyOnExit;
+});
 
 function applyContentSecurityPolicy() {
   if (isDev) return; // Vite's HMR client needs inline scripts and a websocket.
