@@ -48,6 +48,17 @@ func NewManager(runner *cli.Runner, logger *slog.Logger) *Manager {
 // ErrNoShell is what a scratch image gives back: nothing to run ls with.
 var ErrNoShell = fmt.Errorf("this image has no shell, so its files cannot be listed")
 
+// HasShell reports whether there is a shell to browse or attach to.
+//
+// A container built FROM scratch has none, and neither the file browser nor
+// the terminal can work without one -- so the UI is better off not offering
+// them at all than offering them and failing.
+func (m *Manager) HasShell(ctx context.Context, container string) bool {
+	_, err := m.runner.Run(ctx, "exec", container, "/bin/sh", "-c", "exit 0")
+
+	return err == nil
+}
+
 func (m *Manager) List(ctx context.Context, container, dir string) ([]Entry, error) {
 	if dir == "" {
 		dir = "/"

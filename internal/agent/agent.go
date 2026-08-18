@@ -301,6 +301,20 @@ func (a *Agent) registerToolchain() {
 // --- files inside a container ----------------------------------------------
 
 func (a *Agent) registerFiles() {
+	// Asked once when a container is opened: without a shell there is nothing
+	// for the Files or Terminal tabs to do, and they are hidden rather than
+	// left to fail.
+	a.server.Register("containers.hasShell", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Container string `json:"container"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		return map[string]any{"hasShell": a.files.HasShell(ctx, args.Container)}, nil
+	})
+
 	a.server.Register("files.list", func(ctx context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			Container string `json:"container"`

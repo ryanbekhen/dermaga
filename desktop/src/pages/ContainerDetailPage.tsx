@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -44,6 +44,10 @@ const TABS: TabDefinition[] = [
   { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
 ];
 
+// Both need a shell inside the container. An image built FROM scratch has
+// none, and a tab that can only apologise is worse than no tab.
+const NEEDS_SHELL = ['files', 'terminal'];
+
 type Action = 'start' | 'stop' | 'restart' | 'remove';
 
 interface ContainerDetailPageProps {
@@ -51,11 +55,14 @@ interface ContainerDetailPageProps {
   tab: ContainerTab;
 }
 
-export function ContainerDetailPage({ container, tab }: ContainerDetailPageProps) {
+export function ContainerDetailPage({ container, tab: requested }: ContainerDetailPageProps) {
   const [pending, setPending] = useState<Action | null>(null);
   // Empty means whoever the image runs as; root is the other one people reach
   // for, usually to install something inside a running container.
   const [shellUser, setShellUser] = useState('');
+  // undefined while unknown: the tabs stay until the answer arrives, so they
+  // do not flicker away and back on every visit.
+  const [hasShell, setHasShell] = useState<boolean | undefined>(undefined);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [editing, setEditing] = useState<ContainerSpec | null>(null);
   const [loadingSpec, setLoadingSpec] = useState(false);
@@ -67,6 +74,21 @@ export function ContainerDetailPage({ container, tab }: ContainerDetailPageProps
   const pushToast = useToastStore((s) => s.push);
 
   const running = container.status === 'running';
+
+  useEffect(() => {
+    if (!running) return;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void api
+      .hasShell(container.id)
+      .then(setHasShell)
+      .catch(() => setHasShell(true));
+  }, [container.id, running]);
+
+  const tabs = hasShell === false ? TABS.filter((t) => !NEEDS_SHELL.includes(t.id)) : TABS;
+
+  // Someone may be standing on a tab that has just been taken away.
+  const tab = tabs.some((t) => t.id === requested) ? requested : 'overview';
   const busy = pending !== null;
 
   // No refetch after an action: the server pushes the new state over the event
@@ -99,7 +121,7 @@ export function ContainerDetailPage({ container, tab }: ContainerDetailPageProps
       title={container.name}
       badges={<StatusBadge status={container.status} />}
       subtitle={shortImage(container.image)}
-      tabs={TABS}
+      tabs={tabs}
       activeTab={tab}
       onSelectTab={setTab}
       actions={

@@ -76,6 +76,12 @@ export const api = {
 
   // --- files inside a container --------------------------------------------
 
+  /** Whether the container has a shell; without one, Files and Terminal cannot work. */
+  async hasShell(container: string): Promise<boolean> {
+    const { hasShell } = await invoke<{ hasShell: boolean }>('containers.hasShell', { container });
+    return hasShell;
+  },
+
   async listFiles(container: string, path: string): Promise<FileEntry[]> {
     return (await invoke<FileEntry[]>('files.list', { container, path })) ?? [];
   },
