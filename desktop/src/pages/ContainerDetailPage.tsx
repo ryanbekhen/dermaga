@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   Info,
   Pencil,
   Play,
@@ -25,7 +26,7 @@ import { api } from '../services/api';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type { Container, ContainerSpec, ContainerTab } from '../types';
+import type { Container, ContainerSpec, ContainerTab, Port } from '../types';
 import { formatDuration, formatMemory, shortImage, splitEnv } from '../utils/format';
 
 // xterm is a large dependency and only the Terminal tab needs it, so it stays
@@ -317,11 +318,10 @@ function OverviewTab({ container }: { container: Container }) {
       {container.ports.length > 0 && (
         <Section title="Published ports">
           {container.ports.map((port) => (
-            <Row
+            <PortRow
               key={`${port.protocol}-${port.host}-${port.container}`}
-              label={port.protocol}
-              value={`${port.host} → ${port.container}`}
-              mono
+              port={port}
+              running={running}
             />
           ))}
         </Section>
@@ -464,6 +464,40 @@ function TerminalUser({ value, onChange }: { value: string; onChange: (value: st
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * A published port, and a way to reach it.
+ *
+ * A port mapping is only interesting because something is listening behind it,
+ * and the next thing anyone does with 8080 is open it. TCP only: there is
+ * nothing a browser can do with a UDP port.
+ */
+function PortRow({ port, running }: { port: Port; running: boolean }) {
+  const hostPort = port.host.includes(':') ? port.host.split(':').pop() : port.host;
+  const openable = running && port.protocol.toLowerCase() === 'tcp' && Boolean(hostPort);
+  const url = `http://localhost:${hostPort}`;
+
+  return (
+    <div className="row">
+      <span className="row-key">{port.protocol}</span>
+      <span className="row-value flex items-center justify-end gap-2 font-mono">
+        {port.host} → {port.container}
+        {openable && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            title={`Open ${url}`}
+            className="btn-icon border-transparent"
+            aria-label={`Open ${url} in your browser`}
+          >
+            <ExternalLink size={13} aria-hidden />
+          </a>
+        )}
+      </span>
     </div>
   );
 }
