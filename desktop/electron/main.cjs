@@ -16,6 +16,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { Agent } = require('./agent.cjs');
+const { createTray, updateTray } = require('./tray.cjs');
 
 const isDev = !app.isPackaged;
 const DEV_ORIGIN = `http://localhost:${process.env.DERMAGA_DEV_PORT || 3000}`;
@@ -52,7 +53,6 @@ function placeOn(width, height) {
 
 // Streams the startup sequence is listening to, keyed by stream id.
 const streamListeners = new Map();
-
 
 /** Runs a streaming agent method to completion, reporting each line. */
 function runStream(method, params, onLine) {
@@ -218,6 +218,14 @@ function startAgent() {
 
       if (message?.method === 'containers.exited') notifyExit(message.params);
 
+      // The menu bar reads the same snapshots the window does, so it stays
+      // right whether or not there is a window to send them to.
+      if (message?.method === 'events.snapshot') {
+        updateTray({
+          containers: (message.params?.containers ?? []).filter((c) => c.status === 'running'),
+        });
+      }
+
       mainWindow?.webContents.send('dermaga:notify', message);
     },
     onExit: (code) => console.warn('[dermaga] agent exited with code', code),
@@ -253,7 +261,9 @@ function notifyExit(exit) {
 
   const notification = new Notification({
     title: `${exit.name} stopped`,
-    body: exit.image ? `Running ${exit.image}. Nothing asked it to stop.` : 'Nothing asked it to stop.',
+    body: exit.image
+      ? `Running ${exit.image}. Nothing asked it to stop.`
+      : 'Nothing asked it to stop.',
     silent: false,
   });
 
@@ -715,7 +725,11 @@ async function startUp() {
     splashStep('services', 'failed', 'Could not start services');
   }
 
-  // 5. The window itself.
+  // 5. The menu bar item, before the window: from here on Dermaga has a face
+  // even when nothing is open.
+  startTray();
+
+  // 6. The window itself.
   splashStep('ui', 'active');
   createWindow();
 
@@ -740,6 +754,66 @@ async function startUp() {
   closeSplash();
   mainWindow?.show();
   mainWindow?.focus();
+}
+
+/**
+ * Brings up the menu bar item and keeps it current.
+ *
+ * Main subscribes to the agent in its own right rather than relying on the
+ * window having done so, because the whole point of the menu bar is to be
+ * right when there is no window.
+ */
+function startTray() {
+  try {
+    trayUp();
+  } catch (error) {
+    // A missing icon or a refused status item should not take the app down;
+    // the window is still the way in.
+    console.error('[dermaga] menu bar item failed:', error.message);
+  }
+}
+
+function trayUp() {
+  createTray({
+    onOpen: () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      mainWindow?.show();
+      mainWindow?.focus();
+      app.focus({ steal: true });
+    },
+    onOpenContainer: (id) => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      mainWindow?.show();
+      mainWindow?.focus();
+      app.focus({ steal: true });
+      mainWindow?.webContents.send('dermaga:open-container', id);
+    },
+    onStartServices: () => {
+      void startServices()
+        .then(refreshTrayServices)
+        .catch((error) => console.error('[dermaga] tray could not start services:', error.message));
+    },
+    onQuit: () => app.quit(),
+  });
+
+  agent
+    ?.invoke('events.subscribe')
+    .catch((error) => console.error('[dermaga] tray subscription failed:', error.message));
+
+  void refreshTrayServices();
+  setInterval(refreshTrayServices, 20000);
+  console.log('[dermaga] menu bar item up');
+}
+
+async function refreshTrayServices() {
+  try {
+    const report = await agent.invoke('system.status');
+    updateTray({ running: Boolean(report?.status?.running) });
+  } catch {
+    // The agent may be starting or gone; either way the services cannot be
+    // reported as up.
+    updateTray({ running: false });
+  }
 }
 
 app.whenReady().then(() => {
