@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useUIStore } from '../store/uiStore';
 
 const SHORTCUTS: [string, string][] = [
   ['⌘K', 'Command palette'],
@@ -26,6 +27,8 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 export function HelpView({ version }: { version: string }) {
+  const navigate = useUIStore((s) => s.navigate);
+
   return (
     <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
       {/* Centred so a wide window reads as a document, not a left-aligned strip. */}
@@ -124,9 +127,16 @@ export function HelpView({ version }: { version: string }) {
             <p>
               The bottom-right corner says which version is running, and speaks up when a newer one
               exists: one click downloads it, opens the installer and closes Dermaga so it can be
-              replaced. <strong>No Linux kernel</strong> there means containers cannot run at all --
-              Dermaga installs one on first launch, and if that could not finish the warning stays,
-              with the command to run by hand.
+              replaced. Click the version itself for{' '}
+              <button
+                onClick={() => navigate({ name: 'changelog' })}
+                className="font-semibold text-brand-700 hover:underline dark:text-brand-400"
+              >
+                what changed in each release
+              </button>
+              . <strong>No Linux kernel</strong> there means containers cannot run at all -- Dermaga
+              installs one on first launch, and if that could not finish the warning stays, with the
+              command to run by hand.
             </p>
           </Card>
 

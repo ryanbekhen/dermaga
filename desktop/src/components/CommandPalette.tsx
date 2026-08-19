@@ -17,6 +17,7 @@ import {
   Search,
   Server,
   Settings,
+  Sparkles,
   Square,
   Unplug,
   type LucideIcon,
@@ -148,6 +149,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       go('System', Cpu, { name: 'system' }),
       go('Settings', Settings, { name: 'settings' }),
       go('Help', CircleHelp, { name: 'help' }),
+      go("What's new", Sparkles, { name: 'changelog' }),
       go('Licences', Scale, { name: 'licences' }),
 
       ...containers.map((container) => ({

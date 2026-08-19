@@ -14,6 +14,7 @@ import { useEventStream } from './hooks/useEventStream';
 import { useFullScreen } from './hooks/useFullScreen';
 import { useTheme } from './hooks/useTheme';
 import { api } from './services/api';
+import { ChangelogPage } from './pages/ChangelogPage';
 import { ContainerDetailPage } from './pages/ContainerDetailPage';
 import { ContainersPage } from './pages/ContainersPage';
 import { ImageDetailPage } from './pages/ImageDetailPage';
@@ -222,6 +223,10 @@ export function App() {
             {route.name === 'settings' && <SettingsPanel />}
 
             {route.name === 'help' && <HelpView version={build?.version ?? APP_VERSION} />}
+
+            {route.name === 'changelog' && (
+              <ChangelogPage version={build?.version ?? APP_VERSION} />
+            )}
 
             {route.name === 'registries' && <RegistriesPage />}
 

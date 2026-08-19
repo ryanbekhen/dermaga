@@ -14,7 +14,7 @@ DMG     := desktop/release/Dermaga-$(VERSION)-arm64.dmg
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
 
-.PHONY: all agent icon notices desktop-deps dev check test lint fmt dist verify-dist install release publish notes version clean
+.PHONY: all agent icon notices changelog desktop-deps dev check test lint fmt dist verify-dist install release publish notes version clean
 
 all: agent
 
@@ -43,8 +43,11 @@ desktop-deps:
 notices:
 	node scripts/notices.mjs
 
+changelog:
+	node scripts/changelog.mjs
+
 ## Run Vite and Electron together, with a freshly built agent.
-dev: agent icon notices
+dev: agent icon notices changelog
 	cd desktop && npm run dev:app
 
 ## Everything that has to pass: vet, tests, types, lint.
@@ -66,7 +69,7 @@ fmt:
 
 ## Package the DMG. The agent is embedded as a resource, and packaging fails
 ## rather than shipping a bundle without it.
-dist: agent icon notices
+dist: agent icon notices changelog
 	cd desktop && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null
 	cd desktop && npm run dist
 	@$(MAKE) --no-print-directory verify-dist

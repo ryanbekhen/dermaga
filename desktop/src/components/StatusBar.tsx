@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowDownToLine, Loader2, RefreshCw } from 'lucide-react';
 import { useUpdate } from '../hooks/useUpdate';
+import { useUIStore } from '../store/uiStore';
 import { KernelStatusItem } from './KernelStatusItem';
 import { ScannerStatusItem } from './ScannerStatusItem';
 import type { ConnectionState } from '../hooks/useEventStream';
@@ -18,6 +19,8 @@ interface StatusBarProps {
  * way until something is actually wrong, then colours itself.
  */
 export function StatusBar({ build, system, connection, error }: StatusBarProps) {
+  const navigate = useUIStore((s) => s.navigate);
+
   const disconnected = connection === 'disconnected';
 
   return (
@@ -41,12 +44,16 @@ export function StatusBar({ build, system, connection, error }: StatusBarProps) 
           <span title="Apple Container CLI">container {system.cliVersion}</span>
         )}
         {build && (
-          <span title={buildTitle(build)}>
+          <button
+            onClick={() => navigate({ name: 'changelog' })}
+            title={`${buildTitle(build)}\nClick to see what changed`}
+            className="transition-colors hover:text-ink-700 dark:hover:text-ink-300"
+          >
             v{build.version}
             {build.commit && build.commit !== 'unknown' && (
               <span className="ml-1.5 font-mono opacity-70">{build.commit}</span>
             )}
-          </span>
+          </button>
         )}
       </div>
     </footer>

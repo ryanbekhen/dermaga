@@ -40,13 +40,20 @@ everything you do is immediately visible to `container ls` and vice versa.
 - **Vulnerabilities** — every image is scanned in the background and the counts appear beside it in
   the list. Per image: the CVEs, the package each one is in, and the version that fixes it. Runs
   entirely on your Mac; nothing about your images is sent anywhere.
-- **Volumes and networks** — create and delete, and see which containers depend on them.
+- **Networks** — create and delete, and open one to see it drawn: the network in the middle, every
+  container attached to it around the edge with the address it holds there, and the gateway as a
+  node of its own. Attach an existing container to a network, or detach it, from the network's page
+  or the palette.
+- **Volumes** — create and delete, see which containers mount one and where it lands inside each,
+  and read what it actually costs on disk rather than the half-terabyte cap it was created with.
+  Open one and look inside it, even when no container has it mounted.
 - **Machines** — create, boot, stop, resize (CPU, memory, home mount) and delete the Linux VMs.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
 - **Speaks up** — a container that stops without being asked to is reported: in the window, as a
   sound when the window is not what you are looking at, and as a notification.
-- **Command palette** — `⌘K` finds any container, image, machine or page by name, starts or stops a
-  container without hunting for its row, and opens the create, pull, build and load forms directly.
+- **Command palette** — `⌘K` finds any container, image, volume, network, machine or page by name,
+  starts or stops a container without hunting for its row, runs a container from an image, attaches
+  or detaches one from a network, and opens the create, pull, build and load forms directly.
 - **Live by default** — no refresh button anywhere. Changes made in a terminal appear within two
   seconds; changes made in Dermaga appear immediately.
 - **Updates itself** — when a newer release exists the status bar says so; one click downloads it,
@@ -119,7 +126,7 @@ dotfiles. Dermaga merges partial updates and repairs out-of-range values rather 
 
 | Shortcut | Action                                                          |
 | -------- | --------------------------------------------------------------- |
-| `⌘K`     | Command palette — jump to any container, image, machine or page |
+| `⌘K`     | Command palette — jump to any container, image, volume, network, machine or page |
 | `⌘F`     | Focus the search box on this page                                |
 | `Esc`    | Clear search, or close the palette                               |
 | `⌘,`     | Open settings                                                    |
@@ -208,10 +215,65 @@ sequenceDiagram
 | `system.kernelConfigured` `system.installKernel`                                      | The Linux kernel containers run on       |
 | `images.builderStatus` `images.startBuilder`                                          | The buildkit container builds run in     |
 | `volumes.*` `networks.*`                                                              | List, create, delete                     |
+| `containers.run`                                                                      | Create and wait, for helper containers   |
 | `machines.list/get/start/stop/delete/setDefault/configure`                            | Machine lifecycle                        |
 | `events.subscribe`                                                                    | Pushes `events.snapshot` on every change |
 | `containers.create` `containers.logs` `images.pull` `images.build` `machines.create`  | Streams                                  |
 | `terminal.open/input/resize` `stream.cancel`                                          | pty sessions, base64 payloads            |
+
+## How the vulnerability check works
+
+Apple's `container` CLI has no scanner of its own, so Dermaga borrows one: [Trivy][trivy], driven as
+a command rather than linked in as a library — embedding it would pull a dependency tree larger than
+the rest of this app and add hundreds of megabytes to every release.
+
+Scanning an image means handing it to Trivy as something it can read:
+
+```
+container image save <ref> --platform linux/arm64 --output image.tar
+tar -xf image.tar -C oci/     # Trivy reads an OCI directory; the CLI writes an OCI tar
+trivy image --input oci/ --format json --scanners vuln --skip-db-update
+```
+
+The platform is pinned because the local store holds only the architecture that was pulled; asking
+for the whole multi-arch index fails on blobs that were never fetched.
+
+**Where the knowledge comes from.** Trivy matches the packages it finds against its own vulnerability
+database — around 100 MB, built from the distributions' security trackers and the usual CVE feeds.
+Dermaga downloads it once (`trivy image --download-db-only`) and keeps it current on its own
+schedule, which is why the scans themselves run with `--skip-db-update`. Trivy stamps each database
+with a `NextUpdate` about a day out, so Dermaga checks every six hours: that costs nothing when there
+is nothing new — it reads a local file — and picks up a new database within hours of it landing.
+
+**Installing itself.** If Trivy is missing and Homebrew is present, Dermaga installs it with
+`brew install trivy` and updates it the same way. Without Homebrew it stays quiet, and the feature is
+simply absent rather than nagging.
+
+**When scans happen.** Never while you wait, if it can be helped:
+
+| When              | What                                                                            |
+| ----------------- | ------------------------------------------------------------------------------- |
+| at startup        | install or update Trivy, refresh a stale database, scan whatever has no result   |
+| an image appears  | scan it, 30 seconds after the image list settles                                 |
+| every six hours   | the same as startup                                                             |
+| you ask for one   | that image jumps the queue                                                      |
+
+The 30-second wait is not politeness: a pull publishes the image as soon as its manifest lands, while
+unpacking the layers can take a minute, and an image scanned in between looks empty — which reads as
+"no vulnerabilities". Scans run one at a time, so a Mac full of images warms up gradually rather than
+exporting several gigabytes at once. By the time you open an image, the answer is usually already
+there.
+
+**What is kept, and for how long.** Results live in `~/.dermaga/scans.json`, so closing the app does
+not mean rescanning everything on the next launch. A result is taken again when the database turns
+over, when Trivy itself is upgraded, or when it is more than a week old, so the counts on screen
+always reflect the database in hand. Results for images that no longer exist are cleared on every
+pass, and the System page drops stale ones on request.
+
+**What leaves your Mac.** The database download, and nothing else. Images are exported to a temporary
+directory, scanned there and deleted; no image, digest or finding is sent anywhere.
+
+[trivy]: https://github.com/aquasecurity/trivy
 
 ## Behaviour worth knowing
 
@@ -305,7 +367,10 @@ release with the artefact attached. It refuses to start on a dirty tree, a faili
 existing tag.
 
 Release notes are built from the commits between the two tags, grouped by their `feat:` / `fix:` /
-`perf:` / `docs:` prefix; `make notes VERSION=1.1.0` prints them without publishing anything. If the
+`perf:` / `docs:` prefix; `make notes VERSION=1.1.0` prints them without publishing anything. Those
+notes are the record of what moved; [CHANGELOG.md](CHANGELOG.md) is the record of what changed for
+whoever is deciding whether to update, and its `Unreleased` section becomes the new version's
+heading as part of cutting the release. If the
 last step fails — GitHub having a bad day, an expired token — `make publish VERSION=1.1.0` retries
 just that part, without re-tagging or rebuilding.
 

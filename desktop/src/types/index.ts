@@ -416,4 +416,5 @@ export type Route =
   | { name: 'system' }
   | { name: 'settings' }
   | { name: 'help' }
+  | { name: 'changelog' }
   | { name: 'licences' };
