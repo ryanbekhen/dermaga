@@ -23,6 +23,7 @@ describe('intents', () => {
       ['openContainer', () => useUIStore.getState().openContainer('web')],
       ['openImage', () => useUIStore.getState().openImage('alpine:latest')],
       ['openMachine', () => useUIStore.getState().openMachine('default')],
+      ['openNetwork', () => useUIStore.getState().openNetwork('backend')],
     ];
 
     for (const [name, move] of moves) {

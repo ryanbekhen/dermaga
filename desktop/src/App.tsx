@@ -20,6 +20,7 @@ import { ImageDetailPage } from './pages/ImageDetailPage';
 import { ImagesPage } from './pages/ImagesPage';
 import { MachineDetailPage } from './pages/MachineDetailPage';
 import { MachinesPage } from './pages/MachinesPage';
+import { NetworkDetailPage } from './pages/NetworkDetailPage';
 import { NetworksPage } from './pages/NetworksPage';
 import { ServicesOffline } from './pages/ServicesOffline';
 import { SystemPage } from './pages/SystemPage';
@@ -52,6 +53,7 @@ export function App() {
 
   const containers = useResourceStore((s) => s.containers);
   const machines = useResourceStore((s) => s.machines);
+  const networks = useResourceStore((s) => s.networks);
   const error = useResourceStore((s) => s.error);
 
   const [system, setSystem] = useState<SystemStatus | null>(null);
@@ -119,6 +121,8 @@ export function App() {
     route.name === 'container' ? containers.find((c) => c.id === route.id) : undefined;
   const selectedMachine =
     route.name === 'machine' ? machines.find((m) => m.id === route.id) : undefined;
+  const selectedNetwork =
+    route.name === 'network' ? networks.find((n) => n.name === route.network) : undefined;
 
   useEffect(() => {
     if (route.name === 'container' && containers.length > 0 && !selectedContainer) {
@@ -127,7 +131,19 @@ export function App() {
     if (route.name === 'machine' && machines.length > 0 && !selectedMachine) {
       navigate({ name: 'machines' });
     }
-  }, [route, containers.length, machines.length, selectedContainer, selectedMachine, navigate]);
+    if (route.name === 'network' && networks.length > 0 && !selectedNetwork) {
+      navigate({ name: 'networks' });
+    }
+  }, [
+    route,
+    containers.length,
+    machines.length,
+    networks.length,
+    selectedContainer,
+    selectedMachine,
+    selectedNetwork,
+    navigate,
+  ]);
 
   // Nothing else is usable without the services, so the window becomes the
   // single screen that fixes it -- no sidebar, no status bar, no navigation to
@@ -170,6 +186,9 @@ export function App() {
             {route.name === 'volumes' && <VolumesPage />}
 
             {route.name === 'networks' && <NetworksPage />}
+
+            {route.name === 'network' &&
+              (selectedNetwork ? <NetworkDetailPage network={selectedNetwork} /> : <Loading />)}
 
             {route.name === 'machines' && <MachinesPage runtimeMissing={runtimeMissing} />}
 

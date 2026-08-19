@@ -25,7 +25,7 @@ const COLUMNS: Column[] = [
   { key: 'mode', label: 'Mode', width: '88px' },
   { key: 'subnet', label: 'Subnet', width: '152px' },
   { key: 'gateway', label: 'Gateway', width: '140px' },
-  { key: 'used', label: 'Attached', width: 'minmax(140px,1.2fr)' },
+  { key: 'used', label: 'Containers', width: '92px', align: 'right' },
   { key: 'created', label: 'Created', width: '80px', align: 'right' },
 ];
 
@@ -33,6 +33,7 @@ export function NetworksPage() {
   const networks = useResourceStore((s) => s.networks);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
+  const openNetwork = useUIStore((s) => s.openNetwork);
   const pushToast = useToastStore((s) => s.push);
 
   const creating = useDialog('network.create');
@@ -62,7 +63,7 @@ export function NetworksPage() {
     <div className="flex min-h-0 flex-col gap-3">
       <PageHeader
         title="Networks"
-        subtitle="Attach containers to a network when you create them"
+        subtitle="Open one to see what is attached to it"
         search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search networks…' }}
         actions={
           selected.size > 0 ? (
@@ -91,6 +92,7 @@ export function NetworksPage() {
         rows={visible}
         rowKey={(network) => network.name}
         selection={{ selected, onChange: setSelected }}
+        onOpen={(network) => openNetwork(network.name)}
         empty={networks.length === 0 ? 'No networks yet.' : 'No networks match your search.'}
         cells={(network) => [
           <NameCell key="name">
@@ -104,7 +106,7 @@ export function NetworksPage() {
           <Muted key="gateway" mono>
             {network.ipv4Gateway || '—'}
           </Muted>,
-          <Muted key="used">{network.usedBy.join(', ') || '—'}</Muted>,
+          <Muted key="used">{network.usedBy.length || '—'}</Muted>,
           <Muted key="created">
             {network.createdAt ? formatDuration(network.createdAt) : '—'}
           </Muted>,

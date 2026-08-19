@@ -27,6 +27,7 @@ interface UIState {
   openContainer: (id: string, tab?: ContainerTab) => void;
   openMachine: (id: string, tab?: MachineTab) => void;
   openImage: (reference: string) => void;
+  openNetwork: (name: string) => void;
   /** Switches tabs within the current detail route; ignored elsewhere. */
   setTab: (tab: string) => void;
   back: () => void;
@@ -46,6 +47,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({ route: { name: 'container', id, tab }, intent: null }),
   openMachine: (id, tab = 'overview') => set({ route: { name: 'machine', id, tab }, intent: null }),
   openImage: (reference) => set({ route: { name: 'image', reference }, intent: null }),
+  openNetwork: (name) => set({ route: { name: 'network', network: name }, intent: null }),
   setTab: (tab) =>
     set((state) => {
       if (state.route.name === 'container') {
@@ -61,6 +63,7 @@ export const useUIStore = create<UIState>((set) => ({
       if (state.route.name === 'container') return { route: { name: 'containers' }, intent: null };
       if (state.route.name === 'machine') return { route: { name: 'machines' }, intent: null };
       if (state.route.name === 'image') return { route: { name: 'images' }, intent: null };
+      if (state.route.name === 'network') return { route: { name: 'networks' }, intent: null };
       return state;
     }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),

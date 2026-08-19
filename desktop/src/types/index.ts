@@ -404,6 +404,7 @@ export type Route =
   | { name: 'image'; reference: string }
   | { name: 'volumes' }
   | { name: 'networks' }
+  | { name: 'network'; network: string }
   | { name: 'registries' }
   | { name: 'machines' }
   | { name: 'machine'; id: string; tab: MachineTab }
