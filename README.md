@@ -17,9 +17,14 @@
 
 ---
 
-Dermaga is a lightweight alternative to Docker Desktop for Apple Silicon. It runs no daemon, opens
-no ports and polls nothing: a small Go agent wraps the `container` CLI, the UI subscribes to it, and
-everything you do is immediately visible to `container ls` and vice versa.
+Dermaga is a lightweight alternative to Docker Desktop for Apple Silicon. A small Go agent wraps the
+`container` CLI and the UI subscribes to it, so everything you do is immediately visible to
+`container ls` and vice versa. It opens no ports: the agent and the app speak over a socket in your
+own home directory.
+
+No daemon by default — the agent belongs to the app and goes when it does. There is one if you want
+one: a per-user background service you switch on in Settings, which keeps watching your containers,
+and restarting the ones you asked it to, while Dermaga is closed.
 
 ## Features
 
@@ -47,6 +52,9 @@ everything you do is immediately visible to `container ls` and vice versa.
 - **Volumes** — create and delete, see which containers mount one and where it lands inside each,
   and read what it actually costs on disk rather than the half-terabyte cap it was created with.
   Open one and look inside it, even when no container has it mounted.
+- **Restart policies** — Apple's CLI has none, so Dermaga has one. Set a container to come back
+  **always**, or **unless you stopped it yourself**, and it is started again when it stops on its
+  own. Honoured while Dermaga runs, or around the clock with the background service on.
 - **Machines** — create, boot, stop, resize (CPU, memory, home mount) and delete the Linux VMs.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
 - **Speaks up** — a container that stops without being asked to is reported: in the window, as a
@@ -133,18 +141,23 @@ dotfiles. Dermaga merges partial updates and repairs out-of-range values rather 
 
 ## Architecture
 
-Three layers, each with one job. There is no HTTP server and no listening port — the agent is a
-child process that speaks JSON-RPC on its own stdin and stdout, and dies with the app.
+Three layers, each with one job. There is no HTTP server and no listening port — the agent speaks
+JSON-RPC over a Unix socket at `~/.dermaga/agent.sock`, mode `0600`, and the app connects to it.
+
+Usually the app starts that agent and takes it down again on quit. Switch the background service on
+and launchd starts it instead, at login, and it carries on watching after the last window closes.
+Either way there is exactly one: an agent that finds the socket answered stands down rather than
+binding over it.
 
 ```mermaid
 flowchart TD
     R["<b>desktop/src</b><br/>React renderer<br/><i>no network access</i>"]
-    M["<b>desktop/electron</b><br/>Electron main<br/><i>spawns the agent</i>"]
+    M["<b>desktop/electron</b><br/>Electron main<br/><i>connects, or starts one</i>"]
     A["<b>cmd/dermaga-agent</b><br/>Go agent<br/><i>wraps the CLI</i>"]
     C["<b>container</b><br/>Apple's CLI"]
 
     R -- "contextBridge IPC" --> M
-    M -- "JSON-RPC 2.0 over stdio" --> A
+    M -- "JSON-RPC 2.0 over a Unix socket" --> A
     A -- "exec" --> C
     C -. "state" .-> A
     A -. "events.snapshot" .-> M
@@ -152,8 +165,12 @@ flowchart TD
 ```
 
 The agent holds no container state. Every call shells out; the only things it remembers are the last
-stats sample, needed to turn cumulative CPU time into a percentage, and the last snapshot, needed to
-tell when something actually changed.
+stats sample, needed to turn cumulative CPU time into a percentage, the last snapshot, needed to tell
+when something actually changed, and which containers you stopped on purpose, so that *unless
+stopped* can mean what it says after a restart.
+
+Restart policies live on the containers themselves, as a `dermaga.restart` label. Nothing in Dermaga
+has to be kept in step with what the CLI already knows.
 
 ### Go packages
 
@@ -277,6 +294,11 @@ directory, scanned there and deleted; no image, digest or finding is sent anywhe
 
 ## Behaviour worth knowing
 
+**A restart policy only holds while something is running.** Without the background service the agent
+belongs to the app: close Dermaga and nothing is watching, so nothing is restarted until you open it
+again. Switch the service on in **Settings → Startup** and that gap closes — the agent starts at
+login and keeps its eye on your containers whether or not a window is open.
+
 **Browsing a container needs a shell in it.** Apple's CLI cannot read a container's filesystem, so
 Dermaga runs `ls` inside the container and reads what it prints. An image built `FROM scratch` has
 no `ls`, and says so rather than pretending to be empty.
@@ -382,8 +404,10 @@ bottom-right of the status bar — so any running build can be traced back to th
 
 Dermaga needs no macOS permissions of its own: no network access, no disk access prompts, no
 accessibility, no admin password. It runs Apple's CLI as your user and talks to its agent over a
-pipe. The two things it does ask about, it asks in the UI: installing the `container` CLI through
-Homebrew, and installing a kernel if the services need one.
+socket in your own home directory. Three things it does ask about, and asks in the UI: installing the
+`container` CLI through Homebrew, installing a kernel if the services need one, and installing the
+background service — a per-user launchd job in `~/Library/LaunchAgents`, which needs no
+administrator either and is removed from the same switch.
 
 > **Launching from an Electron-based terminal:** VS Code, Cursor and Claude Code export
 > `ELECTRON_RUN_AS_NODE=1`, which makes a packaged Electron app exit immediately. Launch from Finder,
