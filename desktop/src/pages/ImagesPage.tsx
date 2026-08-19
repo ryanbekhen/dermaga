@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileDown, FileUp, FolderOpen, Hammer, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  Download,
+  FileDown,
+  FileUp,
+  FolderOpen,
+  Hammer,
+  Play,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -10,6 +19,7 @@ import {
   SelectionActions,
   type Column,
 } from '../components/DataTable';
+import { ContainerForm } from '../components/ContainerForm';
 import { Checkbox, Field, Modal } from '../components/form';
 import { SaveImageDialog, loadImage, saveImage } from '../components/ImageArchive';
 import { TaskRows, runTask } from '../components/TaskRows';
@@ -101,6 +111,7 @@ export function ImagesPage() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [savingGroup, setSavingGroup] = useState<ImageGroup | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
 
   const groups = useMemo(() => groupByDigest(images), [images]);
 
@@ -231,6 +242,13 @@ export function ImagesPage() {
         actions={(group) => (
           <>
             <IconButton
+              icon={Play}
+              className="border-transparent opacity-0 group-hover:opacity-100"
+              title="Run a container from this image"
+              aria-label={`Run ${group.names[0]}`}
+              onClick={() => setRunning(group.tags[0].reference)}
+            />
+            <IconButton
               icon={FileDown}
               className="border-transparent opacity-0 group-hover:opacity-100"
               title="Save as a file"
@@ -286,6 +304,8 @@ export function ImagesPage() {
           onCancel={() => setBulkDeleting(false)}
         />
       )}
+
+      {running && <ContainerForm initial={{ image: running }} onClose={() => setRunning(null)} />}
 
       {pulling.open && <PullDialog onClose={() => pulling.close()} />}
 

@@ -210,7 +210,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
 
       {/* Creating does not navigate: the new container appears in this list,
           and being thrown into its detail page interrupts what you were doing. */}
-      {creating.open && <ContainerForm onClose={() => creating.close()} />}
+      {creating.open && (
+        <ContainerForm
+          initial={creating.target ? { image: creating.target } : undefined}
+          onClose={() => creating.close()}
+        />
+      )}
 
       {confirmingRemove && (
         <ConfirmDialog

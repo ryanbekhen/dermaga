@@ -13,11 +13,12 @@ import { useTaskStore } from '../store/taskStore';
 interface ContainerFormProps {
   /** Present when editing; absent when creating. */
   editing?: string;
-  initial?: ContainerSpec;
+  /** What to open with: a whole spec when editing, or just an image to run. */
+  initial?: Partial<ContainerSpec>;
   onClose: () => void;
 }
 
-const EMPTY: ContainerSpec = {
+const EMPTY: Partial<ContainerSpec> = {
   name: '',
   image: '',
   cpus: 1,

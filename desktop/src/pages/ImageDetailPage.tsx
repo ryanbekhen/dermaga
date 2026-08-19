@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Boxes, FileDown, Info, Layers, ShieldCheck, Tags, Trash2, Upload, X } from 'lucide-react';
+import {
+  Boxes,
+  FileDown,
+  Info,
+  Layers,
+  Play,
+  ShieldCheck,
+  Tags,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ContainerForm } from '../components/ContainerForm';
 import { Badge } from '../components/DataTable';
 import { IconButton } from '../components/Button';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
@@ -35,6 +47,7 @@ export function ImageDetailPage({ reference }: { reference: string }) {
   const [reloads, setReloads] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
 
   const back = useUIStore((s) => s.back);
   const openContainer = useUIStore((s) => s.openContainer);
@@ -101,6 +114,12 @@ export function ImageDetailPage({ reference }: { reference: string }) {
       onSelectTab={setTab}
       actions={
         <>
+          {/* The first thing anyone wants from an image, and until now the one
+              thing this page could not do. */}
+          <button onClick={() => setRunning(true)} className="btn-ghost">
+            <Play size={13} aria-hidden />
+            Run
+          </button>
           <button onClick={() => setPushing(true)} className="btn-ghost">
             <Upload size={13} aria-hidden />
             Push
@@ -263,6 +282,10 @@ export function ImageDetailPage({ reference }: { reference: string }) {
             )}
           </Section>
         </DetailGrid>
+      )}
+
+      {running && (
+        <ContainerForm initial={{ image: reference }} onClose={() => setRunning(false)} />
       )}
 
       {pushing && <PushDialog reference={reference} onClose={() => setPushing(false)} />}

@@ -230,6 +230,18 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         run: () => openNetwork(network.name),
       })),
 
+      // Running an image is the thing people come to an image for, so it is a
+      // command in its own right rather than a page to navigate to.
+      ...images.map((image) => ({
+        id: `run:${image.reference}`,
+        // shortImage, not the full reference: "Run alpine:3.20" is what the
+        // user would type, "docker.io/library/..." is not.
+        label: `Run ${shortImage(image.reference)}`,
+        section: 'Actions',
+        icon: Play,
+        run: () => navigateWith({ name: 'containers' }, 'container.create', image.reference),
+      })),
+
       ...machines.map((machine) => ({
         id: `machine:${machine.id}`,
         label: machine.id,
