@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,8 @@ func main() {
 			application.NewService(app.dock),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
+			Handler:    application.AssetFileServerFS(assets),
+			Middleware: contentSecurityPolicy,
 		},
 		Mac: application.MacOptions{
 			// Closing the window does not quit on macOS: the app keeps
@@ -112,6 +114,21 @@ func main() {
 	if err := app.wails.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// contentSecurityPolicy locks the window down to what it actually needs.
+//
+// The window has no network access of its own: everything goes to the agent
+// through the bridge, so nothing here should ever open a connection. The
+// runtime is served from the same origin, which is why 'self' is enough.
+func contentSecurityPolicy(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Security-Policy",
+			"default-src 'self'; connect-src 'self'"+cspConnectExtra+
+				"; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
+
+		next.ServeHTTP(writer, request)
+	})
 }
 
 // --- where things are -----------------------------------------------------
