@@ -172,7 +172,7 @@ export function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="flex min-h-0 flex-1">
-        <Sidebar />
+        <Sidebar version={build?.version} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Nothing sits above the page here, so give the window a drag strip.

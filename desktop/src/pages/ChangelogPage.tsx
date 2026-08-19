@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '../components/DataTable';
 import { DetailLayout } from '../components/DetailLayout';
 import releases from '../generated/changelog.json';
+import { useChangelogStore } from '../store/changelogStore';
 import { useUIStore } from '../store/uiStore';
 
 interface Release {
@@ -21,7 +22,11 @@ interface Release {
  */
 export function ChangelogPage({ version }: { version: string }) {
   const navigate = useUIStore((s) => s.navigate);
+  const markSeen = useChangelogStore((s) => s.markSeen);
   const entries = releases as Release[];
+
+  // Reading the notes is what makes them read; the dot in the sidebar goes.
+  useEffect(() => markSeen(version), [markSeen, version]);
 
   return (
     <DetailLayout

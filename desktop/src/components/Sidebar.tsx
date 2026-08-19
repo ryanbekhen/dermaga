@@ -10,11 +10,13 @@ import {
   Network,
   Server,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import logo from '@assets/logo.png';
 import { useFullScreen } from '../hooks/useFullScreen';
 import { useSettingsStore } from '../store/settingsStore';
+import { useUnreadChangelog } from '../store/changelogStore';
 import { useUIStore } from '../store/uiStore';
 import type { Route } from '../types';
 
@@ -46,19 +48,24 @@ const PRIMARY_NAV: NavEntry[] = [
 
 const SECONDARY_NAV: NavEntry[] = [
   { target: { name: 'settings' }, owns: ['settings'], icon: Settings, label: 'Settings' },
+  { target: { name: 'changelog' }, owns: ['changelog'], icon: Sparkles, label: "What's new" },
   { target: { name: 'help' }, owns: ['help'], icon: CircleHelp, label: 'Help' },
   { target: { name: 'licences' }, owns: ['licences'], icon: Scale, label: 'Licences' },
 ];
 
-export function Sidebar() {
+export function Sidebar({ version }: { version?: string }) {
   const route = useUIStore((s) => s.route);
   const navigate = useUIStore((s) => s.navigate);
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const fullScreen = useFullScreen();
   const setCollapsed = useSettingsStore((s) => s.setSidebarCollapsed);
+  const hasUnread = useUnreadChangelog(version);
 
   const item = ({ target, owns, icon: Icon, label }: NavEntry) => {
     const active = owns.includes(route.name);
+    // A menu entry says the notes exist; the dot says there are some the user
+    // has not read. It clears the moment the page is opened.
+    const unread = target.name === 'changelog' && hasUnread;
 
     return (
       <button
@@ -75,13 +82,22 @@ export function Sidebar() {
             : 'text-white/70 hover:bg-white/10 dark:text-ink-400 dark:hover:bg-white/5 dark:hover:text-ink-100'
         }`}
       >
-        <Icon size={15} className="shrink-0" strokeWidth={active ? 2.25 : 1.75} aria-hidden />
+        <span className="relative shrink-0">
+          <Icon size={15} strokeWidth={active ? 2.25 : 1.75} aria-hidden />
+          {unread && (
+            <span
+              className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-white ring-2 ring-brand-700 dark:bg-brand-400 dark:ring-ink-900"
+              aria-hidden
+            />
+          )}
+        </span>
         <span
           className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
             collapsed ? 'max-w-0 opacity-0' : 'max-w-40 opacity-100'
           }`}
         >
           {label}
+          {unread && <span className="sr-only"> (unread)</span>}
         </span>
       </button>
     );
