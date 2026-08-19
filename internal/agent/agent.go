@@ -1416,7 +1416,16 @@ func (a *Agent) registerStreams() {
 
 // SocketPath is where an agent serving a socket puts it: beside the settings
 // and the scan results, in a directory only this user can read.
+//
+// DERMAGA_SOCKET overrides it, which is how a development build keeps to
+// itself. Sharing one path would mean the app you are working on driving the
+// agent of the one you have installed -- different code, same containers, and
+// no sign on screen that it is happening.
 func SocketPath() (string, error) {
+	if custom := strings.TrimSpace(os.Getenv("DERMAGA_SOCKET")); custom != "" {
+		return custom, nil
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

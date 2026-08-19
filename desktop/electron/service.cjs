@@ -37,7 +37,7 @@ const SERVICE_PATH = [
   '/sbin',
 ];
 
-function plist(binary) {
+function plist(binary, socket) {
   const logFile = path.join(os.homedir(), '.dermaga', 'agent.log');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -66,6 +66,10 @@ function plist(binary) {
 	<dict>
 		<key>PATH</key>
 		<string>${SERVICE_PATH.join(':')}</string>
+		<!-- The service belongs to the build that installed it, and listens
+		     where that build looks. A development build has its own socket. -->
+		<key>DERMAGA_SOCKET</key>
+		<string>${socket}</string>
 	</dict>
 	<key>StandardErrorPath</key>
 	<string>${logFile}</string>
@@ -88,8 +92,6 @@ async function status() {
   }
 }
 
-const socketPath = () => path.join(os.homedir(), '.dermaga', 'agent.sock');
-
 /** Polls, because launchd and a process on its way out answer to no promise. */
 async function waitFor(condition, attempts = 60) {
   for (let i = 0; i < attempts; i += 1) {
@@ -109,13 +111,14 @@ async function waitFor(condition, attempts = 60) {
  * a service that is installed and doing nothing. So: ask the holder to let go,
  * wait until it genuinely has, and only then boot the service.
  */
-async function install(binary, { releaseSocket }) {
+async function install(binary, { socket, releaseSocket }) {
   await mkdir(path.dirname(plistPath()), { recursive: true });
   await mkdir(path.join(os.homedir(), '.dermaga'), { recursive: true });
-  await writeFile(plistPath(), plist(binary), 'utf8');
+  await mkdir(path.dirname(socket), { recursive: true });
+  await writeFile(plistPath(), plist(binary, socket), 'utf8');
 
   await releaseSocket?.();
-  await waitFor(() => !existsSync(socketPath()));
+  await waitFor(() => !existsSync(socket));
 
   // Already loaded from an earlier install: replace it rather than fail.
   await run('launchctl', ['bootout', `${target()}/${LABEL}`]).catch(() => {});
@@ -123,19 +126,19 @@ async function install(binary, { releaseSocket }) {
 
   // The socket coming back is the proof that the service is really up. A job
   // that stood down once stays down until asked plainly.
-  if (!(await waitFor(() => existsSync(socketPath()), 30))) {
+  if (!(await waitFor(() => existsSync(socket), 30))) {
     await run('launchctl', ['kickstart', '-k', `${target()}/${LABEL}`]).catch(() => {});
-    await waitFor(() => existsSync(socketPath()), 30);
+    await waitFor(() => existsSync(socket), 30);
   }
 
   return status();
 }
 
 /** Removes the service. Whatever it started goes with it. */
-async function uninstall() {
+async function uninstall(socket) {
   await run('launchctl', ['bootout', `${target()}/${LABEL}`]).catch(() => {});
   await rm(plistPath(), { force: true });
-  await waitFor(() => !existsSync(socketPath()));
+  if (socket) await waitFor(() => !existsSync(socket));
 
   return status();
 }

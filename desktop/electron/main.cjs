@@ -197,6 +197,21 @@ function closeSplash() {
   splashWindow = null;
 }
 
+/**
+ * Where this build's agent listens.
+ *
+ * A development build keeps to its own socket, inside the checkout it was
+ * built from. Sharing the installed app's socket meant the build you are
+ * working on quietly driving the agent of the one you have installed -- and
+ * later, with the background service running, never starting your own agent at
+ * all.
+ */
+function socketPath() {
+  if (app.isPackaged) return path.join(os.homedir(), '.dermaga', 'agent.sock');
+
+  return path.join(__dirname, '..', '..', '.dermaga', 'agent.sock');
+}
+
 function agentBinary() {
   const candidates = app.isPackaged
     ? [path.join(process.resourcesPath, 'dermaga-agent')]
@@ -223,10 +238,14 @@ function startAgent() {
     new Set([...(process.env.PATH || '').split(':').filter(Boolean), ...EXTRA_PATH])
   ).join(':');
 
+  const socket = socketPath();
+
   agent = new Agent({
     binary,
-    socket: path.join(os.homedir(), '.dermaga', 'agent.sock'),
-    env: { ...process.env, PATH: mergedPath },
+    socket,
+    // DERMAGA_SOCKET travels to the agent this app starts, so it listens where
+    // this app is looking.
+    env: { ...process.env, PATH: mergedPath, DERMAGA_SOCKET: socket },
     // Everything the agent pushes -- snapshots, stream chunks, terminal output
     // -- is forwarded to the renderer as one channel.
     onNotify: (message) => {
@@ -440,6 +459,7 @@ ipcMain.handle('dermaga:install-service', async () => {
   if (!binary) throw new Error('The Dermaga agent binary is missing');
 
   const installed = await service.install(binary, {
+    socket: socketPath(),
     releaseSocket: async () => {
       agent?.stop();
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -453,7 +473,7 @@ ipcMain.handle('dermaga:install-service', async () => {
 });
 
 ipcMain.handle('dermaga:uninstall-service', async () => {
-  const removed = await service.uninstall();
+  const removed = await service.uninstall(socketPath());
 
   // Nothing is serving any more, so the app goes back to running its own.
   await startAgent();

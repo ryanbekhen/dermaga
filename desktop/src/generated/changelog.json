@@ -19,6 +19,7 @@
       {
         "title": "Fixed",
         "entries": [
+          "**A development build no longer drives the installed app's agent.** Both looked for the same socket in `~/.dermaga`, so running `make dev` with Dermaga installed meant the build you are working on quietly steering the agent of the one you have — different code, the same containers, and nothing on screen to say so. A development build now keeps its socket inside the checkout, and a background service installed from one listens there too.",
           "**Only one Dermaga at a time.** Opening the app while it was already running started a second copy, with a second agent, a second watcher and duplicate exit notifications. It now brings the running one forward — which matters more than it used to, since an app with no Dock icon is opened by launching it again."
         ]
       }

@@ -1,5 +1,9 @@
 # --- Go -----------------------------------------------------------------
 /bin/
+
+# A development build keeps its agent's socket here rather than in ~/.dermaga,
+# so it never drives the installed app's agent.
+/.dermaga/
 *.test
 *.out
 
