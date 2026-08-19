@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Boxes, FolderTree, Info, RefreshCw, Trash2, UserCog } from 'lucide-react';
+import { Boxes, Eraser, FolderTree, Info, RefreshCw, Trash2, UserCog } from 'lucide-react';
 import { Badge } from '../components/DataTable';
 import { Button } from '../components/Button';
 import { Field, Modal } from '../components/form';
@@ -13,7 +13,7 @@ import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type { Container, ContainerTab, Mount, Volume } from '../types';
+import type { Container, ContainerTab, Mount, Volume, VolumeState } from '../types';
 import { formatBytes, formatDuration } from '../utils/format';
 
 const TABS: TabDefinition[] = [
@@ -173,23 +173,37 @@ export function VolumeDetailPage({ volume }: { volume: Volume }) {
  * to write fails, with an error that never mentions the word volume.
  */
 function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
-  const [owner, setOwner] = useState<string | null>(null);
-  const [state, setState] = useState<'idle' | 'reading' | 'failed'>('idle');
+  const [state, setState] = useState<VolumeState | null>(null);
+  const [busy, setBusy] = useState<'reading' | 'tidying' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [changing, setChanging] = useState(false);
+  const pushToast = useToastStore((s) => s.push);
 
   const read = useCallback(async () => {
-    setState('reading');
+    setBusy('reading');
     setError(null);
 
     try {
-      setOwner(await api.getVolumeOwner(volume));
-      setState('idle');
+      setState(await api.getVolumeState(volume));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read the owner');
-      setState('failed');
+      setError(err instanceof Error ? err.message : 'Could not read the volume');
+    } finally {
+      setBusy(null);
     }
   }, [volume]);
+
+  const tidy = async () => {
+    setBusy('tidying');
+
+    try {
+      setState(await api.tidyVolume(volume));
+      pushToast(`Removed lost+found from ${volume}`);
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not tidy the volume', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   // Free when a running container already has the volume: the agent asks that
   // container. Otherwise it costs a helper, so it waits to be asked.
@@ -205,19 +219,30 @@ function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span className="text-tiny text-ink-500">Owner</span>
         <span className="font-mono text-xs">
-          {owner ?? (state === 'reading' ? 'reading…' : 'not checked')}
+          {state?.owner ?? (busy === 'reading' ? 'reading…' : 'not checked')}
         </span>
-        {owner === '0:0' && <Badge>root</Badge>}
+        {state?.owner === '0:0' && <Badge>root</Badge>}
+        {state?.lostFound && <Badge tone="brand">lost+found</Badge>}
 
         <span className="ml-auto flex items-center gap-2">
           {!held && (
             <Button
               icon={RefreshCw}
-              busy={state === 'reading'}
+              busy={busy === 'reading'}
               busyLabel="Checking…"
               onClick={() => void read()}
             >
-              {owner ? 'Check again' : 'Check'}
+              {state ? 'Check again' : 'Check'}
+            </Button>
+          )}
+          {state?.lostFound && (
+            <Button
+              icon={Eraser}
+              busy={busy === 'tidying'}
+              busyLabel="Removing…"
+              onClick={() => void tidy()}
+            >
+              Remove lost+found
             </Button>
           )}
           <Button icon={UserCog} onClick={() => setChanging(true)}>
@@ -229,18 +254,18 @@ function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
       {error && <p className="text-xs text-orange-700 dark:text-orange-500">{error}</p>}
 
       <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
-        {owner === '0:0'
-          ? 'Owned by root. An image that runs as anyone else — redis and postgres both run as 999 — cannot write here, and says only “permission denied”.'
-          : 'A volume starts out owned by root, while most database images run as somebody else. If one cannot write to this volume, this is usually why.'}
+        {state?.lostFound
+          ? 'This volume still has the ext4 filesystem’s own lost+found in it. Images that look before they write read that as “not empty” and refuse to set themselves up — redis reports “Unknown file ‘./lost+found’ found in data dir” and then cannot write. Volumes created in Dermaga have it removed already.'
+          : 'A volume starts out owned by root, while most database images run as somebody else. If a container cannot write here, this is usually why.'}
         {!held && ' Checking starts a small container for a moment.'}
       </p>
 
       {changing && (
         <SetOwnerDialog
           volume={volume}
-          current={owner}
+          current={state?.owner ?? null}
           onClose={() => setChanging(false)}
-          onChanged={setOwner}
+          onChanged={setState}
         />
       )}
     </>
@@ -257,7 +282,7 @@ function SetOwnerDialog({
   volume: string;
   current: string | null;
   onClose: () => void;
-  onChanged: (owner: string) => void;
+  onChanged: (state: VolumeState) => void;
 }) {
   const [owner, setOwner] = useState(current && current !== '0:0' ? current : '999:999');
   const [busy, setBusy] = useState(false);
@@ -273,7 +298,7 @@ function SetOwnerDialog({
     try {
       const applied = await api.setVolumeOwner(volume, owner.trim());
       onChanged(applied);
-      pushToast(`${volume} now belongs to ${applied}`);
+      pushToast(`${volume} now belongs to ${applied.owner}`);
       onClose();
     } catch (err) {
       pushToast(err instanceof Error ? err.message : 'Could not set the owner', 'error');

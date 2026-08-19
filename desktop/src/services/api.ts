@@ -22,6 +22,7 @@ import type {
   Volume,
   UsagePoint,
   VolumeSpec,
+  VolumeState,
   VulnerabilityReport,
 } from '../types';
 
@@ -227,21 +228,24 @@ export const api = {
   },
 
   /**
-   * Who owns the volume's root directory, as "uid:gid".
+   * What a container will find when it mounts this volume: who owns its root
+   * directory, and whether the filesystem's own lost+found is still in it.
    *
    * Instant when a running container holds the volume -- the agent asks that
    * container -- and a few seconds otherwise, since it has to start a small
    * one to look.
    */
-  async getVolumeOwner(name: string): Promise<string> {
-    const { owner } = await invoke<{ owner: string }>('volumes.owner', { name });
-    return owner;
+  async getVolumeState(name: string): Promise<VolumeState> {
+    return invoke('volumes.owner', { name });
   },
 
-  /** Answers with the owner as it stands afterwards, not as it was asked for. */
-  async setVolumeOwner(name: string, owner: string): Promise<string> {
-    const result = await invoke<{ owner: string }>('volumes.setOwner', { name, owner });
-    return result.owner;
+  /** Each answers with the state as it stands afterwards, not as it was asked for. */
+  async setVolumeOwner(name: string, owner: string): Promise<VolumeState> {
+    return invoke('volumes.setOwner', { name, owner });
+  },
+
+  async tidyVolume(name: string): Promise<VolumeState> {
+    return invoke('volumes.tidy', { name });
   },
 
   async deleteVolume(name: string): Promise<void> {

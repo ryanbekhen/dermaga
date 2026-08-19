@@ -21,6 +21,13 @@ change means to someone using Dermaga, not for how much code moved.
 - **Closing the window leaves the Dock.** With no window open Dermaga is a menu bar app; the icon
   comes back the moment a window does.
 
+- **Volumes that database images can actually write to.** A volume here is an ext4 filesystem, and
+  every ext4 filesystem has a `lost+found` in it. Images that look before they write read that as
+  "this volume is not empty" and refuse to set themselves up: redis prints *"Notice: Unknown file
+  './lost+found' found in data dir. Permissions will not be modified"*, then drops to its own user
+  and fails with `Can't open or create append-only dir appendonlydir: Permission denied`. Volumes
+  created in Dermaga no longer carry one, so `redis-server --appendonly yes` works on a fresh volume
+  with nothing to configure. Volumes made elsewhere can be tidied from their page.
 - **A volume's owner, and a way to change it.** The Permissions section on a volume reports who owns
   its root directory and hands it to someone else in one step. This is the answer to most "permission
   denied" in a container with a volume: a volume is born owned by root, while the official database

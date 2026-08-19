@@ -904,12 +904,34 @@ func (a *Agent) registerVolumes() {
 			return nil, err
 		}
 
-		owner, err := a.volumes.Owner(ctx, args.Name, a.volumeMount(ctx, args.Name))
+		state, err := a.volumes.Inspect(ctx, args.Name, a.volumeMount(ctx, args.Name))
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
 		}
 
-		return map[string]any{"owner": owner}, nil
+		return state, nil
+	})
+
+	// Removes the filesystem's own lost+found, which is what makes a fresh
+	// volume look occupied to an image that checks before it writes.
+	a.server.Register("volumes.tidy", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Name string `json:"name"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.volumes.Tidy(ctx, args.Name, a.volumeMount(ctx, args.Name)); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		state, err := a.volumes.Inspect(ctx, args.Name, a.volumeMount(ctx, args.Name))
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return state, nil
 	})
 
 	a.server.Register("volumes.setOwner", func(ctx context.Context, params json.RawMessage) (any, error) {
@@ -925,12 +947,12 @@ func (a *Agent) registerVolumes() {
 			return nil, rpc.Fail(err.Error())
 		}
 
-		owner, err := a.volumes.Owner(ctx, args.Name, a.volumeMount(ctx, args.Name))
+		state, err := a.volumes.Inspect(ctx, args.Name, a.volumeMount(ctx, args.Name))
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
 		}
 
-		return map[string]any{"owner": owner}, nil
+		return state, nil
 	})
 
 	a.server.Register("volumes.list", func(ctx context.Context, _ json.RawMessage) (any, error) {

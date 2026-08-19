@@ -385,6 +385,18 @@ export interface MachineSettings {
   virtualization?: boolean;
 }
 
+/** What a container meets when it mounts a volume. */
+export interface VolumeState {
+  /** "uid:gid" of the volume's root directory. */
+  owner: string;
+  /**
+   * Whether the ext4 filesystem's lost+found is still there. Images that look
+   * before they write -- redis, Postgres -- read it as "this volume is not
+   * empty" and refuse to set themselves up.
+   */
+  lostFound: boolean;
+}
+
 export interface VolumeSpec {
   name: string;
   size?: string;

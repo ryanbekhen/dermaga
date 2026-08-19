@@ -149,6 +149,15 @@ func (m *Manager) Create(ctx context.Context, spec Spec) error {
 	}
 	m.changed.Changed()
 
+	// A volume made here comes out looking empty, so that images which inspect
+	// their data directory before touching it -- redis, Postgres -- behave the
+	// way their authors intended. Best effort: a volume that exists is worth
+	// more than one that failed to be tidied, and the volume page can finish
+	// the job later.
+	if err := m.Tidy(ctx, spec.Name, nil); err != nil {
+		m.logger.Warn("Created the volume but could not tidy it", "name", spec.Name, "error", err)
+	}
+
 	return nil
 }
 
@@ -191,6 +200,55 @@ var ownerPattern = regexp.MustCompile(`^\d+(:\d+)?$`)
 // ValidOwner reports whether an owner is one this package will act on.
 func ValidOwner(owner string) bool {
 	return ownerPattern.MatchString(owner)
+}
+
+// State is what a container will find when it mounts the volume: who owns the
+// root directory, and whether the filesystem's own lost+found is still sitting
+// in it.
+type State struct {
+	Owner string `json:"owner"`
+	// Every ext4 filesystem has one, and a volume here is an ext4 filesystem.
+	// Images disagree with that: the redis entrypoint refuses to fix ownership
+	// when it finds anything unexpected in the data directory ("Notice: Unknown
+	// file './lost+found' found in data dir"), and Postgres refuses to
+	// initialise a data directory that is not empty. Both then fail with an
+	// error that never mentions a volume.
+	LostFound bool `json:"lostFound"`
+}
+
+// Inspect reads both in one visit, since either answer costs the same trip.
+func (m *Manager) Inspect(ctx context.Context, name string, in *Mount) (State, error) {
+	path := pathOf(in)
+	script := fmt.Sprintf(
+		`stat -c %%u:%%g %s; [ -d %s/lost+found ] && echo yes || echo no`, path, path,
+	)
+
+	out, err := m.runner.Run(ctx, commandIn(withVolume(in, name), []string{"sh", "-c", script})...)
+	if err != nil {
+		return State{}, fmt.Errorf("could not read %s: %w", name, err)
+	}
+
+	lines := strings.Fields(string(out))
+	if len(lines) < 2 {
+		return State{}, fmt.Errorf("could not read %s: unexpected output %q", name, string(out))
+	}
+
+	return State{Owner: lines[0], LostFound: lines[1] == "yes"}, nil
+}
+
+// Tidy removes the filesystem's lost+found, which is what makes a fresh volume
+// look occupied to an image that checks.
+//
+// Nothing is lost with it: it is created empty by mkfs and only ever filled by
+// a filesystem check recovering orphaned inodes, which would recreate it.
+func (m *Manager) Tidy(ctx context.Context, name string, in *Mount) error {
+	target := pathOf(in) + "/lost+found"
+
+	if _, err := m.runner.Run(ctx, commandIn(withVolume(in, name), []string{"rm", "-rf", target})...); err != nil {
+		return fmt.Errorf("could not tidy %s: %w", name, err)
+	}
+
+	return nil
 }
 
 // Owner reports who owns the volume's root directory, as "uid:gid".

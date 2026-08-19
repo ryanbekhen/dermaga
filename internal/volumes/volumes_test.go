@@ -76,3 +76,21 @@ func TestCommandGoesWhereTheVolumeIs(t *testing.T) {
 		t.Errorf("the helper must not outlive the question: %v", free)
 	}
 }
+
+// The tidy has to reach the volume the same way everything else does: through
+// the container holding it, or through a helper that mounts it.
+func TestTidyRemovesLostFoundWhereverTheVolumeIs(t *testing.T) {
+	held := commandIn(&Mount{Container: "redis", Path: "/data", Volume: "redis-data"},
+		[]string{"rm", "-rf", "/data/lost+found"})
+
+	if strings.Join(held, " ") != "exec redis rm -rf /data/lost+found" {
+		t.Errorf("held volume: got %v", held)
+	}
+
+	free := strings.Join(commandIn(&Mount{Volume: "redis-data"},
+		[]string{"rm", "-rf", helperPath + "/lost+found"}), " ")
+
+	if !strings.Contains(free, "run --rm") || !strings.Contains(free, helperPath+"/lost+found") {
+		t.Errorf("free volume: got %s", free)
+	}
+}
