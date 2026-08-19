@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Button } from './Button';
+import type { ServiceStatus } from '../services/ipc';
 import {
   getOpenAtLogin,
   installService,
@@ -172,26 +174,22 @@ function OpenAtLogin() {
  * because a background process nobody asked for is not a feature.
  */
 function BackgroundService() {
-  const [installed, setInstalled] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const pushToast = useToastStore((s) => s.push);
 
   useEffect(() => {
-    void serviceStatus().then((status) => {
-      setInstalled(status.installed);
-      setReady(true);
-    });
+    void serviceStatus().then(setStatus);
   }, []);
 
   const change = async (wanted: boolean) => {
     setBusy(true);
 
     try {
-      const status = wanted ? await installService() : await uninstallService();
-      setInstalled(status.installed);
+      const next = wanted ? await installService() : await uninstallService();
+      setStatus(next);
       pushToast(
-        status.installed ? 'Dermaga keeps watching in the background' : 'Background service removed'
+        next.installed ? 'Dermaga keeps watching in the background' : 'Background service removed'
       );
     } catch (err) {
       pushToast(err instanceof Error ? err.message : 'Could not change the service', 'error');
@@ -200,17 +198,38 @@ function BackgroundService() {
     }
   };
 
+  const installed = status?.installed ?? false;
+
   return (
     <>
       <Toggle
         checked={installed}
         onChange={(value) => void change(value)}
         label="Keep watching while Dermaga is closed"
-        disabled={!ready || busy}
+        disabled={!status || busy}
       />
+
+      {/* A service points at the copy of Dermaga that installed it. Move that
+          copy, delete it, or switch between a development build and an
+          installed one, and it goes on pointing where it was -- so say so,
+          rather than leave a service that is switched on and serving nobody. */}
+      {installed && (status?.missing || status?.stale) && (
+        <div className="flex flex-col items-start gap-1.5 rounded-md border border-orange-600/40 bg-orange-600/5 p-2">
+          <p className="text-tiny leading-relaxed text-ink-700 dark:text-ink-300">
+            {status.missing
+              ? 'The service points at a copy of Dermaga that is no longer there, so it cannot start:'
+              : 'The service belongs to a different copy of Dermaga, so it is not the agent this window is talking to:'}{' '}
+            <span className="font-mono">{status.binary}</span>
+          </p>
+          <Button busy={busy} busyLabel="Pointing…" onClick={() => void change(true)}>
+            Point it at this copy
+          </Button>
+        </div>
+      )}
+
       <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
         {installed
-          ? 'The agent runs as a background service, started at login. Containers are watched, and exits are noticed, whether or not a window is open. Removing it puts the agent back inside the app.'
+          ? 'The agent runs as a background service, started at login. Containers are watched, and the ones marked to start with Dermaga are brought up, whether or not a window is open. Removing it puts the agent back inside the app.'
           : 'The agent lives inside Dermaga: close the window and nothing is watching your containers. Turn this on to keep one small process running instead.'}
       </p>
     </>

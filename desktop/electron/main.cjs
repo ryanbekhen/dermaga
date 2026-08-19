@@ -452,7 +452,9 @@ function createWindow() {
 // The background service: the agent as a launchd job, so containers are still
 // watched -- and, with a restart policy, still restarted -- when no window is
 // open. Installing it hands over the socket the app's own agent is holding.
-ipcMain.handle('dermaga:service-status', () => service.status());
+ipcMain.handle('dermaga:service-status', () =>
+  service.status({ binary: agentBinary(), socket: socketPath() })
+);
 
 ipcMain.handle('dermaga:install-service', async () => {
   const binary = agentBinary();

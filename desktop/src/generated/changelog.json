@@ -19,6 +19,7 @@
       {
         "title": "Fixed",
         "entries": [
+          "**The background service says when it is pointing at the wrong copy of Dermaga.** The service records the path of the app that installed it, so moving that app, deleting it, or switching between a development build and an installed one left a service that was switched on and serving nobody — silently. Settings now says which copy it points at, whether that copy is still there, and offers to point it at this one.",
           "**A development build no longer drives the installed app's agent.** Both looked for the same socket in `~/.dermaga`, so running `make dev` with Dermaga installed meant the build you are working on quietly steering the agent of the one you have — different code, the same containers, and nothing on screen to say so. A development build now keeps its socket inside the checkout, and a background service installed from one listens there too.",
           "**Table headings line up, and the cursor stops flickering.** The click belonged to each cell, so the gutters between columns belonged to nothing: the pointer changed at every column edge, and clicking between two columns did nothing at all. The row owns both now.",
           "**A stream that stops because reading failed says so.** A scanner ends on an error exactly as it ends at the end of the input, so a build or a terminal session cut short looked like one that finished.",

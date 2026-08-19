@@ -108,18 +108,34 @@ export function openNotificationSettings(): Promise<void> {
 export interface ServiceStatus {
   installed: boolean;
   binary: string | null;
+  socket: string | null;
+  /** launchd has the job loaded and up. */
+  running: boolean;
+  /** It points at a different build of Dermaga than this one. */
+  stale: boolean;
+  /** It points at a copy of Dermaga that is no longer there. */
+  missing: boolean;
 }
 
+const NO_SERVICE: ServiceStatus = {
+  installed: false,
+  binary: null,
+  socket: null,
+  running: false,
+  stale: false,
+  missing: false,
+};
+
 export function serviceStatus(): Promise<ServiceStatus> {
-  return bridge().serviceStatus?.() ?? Promise.resolve({ installed: false, binary: null });
+  return bridge().serviceStatus?.() ?? Promise.resolve(NO_SERVICE);
 }
 
 export function installService(): Promise<ServiceStatus> {
-  return bridge().installService?.() ?? Promise.resolve({ installed: false, binary: null });
+  return bridge().installService?.() ?? Promise.resolve(NO_SERVICE);
 }
 
 export function uninstallService(): Promise<ServiceStatus> {
-  return bridge().uninstallService?.() ?? Promise.resolve({ installed: false, binary: null });
+  return bridge().uninstallService?.() ?? Promise.resolve(NO_SERVICE);
 }
 
 /**

@@ -80,15 +80,43 @@ function plist(binary, socket) {
 
 const target = () => `gui/${process.getuid()}`;
 
-/** Whether the service is installed, and the binary it points at. */
-async function status() {
-  try {
-    const contents = await readFile(plistPath(), 'utf8');
-    const binary = contents.match(/<string>([^<]*dermaga-agent)<\/string>/)?.[1] ?? null;
+/**
+ * What the service is, if it is anything: where it points, whether launchd is
+ * actually running it, and whether it belongs to the build asking.
+ *
+ * The last one matters because the plist records a path. Move the app, delete
+ * it, or switch between a development build and an installed one, and the
+ * service carries on pointing at wherever it was when it was installed --
+ * silently, which is the worst way for it to be wrong.
+ */
+async function status({ binary: current, socket: currentSocket } = {}) {
+  let contents;
 
-    return { installed: true, binary };
+  try {
+    contents = await readFile(plistPath(), 'utf8');
   } catch {
-    return { installed: false, binary: null };
+    return { installed: false, binary: null, socket: null, running: false, stale: false, missing: false };
+  }
+
+  const binary = contents.match(/<string>([^<]*dermaga-agent)<\/string>/)?.[1] ?? null;
+  const socket = contents.match(/<key>DERMAGA_SOCKET<\/key>\s*<string>([^<]*)<\/string>/)?.[1] ?? null;
+
+  const running = await isRunning();
+  const missing = Boolean(binary) && !existsSync(binary);
+  const stale = Boolean(
+    (current && binary && binary !== current) || (currentSocket && socket && socket !== currentSocket)
+  );
+
+  return { installed: true, binary, socket, running, stale, missing };
+}
+
+/** Whether launchd has the job loaded and up. */
+async function isRunning() {
+  try {
+    const { stdout } = await run('launchctl', ['print', `${target()}/${LABEL}`]);
+    return /state = running/.test(stdout);
+  } catch {
+    return false;
   }
 }
 
@@ -131,7 +159,7 @@ async function install(binary, { socket, releaseSocket }) {
     await waitFor(() => existsSync(socket), 30);
   }
 
-  return status();
+  return status({ binary, socket });
 }
 
 /** Removes the service. Whatever it started goes with it. */

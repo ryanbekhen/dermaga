@@ -53,6 +53,11 @@ change means to someone using Dermaga, not for how much code moved.
 
 ### Fixed
 
+- **The background service says when it is pointing at the wrong copy of Dermaga.** The service
+  records the path of the app that installed it, so moving that app, deleting it, or switching
+  between a development build and an installed one left a service that was switched on and serving
+  nobody — silently. Settings now says which copy it points at, whether that copy is still there, and
+  offers to point it at this one.
 - **A development build no longer drives the installed app's agent.** Both looked for the same socket
   in `~/.dermaga`, so running `make dev` with Dermaga installed meant the build you are working on
   quietly steering the agent of the one you have — different code, the same containers, and nothing
