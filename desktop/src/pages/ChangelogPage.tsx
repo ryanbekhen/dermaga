@@ -1,10 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '../components/DataTable';
-import { DetailLayout } from '../components/DetailLayout';
 import releases from '../generated/changelog.json';
 import { useChangelogStore } from '../store/changelogStore';
-import { useUIStore } from '../store/uiStore';
 
 interface Release {
   version: string;
@@ -21,21 +19,26 @@ interface Release {
  * carries its own history rather than fetching one.
  */
 export function ChangelogPage({ version }: { version: string }) {
-  const navigate = useUIStore((s) => s.navigate);
   const markSeen = useChangelogStore((s) => s.markSeen);
   const entries = releases as Release[];
 
   // Reading the notes is what makes them read; the dot in the sidebar goes.
   useEffect(() => markSeen(version), [markSeen, version]);
 
+  // A page of its own in the sidebar, so it is laid out like the others --
+  // Help, Licences -- rather than like something you arrived at from
+  // somewhere and can go back from.
   return (
-    <DetailLayout
-      onBack={() => navigate({ name: 'help' })}
-      title="What's new"
-      subtitle={`Every release, newest first · you are running v${version.replace(/^v/, '')}`}
-    >
-      <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
-        <div className="flex max-w-3xl flex-col gap-7 pb-4">
+    <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+        <header>
+          <h1 className="text-xl font-semibold">What&rsquo;s new</h1>
+          <p className="text-tiny text-ink-600 dark:text-ink-400">
+            Every release, newest first · you are running v{version.replace(/^v/, '')}
+          </p>
+        </header>
+
+        <div className="flex flex-col gap-7 pb-4">
           {entries.map((release) => {
             const running = release.version.replace(/^v/, '') === version.replace(/^v/, '');
 
@@ -82,22 +85,31 @@ export function ChangelogPage({ version }: { version: string }) {
           })}
         </div>
       </div>
-    </DetailLayout>
+    </div>
   );
 }
 
 /**
- * The two pieces of markdown the changelog actually uses: **bold** for the lead
- * of an entry, `code` for a flag or a path. Built as elements rather than HTML,
- * so nothing in the file can become markup.
+ * The three pieces of markdown the changelog uses: **bold** for the lead of an
+ * entry, *italic* for something quoted from a log, and `code` for a flag or a
+ * path. Built as elements rather than HTML, so nothing in the file can become
+ * markup.
  */
 function inline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, index) => {
+  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
         <strong key={index} className="font-semibold text-ink-900 dark:text-ink-100">
           {part.slice(2, -2)}
         </strong>
+      );
+    }
+
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return (
+        <em key={index} className="italic">
+          {part.slice(1, -1)}
+        </em>
       );
     }
 

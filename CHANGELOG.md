@@ -11,6 +11,9 @@ change means to someone using Dermaga, not for how much code moved.
 
 ### Fixed
 
+- **What's new looks like the page it is.** It kept a back arrow from when it was reached from Help,
+  which made no sense once it had an entry of its own in the sidebar — and italics in the notes were
+  rendering as literal asterisks.
 - **A notification, or the menu bar, opens the container even with no window.** Clicking *"web
   stopped"* did nothing at all when Dermaga was sitting in the menu bar with everything closed — and
   that is exactly when a notification about a container that died is worth clicking. The window is
