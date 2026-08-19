@@ -187,6 +187,7 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="my-service"
+            autoFocus
             className="input"
           />
         </Field>

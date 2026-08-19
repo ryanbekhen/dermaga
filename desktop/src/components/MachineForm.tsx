@@ -69,6 +69,7 @@ export function CreateMachineDialog({ onClose }: { onClose: () => void }) {
             value={image}
             onChange={(e) => setImage(e.target.value)}
             list="dermaga-machine-images"
+            autoFocus
             className="input"
           />
           <datalist id="dermaga-machine-images">

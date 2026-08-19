@@ -1,5 +1,16 @@
 import { Plus, X } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { tabWrap } from '../utils/focus';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusableIn(root: HTMLElement) {
+  // offsetParent is null for anything display:none, which must not be a stop.
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (element) => element.offsetParent !== null
+  );
+}
 
 /** A centred modal with an escape hatch and a scrolling body. */
 export function Modal({
@@ -17,9 +28,40 @@ export function Modal({
   footer: ReactNode;
   wide?: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    // A form opened from the command palette should be ready to type in. If no
+    // field claimed focus with autoFocus, the first one takes it -- the close
+    // button is first in the DOM, and landing there means a wasted Tab.
+    if (!panel.contains(document.activeElement)) {
+      const stops = focusableIn(panel);
+      const firstField = stops.find((element) => element.tagName !== 'BUTTON');
+      (firstField ?? stops[0])?.focus();
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const stops = focusableIn(panel);
+      const active = document.activeElement;
+      const wrap = tabWrap(
+        stops.length,
+        active instanceof HTMLElement ? stops.indexOf(active) : -1,
+        event.shiftKey
+      );
+      if (!wrap) return;
+
+      event.preventDefault();
+      (wrap === 'first' ? stops[0] : stops[stops.length - 1]).focus();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -32,6 +74,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

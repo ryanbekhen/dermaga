@@ -15,6 +15,7 @@ import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
+import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { Volume } from '../types';
 import { formatBytes, formatDuration } from '../utils/format';
@@ -36,7 +37,7 @@ export function VolumesPage() {
   const containers = useResourceStore((s) => s.containers);
   const pushToast = useToastStore((s) => s.push);
 
-  const [creating, setCreating] = useState(false);
+  const creating = useDialog('volume.create');
   const [deleting, setDeleting] = useState<Volume | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -79,7 +80,7 @@ export function VolumesPage() {
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => setCreating(true)} className="btn-primary">
+            <button onClick={() => creating.show()} className="btn-primary">
               <Plus size={13} aria-hidden />
               New volume
             </button>
@@ -167,7 +168,7 @@ export function VolumesPage() {
         />
       )}
 
-      {creating && <CreateVolumeDialog onClose={() => setCreating(false)} />}
+      {creating.open && <CreateVolumeDialog onClose={() => creating.close()} />}
 
       {deleting && (
         <ConfirmDialog

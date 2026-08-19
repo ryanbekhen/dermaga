@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { CommandPalette } from './components/CommandPalette';
 import { HelpView } from './components/HelpView';
 import { LicencesPage } from './pages/LicencesPage';
 import { RegistriesPage } from './pages/RegistriesPage';
@@ -56,6 +57,7 @@ export function App() {
   const [system, setSystem] = useState<SystemStatus | null>(null);
   const [cliAvailable, setCliAvailable] = useState(true);
   const [build, setBuild] = useState<BuildInfo | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const fullScreen = useFullScreen();
 
   // The services are what everything else depends on, so their state is
@@ -94,6 +96,11 @@ export function App() {
       if ((event.metaKey || event.ctrlKey) && event.key === ',') {
         event.preventDefault();
         navigate({ name: 'settings' });
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
       }
     };
 
@@ -189,6 +196,8 @@ export function App() {
       </div>
 
       <StatusBar build={build} system={system} connection={connection} error={error} />
+
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
 
       <Toasts />
     </div>

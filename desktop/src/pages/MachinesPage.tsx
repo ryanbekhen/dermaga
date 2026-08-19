@@ -17,6 +17,7 @@ import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
+import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import { formatBytes, formatDuration, formatMemory } from '../utils/format';
 
@@ -36,7 +37,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openMachine = useUIStore((s) => s.openMachine);
-  const [creating, setCreating] = useState(false);
+  const creating = useDialog('machine.create');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -129,7 +130,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => setCreating(true)} className="btn-primary">
+            <button onClick={() => creating.show()} className="btn-primary">
               <Plus size={13} aria-hidden />
               New machine
             </button>
@@ -165,7 +166,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
         ]}
       />
 
-      {creating && <CreateMachineDialog onClose={() => setCreating(false)} />}
+      {creating.open && <CreateMachineDialog onClose={() => creating.close()} />}
 
       {confirmingDelete && (
         <ConfirmDialog

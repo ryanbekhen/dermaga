@@ -15,6 +15,7 @@ import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
+import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { Network } from '../types';
 import { formatDuration } from '../utils/format';
@@ -34,7 +35,7 @@ export function NetworksPage() {
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const pushToast = useToastStore((s) => s.push);
 
-  const [creating, setCreating] = useState(false);
+  const creating = useDialog('network.create');
   const [deleting, setDeleting] = useState<Network | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -77,7 +78,7 @@ export function NetworksPage() {
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => setCreating(true)} className="btn-primary">
+            <button onClick={() => creating.show()} className="btn-primary">
               <Plus size={13} aria-hidden />
               New network
             </button>
@@ -155,7 +156,7 @@ export function NetworksPage() {
         />
       )}
 
-      {creating && <CreateNetworkDialog onClose={() => setCreating(false)} />}
+      {creating.open && <CreateNetworkDialog onClose={() => creating.close()} />}
 
       {deleting && (
         <ConfirmDialog

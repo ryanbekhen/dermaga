@@ -4,6 +4,7 @@ import {
   BellRing,
   Boxes,
   CloudUpload,
+  Command,
   FileDown,
   FolderTree,
   Hammer,
@@ -18,8 +19,9 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 const SHORTCUTS: [string, string][] = [
-  ['⌘K / ⌘F', 'Focus search'],
-  ['Esc', 'Clear search'],
+  ['⌘K', 'Command palette'],
+  ['⌘F', 'Focus search'],
+  ['Esc', 'Clear search, or close the palette'],
   ['⌘,', 'Open settings'],
 ];
 
@@ -101,11 +103,11 @@ export function HelpView({ version }: { version: string }) {
 
           <Card icon={FileDown} title="Images as files">
             <p>
-              <strong>Save</strong> &mdash; on an image&rsquo;s page, or on its row in the list
-              &mdash; writes it out as an OCI archive, and <strong>Load</strong> on the Images page
-              reads one back in &mdash; how to move an image to a Mac with no registry between them.
-              An archive holds a single platform, so one is chosen when the image has more than one;
-              only the variants actually pulled here can be written out.
+              <strong>Save</strong> — on an image&rsquo;s page, or on its row in the list — writes
+              it out as an OCI archive, and <strong>Load</strong> on the Images page reads one back
+              in — how to move an image to a Mac with no registry between them. An archive holds a
+              single platform, so one is chosen when the image has more than one; only the variants
+              actually pulled here can be written out.
             </p>
           </Card>
 
@@ -152,6 +154,17 @@ export function HelpView({ version }: { version: string }) {
               sound when the window is not what you are looking at. A stop you asked for stays
               quiet. macOS notifications need an app signed with a Developer ID, so on these builds
               they are attempted but rarely arrive; nothing is lost when they do not.
+            </p>
+          </Card>
+
+          <Card icon={Command} title="Finding anything">
+            <p>
+              <strong>⌘K</strong> opens the command palette: type a few letters of a container,
+              image, machine or page and press Return. It also does things rather than only pointing
+              at them — <strong>Create container</strong>, <strong>Pull image</strong>,{' '}
+              <strong>Build image</strong> and the rest land on the right page with the form already
+              open, and a container can be started or stopped without finding its row.{' '}
+              <strong>⌘F</strong> is still the search box on the page you are on.
             </p>
           </Card>
 

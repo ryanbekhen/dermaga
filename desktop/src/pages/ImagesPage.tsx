@@ -19,6 +19,7 @@ import { useResourceStore } from '../store/resourceStore';
 import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
+import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { BuildSpec, Image } from '../types';
 import { formatBytes, formatDuration, shortDigest } from '../utils/format';
@@ -92,8 +93,8 @@ export function ImagesPage() {
   const openImage = useUIStore((s) => s.openImage);
   const pushToast = useToastStore((s) => s.push);
 
-  const [pulling, setPulling] = useState(false);
-  const [building, setBuilding] = useState(false);
+  const pulling = useDialog('image.pull');
+  const building = useDialog('image.build');
   const [deleting, setDeleting] = useState<ImageGroup | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -179,11 +180,11 @@ export function ImagesPage() {
                 <FileUp size={13} aria-hidden />
                 Load
               </button>
-              <button onClick={() => setBuilding(true)} className="btn-ghost">
+              <button onClick={() => building.show()} className="btn-ghost">
                 <Hammer size={13} aria-hidden />
                 Build
               </button>
-              <button onClick={() => setPulling(true)} className="btn-primary">
+              <button onClick={() => pulling.show()} className="btn-primary">
                 <Download size={13} aria-hidden />
                 Pull image
               </button>
@@ -286,9 +287,9 @@ export function ImagesPage() {
         />
       )}
 
-      {pulling && <PullDialog onClose={() => setPulling(false)} />}
+      {pulling.open && <PullDialog onClose={() => pulling.close()} />}
 
-      {building && <BuildDialog onClose={() => setBuilding(false)} />}
+      {building.open && <BuildDialog onClose={() => building.close()} />}
 
       {savingGroup && (
         <SaveImageDialog

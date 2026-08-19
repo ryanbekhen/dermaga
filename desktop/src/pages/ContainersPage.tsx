@@ -11,6 +11,7 @@ import { StatusDot } from '../components/StatusBadge';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { PageHeader } from '../components/PageHeader';
+import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { Container } from '../types';
 import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../utils/format';
@@ -34,7 +35,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openContainer = useUIStore((s) => s.openContainer);
-  const [creating, setCreating] = useState(false);
+  const creating = useDialog('container.create');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   // Holds the verb of the running bulk action, so its button can spin.
@@ -148,7 +149,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => setCreating(true)} className="btn-primary">
+            <button onClick={() => creating.show()} className="btn-primary">
               <Plus size={13} aria-hidden />
               New container
             </button>
@@ -209,7 +210,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
 
       {/* Creating does not navigate: the new container appears in this list,
           and being thrown into its detail page interrupts what you were doing. */}
-      {creating && <ContainerForm onClose={() => setCreating(false)} />}
+      {creating.open && <ContainerForm onClose={() => creating.close()} />}
 
       {confirmingRemove && (
         <ConfirmDialog

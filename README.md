@@ -45,6 +45,8 @@ everything you do is immediately visible to `container ls` and vice versa.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
 - **Speaks up** — a container that stops without being asked to is reported: in the window, as a
   sound when the window is not what you are looking at, and as a notification.
+- **Command palette** — `⌘K` finds any container, image, machine or page by name, starts or stops a
+  container without hunting for its row, and opens the create, pull, build and load forms directly.
 - **Live by default** — no refresh button anywhere. Changes made in a terminal appear within two
   seconds; changes made in Dermaga appear immediately.
 - **Updates itself** — when a newer release exists the status bar says so; one click downloads it,
@@ -115,11 +117,12 @@ make dev           # build the agent, then run Vite and Electron together
 Preferences live in `~/.dermaga/config.json` as plain JSON, safe to edit by hand or keep in
 dotfiles. Dermaga merges partial updates and repairs out-of-range values rather than failing.
 
-| Shortcut     | Action        |
-| ------------ | ------------- |
-| `⌘K` or `⌘F` | Focus search  |
-| `Esc`        | Clear search  |
-| `⌘,`         | Open settings |
+| Shortcut | Action                                                          |
+| -------- | --------------------------------------------------------------- |
+| `⌘K`     | Command palette — jump to any container, image, machine or page |
+| `⌘F`     | Focus the search box on this page                                |
+| `Esc`    | Clear search, or close the palette                               |
+| `⌘,`     | Open settings                                                    |
 
 ## Architecture
 

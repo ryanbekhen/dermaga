@@ -30,7 +30,9 @@ export function PageHeader({ onBack, title, badges, subtitle, search, actions }:
     if (!search) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && (event.key === 'f' || event.key === 'k')) {
+      // Only ⌘F: ⌘K opens the command palette, which searches everything
+      // rather than only the list on this page.
+      if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
         event.preventDefault();
         searchRef.current?.focus();
         searchRef.current?.select();

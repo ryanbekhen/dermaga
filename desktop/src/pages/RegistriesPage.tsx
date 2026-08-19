@@ -7,6 +7,7 @@ import { Field, Modal } from '../components/form';
 import { PageHeader } from '../components/PageHeader';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
+import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import { formatDuration } from '../utils/format';
 import type { RegistryLogin } from '../types';
@@ -26,7 +27,7 @@ const COLUMNS: Column[] = [
  */
 export function RegistriesPage() {
   const [logins, setLogins] = useState<RegistryLogin[]>([]);
-  const [adding, setAdding] = useState(false);
+  const adding = useDialog('registry.add');
   const [removing, setRemoving] = useState<RegistryLogin | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const searchQuery = useUIStore((s) => s.searchQuery);
@@ -72,7 +73,7 @@ export function RegistriesPage() {
         subtitle="Where images are pulled from and pushed to"
         search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search registries…' }}
         actions={
-          <button onClick={() => setAdding(true)} className="btn-primary">
+          <button onClick={() => adding.show()} className="btn-primary">
             <LogIn size={13} aria-hidden />
             Log in
           </button>
@@ -106,11 +107,11 @@ export function RegistriesPage() {
         )}
       />
 
-      {adding && (
+      {adding.open && (
         <LoginDialog
-          onClose={() => setAdding(false)}
+          onClose={() => adding.close()}
           onDone={() => {
-            setAdding(false);
+            adding.close();
             load();
           }}
         />
