@@ -1,6 +1,9 @@
 package containers
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Trimmed from real `container list --all --format json` output (CLI 1.2.2).
 const listFixture = `[
@@ -152,5 +155,60 @@ func TestParseLogsLine(t *testing.T) {
 	entry = ParseLogsLine("LOG:  database system is ready")
 	if entry["timestamp"] != "" || entry["message"] != "LOG:  database system is ready" {
 		t.Errorf("plain line = %v", entry)
+	}
+}
+
+// Every edit, attach and detach goes through delete-and-run, so a setting the
+// spec forgets is a setting the container silently loses: a read-only root
+// comes back writable, a dropped capability comes back granted. Anything the
+// CLI both reports and accepts as a flag has to survive the round trip.
+func TestSpecOfSurvivesARecreate(t *testing.T) {
+	hardened := &Container{
+		Name:           "api",
+		Image:          "alpine",
+		ReadOnlyRoot:   true,
+		UseInit:        true,
+		Terminal:       true,
+		Rosetta:        true,
+		Virtualization: true,
+		SSH:            true,
+		Platform:       "linux/arm64",
+		RuntimeHandler: "container-runtime-linux",
+		CapAdd:         []string{"CAP_NET_RAW"},
+		CapDrop:        []string{"CAP_MKNOD"},
+		DNS: DNSConfig{
+			Nameservers:   []string{"1.1.1.1"},
+			SearchDomains: []string{"example.com"},
+			Options:       []string{"ndots:2"},
+			Domain:        "corp.local",
+		},
+	}
+
+	args := SpecOf(hardened).Args()
+	rendered := strings.Join(args, " ")
+
+	for _, want := range []string{
+		"--read-only", "--init", "--tty", "--rosetta", "--virtualization", "--ssh",
+		"--platform linux/arm64", "--runtime container-runtime-linux",
+		"--cap-add CAP_NET_RAW", "--cap-drop CAP_MKNOD",
+		"--dns 1.1.1.1", "--dns-search example.com", "--dns-option ndots:2",
+		"--dns-domain corp.local",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("recreating drops %q\ngot: %s", want, rendered)
+		}
+	}
+}
+
+// A container that asked for nothing must not come back asking for something:
+// an empty DNS block means "whatever the CLI does by default", which is not
+// the same as no nameservers at all.
+func TestSpecOfLeavesDefaultsAlone(t *testing.T) {
+	args := strings.Join(SpecOf(&Container{Name: "api", Image: "alpine"}).Args(), " ")
+
+	for _, unwanted := range []string{"--dns", "--read-only", "--init", "--tty", "--cap-add"} {
+		if strings.Contains(args, unwanted) {
+			t.Errorf("plain container gained %q: %s", unwanted, args)
+		}
 	}
 }

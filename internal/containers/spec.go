@@ -27,6 +27,24 @@ type ContainerSpec struct {
 	ReadOnly   bool              `json:"readOnly,omitempty"`
 	Init       bool              `json:"init,omitempty"`
 	RemoveOnE  bool              `json:"removeOnExit,omitempty"`
+
+	// Carried through a recreate rather than edited anywhere. The CLI reports
+	// these on inspect and accepts them as flags, so leaving them out of the
+	// spec would quietly reconfigure a container that was only meant to change
+	// one thing -- a read-only root that comes back writable, a dropped
+	// capability that comes back granted.
+	//
+	// Three settings cannot be carried, because the CLI never reports them:
+	// --rm, --sysctl and the stop signal. Those are lost on every recreate.
+	Platform       string     `json:"platform,omitempty"`
+	RuntimeHandler string     `json:"runtimeHandler,omitempty"`
+	CapAdd         []string   `json:"capAdd,omitempty"`
+	CapDrop        []string   `json:"capDrop,omitempty"`
+	DNS            *DNSConfig `json:"dns,omitempty"`
+	Rosetta        bool       `json:"rosetta,omitempty"`
+	Virtualization bool       `json:"virtualization,omitempty"`
+	SSH            bool       `json:"ssh,omitempty"`
+	Terminal       bool       `json:"terminal,omitempty"`
 }
 
 type SpecMount struct {
@@ -150,6 +168,46 @@ func (s ContainerSpec) Args() []string {
 	if s.RemoveOnE {
 		args = append(args, "--rm")
 	}
+	if s.Terminal {
+		args = append(args, "--tty")
+	}
+	if s.Rosetta {
+		args = append(args, "--rosetta")
+	}
+	if s.Virtualization {
+		args = append(args, "--virtualization")
+	}
+	if s.SSH {
+		args = append(args, "--ssh")
+	}
+	if s.Platform != "" {
+		args = append(args, "--platform", s.Platform)
+	}
+	if s.RuntimeHandler != "" {
+		args = append(args, "--runtime", s.RuntimeHandler)
+	}
+
+	for _, c := range s.CapAdd {
+		args = append(args, "--cap-add", c)
+	}
+	for _, c := range s.CapDrop {
+		args = append(args, "--cap-drop", c)
+	}
+
+	if s.DNS != nil {
+		for _, server := range s.DNS.Nameservers {
+			args = append(args, "--dns", server)
+		}
+		for _, domain := range s.DNS.SearchDomains {
+			args = append(args, "--dns-search", domain)
+		}
+		for _, option := range s.DNS.Options {
+			args = append(args, "--dns-option", option)
+		}
+		if s.DNS.Domain != "" {
+			args = append(args, "--dns-domain", s.DNS.Domain)
+		}
+	}
 
 	for _, e := range s.Env {
 		args = append(args, "--env", e)
@@ -202,21 +260,40 @@ func SpecOf(c *Container) ContainerSpec {
 		network = c.Networks[0]
 	}
 
-	return ContainerSpec{
-		Name:       c.Name,
-		Image:      c.Image,
-		Entrypoint: c.Entrypoint,
-		Command:    c.Command,
-		Env:        c.EnvironmentVars,
-		Ports:      c.Ports,
-		Mounts:     mounts,
-		Labels:     c.Labels,
-		CPUs:       c.CPUAllocation,
-		Memory:     c.MemoryAllocation,
-		Network:    network,
-		WorkDir:    c.WorkingDir,
-		User:       c.User,
+	spec := ContainerSpec{
+		Name:           c.Name,
+		Image:          c.Image,
+		Entrypoint:     c.Entrypoint,
+		Command:        c.Command,
+		Env:            c.EnvironmentVars,
+		Ports:          c.Ports,
+		Mounts:         mounts,
+		Labels:         c.Labels,
+		CPUs:           c.CPUAllocation,
+		Memory:         c.MemoryAllocation,
+		Network:        network,
+		WorkDir:        c.WorkingDir,
+		User:           c.User,
+		ReadOnly:       c.ReadOnlyRoot,
+		Init:           c.UseInit,
+		Terminal:       c.Terminal,
+		Platform:       c.Platform,
+		RuntimeHandler: c.RuntimeHandler,
+		CapAdd:         append([]string(nil), c.CapAdd...),
+		CapDrop:        append([]string(nil), c.CapDrop...),
+		Rosetta:        c.Rosetta,
+		Virtualization: c.Virtualization,
+		SSH:            c.SSH,
 	}
+
+	// An empty DNS block means "whatever the CLI configures by default", which
+	// is not the same as asking for no nameservers at all.
+	if len(c.DNS.Nameservers)+len(c.DNS.SearchDomains)+len(c.DNS.Options) > 0 || c.DNS.Domain != "" {
+		dns := c.DNS
+		spec.DNS = &dns
+	}
+
+	return spec
 }
 
 // CreateCommand validates the spec and returns the `container run` command

@@ -99,7 +99,11 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
   const failTask = useTaskStore((s) => s.fail);
   const finishTask = useTaskStore((s) => s.finish);
 
+  // Spread first: the spec carries settings this form does not show -- a
+  // read-only root, capabilities, DNS, the runtime handler -- and a recreate
+  // that rebuilt it from the fields alone would drop every one of them.
   const buildSpec = (): ContainerSpec => ({
+    ...base,
     name: name.trim(),
     image: image.trim(),
     entrypoint: entrypoint.trim() || undefined,
@@ -117,7 +121,6 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
     readOnly,
     init,
     removeOnExit,
-    labels: base.labels,
   });
 
   // The dialog closes immediately and the work reports itself in the list, so

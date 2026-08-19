@@ -208,6 +208,21 @@ export interface ContainerSpec {
   readOnly?: boolean;
   init?: boolean;
   removeOnExit?: boolean;
+  /**
+   * Settings the forms never show but every recreate has to preserve. The
+   * agent reads them back from the container and renders them as flags again;
+   * dropping them here would reconfigure a container that was only meant to
+   * change one thing.
+   */
+  platform?: string;
+  runtimeHandler?: string;
+  capAdd?: string[];
+  capDrop?: string[];
+  dns?: DNSConfig;
+  rosetta?: boolean;
+  virtualization?: boolean;
+  ssh?: boolean;
+  terminal?: boolean;
 }
 
 /** Persisted in ~/.dermaga/config.json by the server. */
