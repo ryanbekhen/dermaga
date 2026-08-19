@@ -7,7 +7,7 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
-## Unreleased
+## [v1.5.0] — 2026-08-19
 
 ### Added
 
@@ -128,6 +128,7 @@ change means to someone using Dermaga, not for how much code moved.
 First release: containers, images, volumes, networks and machines from one window, a terminal and
 logs for each, and a Go agent wrapping Apple's `container` CLI with no daemon and no polling.
 
+[v1.5.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.5.0
 [v1.4.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.4.1
 [v1.4.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.4.0
 [v1.3.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.3.1
