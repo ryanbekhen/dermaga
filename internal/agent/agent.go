@@ -863,9 +863,76 @@ func (a *Agent) registerImages() {
 	})
 }
 
+// volumeMount finds a running container holding the volume, so the work can go
+// through it rather than through a helper that would be refused the disk.
+func (a *Agent) volumeMount(ctx context.Context, name string) *volumes.Mount {
+	list, err := a.containers.List(ctx, true)
+	if err != nil {
+		return nil
+	}
+
+	for _, container := range list {
+		if container.Status != "running" {
+			continue
+		}
+
+		for _, mount := range container.Mounts {
+			if mount.Type == "volume" && mount.Source == name {
+				return &volumes.Mount{Container: container.ID, Path: mount.Destination}
+			}
+		}
+	}
+
+	return nil
+}
+
 // --- volumes and networks -------------------------------------------------
 
 func (a *Agent) registerVolumes() {
+	// Who owns the volume's root directory, and how to change it.
+	//
+	// Most "permission denied" inside a container comes down to this: the image
+	// runs as somebody other than root -- redis as 999, postgres as 999 -- and
+	// a volume is born owned by root. Neither call reaches for a helper
+	// container when some running container already has the volume, because a
+	// disk image can only be attached to one running VM at a time.
+	a.server.Register("volumes.owner", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Name string `json:"name"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		owner, err := a.volumes.Owner(ctx, args.Name, a.volumeMount(ctx, args.Name))
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"owner": owner}, nil
+	})
+
+	a.server.Register("volumes.setOwner", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Name  string `json:"name"`
+			Owner string `json:"owner"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.volumes.SetOwner(ctx, args.Name, args.Owner, a.volumeMount(ctx, args.Name)); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		owner, err := a.volumes.Owner(ctx, args.Name, a.volumeMount(ctx, args.Name))
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"owner": owner}, nil
+	})
+
 	a.server.Register("volumes.list", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		return a.volumes.List(ctx)
 	})

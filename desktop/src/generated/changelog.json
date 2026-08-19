@@ -9,7 +9,8 @@
         "entries": [
           "**A menu bar item.** It reports the runtime rather than the app — whether the container services are up, how many containers are running, and each of them by name, a click away from its page. Below that: Open Dermaga, Start services when they are stopped, and Quit. The icon is the logo cut down to what survives at 16pt, filled while the services run and hollow when they do not.",
           "**Open Dermaga at login**, in Settings. Opened that way it starts in the menu bar with no window and no splash — nobody logging in asked for a window — while the agent runs and exit notices still arrive. The setting belongs to macOS, so changing it in System Settings changes it here too.",
-          "**Closing the window leaves the Dock.** With no window open Dermaga is a menu bar app; the icon comes back the moment a window does."
+          "**Closing the window leaves the Dock.** With no window open Dermaga is a menu bar app; the icon comes back the moment a window does.",
+          "**A volume's owner, and a way to change it.** The Permissions section on a volume reports who owns its root directory and hands it to someone else in one step. This is the answer to most \"permission denied\" in a container with a volume: a volume is born owned by root, while the official database images run as somebody else — redis and postgres both as 999 — so the first write fails with an error that never mentions the word volume. Reading it is instant when a running container already has the volume, because that container is asked rather than a helper started."
         ]
       },
       {

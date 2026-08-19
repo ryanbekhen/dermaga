@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Boxes, FolderTree, Info, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Boxes, FolderTree, Info, RefreshCw, Trash2, UserCog } from 'lucide-react';
+import { Badge } from '../components/DataTable';
+import { Button } from '../components/Button';
+import { Field, Modal } from '../components/form';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
 import { Row, Section } from '../components/DetailRow';
@@ -99,6 +102,13 @@ export function VolumeDetailPage({ volume }: { volume: Volume }) {
             <Row label="Image" value={volume.source} mono copyable wide />
           </Section>
 
+          <Section title="Permissions" plain>
+            <VolumeOwner
+              volume={volume.name}
+              held={mounts.some(({ container }) => container.status === 'running')}
+            />
+          </Section>
+
           <Section title={`Mounted by (${mounts.length})`} plain>
             {mounts.length === 0 ? (
               <p className="text-xs text-ink-600 dark:text-ink-400">
@@ -151,6 +161,171 @@ export function VolumeDetailPage({ volume }: { volume: Volume }) {
         />
       )}
     </DetailLayout>
+  );
+}
+
+/**
+ * Who owns the volume, and a way to hand it to somebody else.
+ *
+ * This is the answer to most "permission denied" in a container that has a
+ * volume: a volume is born owned by root, while the official images run as
+ * somebody else -- redis as 999, postgres as 999 -- so the first thing they try
+ * to write fails, with an error that never mentions the word volume.
+ */
+function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
+  const [owner, setOwner] = useState<string | null>(null);
+  const [state, setState] = useState<'idle' | 'reading' | 'failed'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
+
+  const read = useCallback(async () => {
+    setState('reading');
+    setError(null);
+
+    try {
+      setOwner(await api.getVolumeOwner(volume));
+      setState('idle');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read the owner');
+      setState('failed');
+    }
+  }, [volume]);
+
+  // Free when a running container already has the volume: the agent asks that
+  // container. Otherwise it costs a helper, so it waits to be asked.
+  useEffect(() => {
+    // The read is a request, not a render: the effect starts it and the answer
+    // lands later, which is the case this rule is not about.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (held) void read();
+  }, [held, read]);
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="text-tiny text-ink-500">Owner</span>
+        <span className="font-mono text-xs">
+          {owner ?? (state === 'reading' ? 'reading…' : 'not checked')}
+        </span>
+        {owner === '0:0' && <Badge>root</Badge>}
+
+        <span className="ml-auto flex items-center gap-2">
+          {!held && (
+            <Button
+              icon={RefreshCw}
+              busy={state === 'reading'}
+              busyLabel="Checking…"
+              onClick={() => void read()}
+            >
+              {owner ? 'Check again' : 'Check'}
+            </Button>
+          )}
+          <Button icon={UserCog} onClick={() => setChanging(true)}>
+            Set owner…
+          </Button>
+        </span>
+      </div>
+
+      {error && <p className="text-xs text-orange-700 dark:text-orange-500">{error}</p>}
+
+      <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
+        {owner === '0:0'
+          ? 'Owned by root. An image that runs as anyone else — redis and postgres both run as 999 — cannot write here, and says only “permission denied”.'
+          : 'A volume starts out owned by root, while most database images run as somebody else. If one cannot write to this volume, this is usually why.'}
+        {!held && ' Checking starts a small container for a moment.'}
+      </p>
+
+      {changing && (
+        <SetOwnerDialog
+          volume={volume}
+          current={owner}
+          onClose={() => setChanging(false)}
+          onChanged={setOwner}
+        />
+      )}
+    </>
+  );
+}
+
+/** Hands the whole volume to a uid, recursively, and says what it cost. */
+function SetOwnerDialog({
+  volume,
+  current,
+  onClose,
+  onChanged,
+}: {
+  volume: string;
+  current: string | null;
+  onClose: () => void;
+  onChanged: (owner: string) => void;
+}) {
+  const [owner, setOwner] = useState(current && current !== '0:0' ? current : '999:999');
+  const [busy, setBusy] = useState(false);
+  const pushToast = useToastStore((s) => s.push);
+
+  // The same shape the agent will accept; catching it here saves a round trip
+  // and explains itself in place.
+  const valid = /^\d+(:\d+)?$/.test(owner.trim());
+
+  const apply = async () => {
+    setBusy(true);
+
+    try {
+      const applied = await api.setVolumeOwner(volume, owner.trim());
+      onChanged(applied);
+      pushToast(`${volume} now belongs to ${applied}`);
+      onClose();
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not set the owner', 'error');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={`Set the owner of ${volume}`}
+      subtitle="Applied to everything in the volume. Run it against the user the image runs as — redis and postgres are both 999 — and the container can write again."
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost" disabled={busy}>
+            Cancel
+          </button>
+          <Button
+            variant="primary"
+            busy={busy}
+            busyLabel="Applying…"
+            disabled={!valid}
+            onClick={() => void apply()}
+          >
+            Set owner
+          </Button>
+        </>
+      }
+    >
+      <Field
+        label="Owner"
+        hint={
+          valid
+            ? 'A user id, or user:group. Find one with: container run --rm <image> id -u <name>'
+            : 'Numbers only — a uid, or uid:gid. Names are not resolvable from outside the image.'
+        }
+      >
+        <input
+          value={owner}
+          onChange={(event) => setOwner(event.target.value)}
+          placeholder="999:999"
+          autoFocus
+          className="input font-mono"
+        />
+      </Field>
+
+      {current && (
+        <p className="text-tiny text-ink-600 dark:text-ink-400">
+          Currently <span className="font-mono">{current}</span>.
+        </p>
+      )}
+    </Modal>
   );
 }
 

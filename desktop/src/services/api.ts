@@ -226,6 +226,24 @@ export const api = {
     await invoke('volumes.create', spec);
   },
 
+  /**
+   * Who owns the volume's root directory, as "uid:gid".
+   *
+   * Instant when a running container holds the volume -- the agent asks that
+   * container -- and a few seconds otherwise, since it has to start a small
+   * one to look.
+   */
+  async getVolumeOwner(name: string): Promise<string> {
+    const { owner } = await invoke<{ owner: string }>('volumes.owner', { name });
+    return owner;
+  },
+
+  /** Answers with the owner as it stands afterwards, not as it was asked for. */
+  async setVolumeOwner(name: string, owner: string): Promise<string> {
+    const result = await invoke<{ owner: string }>('volumes.setOwner', { name, owner });
+    return result.owner;
+  },
+
   async deleteVolume(name: string): Promise<void> {
     await invoke('volumes.delete', { name });
   },

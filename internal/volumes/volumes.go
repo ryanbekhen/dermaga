@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -159,4 +160,108 @@ func (m *Manager) Delete(ctx context.Context, name string) error {
 	m.changed.Changed()
 
 	return nil
+}
+
+// Where a volume is already mounted, when some running container has it.
+//
+// A disk image can only be attached to one running VM at a time, so a volume
+// in use cannot be mounted again to look at it -- but the container that holds
+// it can be asked instead, which is both allowed and instant.
+type Mount struct {
+	// Empty when nothing holds the volume; a helper is used then.
+	Container string
+	Path      string
+	// The volume itself, so a helper knows what to mount.
+	Volume string
+}
+
+// The image a helper container is built from when nothing else has the volume.
+// Small, and almost certainly already on the machine.
+const helperImage = "alpine:latest"
+
+// Where the helper mounts the volume it was started for.
+const helperPath = "/volume"
+
+// ownerPattern is what a POSIX owner looks like: uid, or uid:gid. Anything else
+// is refused rather than passed to chown, where a stray "--reference=/etc" or a
+// user name that does not exist inside the helper would mean something else
+// entirely.
+var ownerPattern = regexp.MustCompile(`^\d+(:\d+)?$`)
+
+// ValidOwner reports whether an owner is one this package will act on.
+func ValidOwner(owner string) bool {
+	return ownerPattern.MatchString(owner)
+}
+
+// Owner reports who owns the volume's root directory, as "uid:gid".
+//
+// It is the answer to the question behind most "permission denied" in a
+// container: the image runs as somebody other than root, and a volume is born
+// owned by root.
+func (m *Manager) Owner(ctx context.Context, name string, in *Mount) (string, error) {
+	args := commandIn(withVolume(in, name), []string{"stat", "-c", "%u:%g", pathOf(in)})
+
+	out, err := m.runner.Run(ctx, args...)
+	if err != nil {
+		return "", fmt.Errorf("could not read the owner of %s: %w", name, err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SetOwner hands the whole volume to a user, which is what makes a Postgres or
+// a Redis image able to write to it.
+func (m *Manager) SetOwner(ctx context.Context, name, owner string, in *Mount) error {
+	if !ValidOwner(owner) {
+		return fmt.Errorf("owner must be a uid or uid:gid, not %q", owner)
+	}
+
+	args := commandIn(withVolume(in, name), []string{"chown", "-R", owner, pathOf(in)})
+
+	if _, err := m.runner.Run(ctx, args...); err != nil {
+		return fmt.Errorf("could not set the owner of %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// withVolume fills in the volume a helper would have to mount.
+func withVolume(in *Mount, name string) *Mount {
+	if in == nil {
+		return &Mount{Volume: name}
+	}
+
+	copied := *in
+	copied.Volume = name
+
+	return &copied
+}
+
+// pathOf is where the volume can be reached: inside the container already
+// holding it, or at the helper's own mount point.
+func pathOf(in *Mount) string {
+	if in != nil && in.Container != "" {
+		return in.Path
+	}
+
+	return helperPath
+}
+
+// commandIn runs the command wherever the volume is reachable: through the
+// container that has it, or through a helper started for the purpose.
+func commandIn(in *Mount, command []string) []string {
+	if in != nil && in.Container != "" {
+		return append([]string{"exec", in.Container}, command...)
+	}
+
+	return append([]string{"run", "--rm", "--mount", mountSpec(in), helperImage}, command...)
+}
+
+func mountSpec(in *Mount) string {
+	name := ""
+	if in != nil {
+		name = in.Volume
+	}
+
+	return fmt.Sprintf("type=volume,source=%s,target=%s", name, helperPath)
 }

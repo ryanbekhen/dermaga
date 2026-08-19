@@ -21,6 +21,13 @@ change means to someone using Dermaga, not for how much code moved.
 - **Closing the window leaves the Dock.** With no window open Dermaga is a menu bar app; the icon
   comes back the moment a window does.
 
+- **A volume's owner, and a way to change it.** The Permissions section on a volume reports who owns
+  its root directory and hands it to someone else in one step. This is the answer to most "permission
+  denied" in a container with a volume: a volume is born owned by root, while the official database
+  images run as somebody else — redis and postgres both as 999 — so the first write fails with an
+  error that never mentions the word volume. Reading it is instant when a running container already
+  has the volume, because that container is asked rather than a helper started.
+
 ### Fixed
 
 - **Only one Dermaga at a time.** Opening the app while it was already running started a second copy,
