@@ -274,6 +274,9 @@ export const streams = {
   pullImage: (reference: string, platform?: string, scheme?: string) =>
     ['images.pull', { reference, platform, scheme }] as const,
   buildImage: (spec: BuildSpec) => ['images.build', spec] as const,
+  saveImage: (reference: string, platform: string, output: string) =>
+    ['images.save', { reference, platform, output }] as const,
+  loadImage: (input: string) => ['images.load', { input }] as const,
   pushImage: (reference: string, scheme?: string) =>
     ['images.push', { reference, scheme }] as const,
   createMachine: (spec: MachineSpec) => ['machines.create', spec] as const,

@@ -746,6 +746,44 @@ func (a *Agent) registerImages() {
 		return map[string]any{"streamId": id}, nil
 	})
 
+	a.server.Register("images.save", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Reference string `json:"reference"`
+			Platform  string `json:"platform"`
+			Output    string `json:"output"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		id, err := a.streams.runCommand(ctx, "save", func(ctx context.Context) (*exec.Cmd, error) {
+			return a.images.SaveCommand(ctx, args.Reference, args.Platform, args.Output), nil
+		})
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"streamId": id}, nil
+	})
+
+	a.server.Register("images.load", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Input string `json:"input"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		id, err := a.streams.runCommand(ctx, "load", func(ctx context.Context) (*exec.Cmd, error) {
+			return a.images.LoadCommand(ctx, args.Input), nil
+		})
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"streamId": id}, nil
+	})
+
 	a.server.Register("images.build", func(ctx context.Context, params json.RawMessage) (any, error) {
 		opts, err := decodeParams[images.BuildOptions](params)
 		if err != nil {

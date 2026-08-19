@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('dermaga', {
   // Returns the chosen path, or null if the dialog was dismissed.
   pickDirectory: (title) => ipcRenderer.invoke('dermaga:pick-directory', title),
 
+  // Where to write an image archive, and which one to read back in.
+  pickSaveFile: (options) => ipcRenderer.invoke('dermaga:pick-save-file', options),
+  pickFile: (options) => ipcRenderer.invoke('dermaga:pick-file', options),
+
   // A dropped File carries no path of its own any more; only the main process
   // can resolve one, and only for files the user actually dropped.
   pathForFile: (file) => webUtils.getPathForFile(file),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FolderOpen, Hammer, ShieldCheck, Trash2 } from 'lucide-react';
+import { Download, FileDown, FileUp, FolderOpen, Hammer, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -11,6 +11,7 @@ import {
   type Column,
 } from '../components/DataTable';
 import { Checkbox, Field, Modal } from '../components/form';
+import { SaveImageDialog, loadImage, saveImage } from '../components/ImageArchive';
 import { TaskRows, runTask } from '../components/TaskRows';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
@@ -98,6 +99,7 @@ export function ImagesPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [savingGroup, setSavingGroup] = useState<ImageGroup | null>(null);
 
   const groups = useMemo(() => groupByDigest(images), [images]);
 
@@ -113,6 +115,18 @@ export function ImagesPage() {
 
   const usersOf = (group: ImageGroup) =>
     containers.filter((c) => group.tags.some((t) => t.reference === c.image)).map((c) => c.name);
+
+  // One platform is not a choice worth a dialog; several is.
+  const startSave = (group: ImageGroup) => {
+    if (group.platforms.length === 1) {
+      void saveImage(group.tags[0].reference, group.platforms[0], (path) =>
+        pushToast(`Saved to ${path}`)
+      );
+      return;
+    }
+
+    setSavingGroup(group);
+  };
 
   const remove = async (group: ImageGroup) => {
     setDeleting(null);
@@ -161,6 +175,10 @@ export function ImagesPage() {
             </SelectionActions>
           ) : (
             <>
+              <button onClick={() => void loadImage()} className="btn-ghost">
+                <FileUp size={13} aria-hidden />
+                Load
+              </button>
               <button onClick={() => setBuilding(true)} className="btn-ghost">
                 <Hammer size={13} aria-hidden />
                 Build
@@ -210,16 +228,27 @@ export function ImagesPage() {
           ];
         }}
         actions={(group) => (
-          <IconButton
-            icon={Trash2}
-            busy={removing === group.digest}
-            className={`border-transparent text-orange-700 dark:text-orange-500 ${
-              removing === group.digest ? '' : 'opacity-0 group-hover:opacity-100'
-            }`}
-            title={group.tags.length > 1 ? `Delete all ${group.tags.length} references` : 'Delete'}
-            aria-label={`Delete ${group.names[0]}`}
-            onClick={() => setDeleting(group)}
-          />
+          <>
+            <IconButton
+              icon={FileDown}
+              className="border-transparent opacity-0 group-hover:opacity-100"
+              title="Save as a file"
+              aria-label={`Save ${group.names[0]}`}
+              onClick={() => startSave(group)}
+            />
+            <IconButton
+              icon={Trash2}
+              busy={removing === group.digest}
+              className={`border-transparent text-orange-700 dark:text-orange-500 ${
+                removing === group.digest ? '' : 'opacity-0 group-hover:opacity-100'
+              }`}
+              title={
+                group.tags.length > 1 ? `Delete all ${group.tags.length} references` : 'Delete'
+              }
+              aria-label={`Delete ${group.names[0]}`}
+              onClick={() => setDeleting(group)}
+            />
+          </>
         )}
       />
 
@@ -260,6 +289,15 @@ export function ImagesPage() {
       {pulling && <PullDialog onClose={() => setPulling(false)} />}
 
       {building && <BuildDialog onClose={() => setBuilding(false)} />}
+
+      {savingGroup && (
+        <SaveImageDialog
+          reference={savingGroup.tags[0].reference}
+          platforms={savingGroup.platforms}
+          onClose={() => setSavingGroup(null)}
+          onSaved={(path) => pushToast(`Saved to ${path}`)}
+        />
+      )}
 
       {deleting && (
         <ConfirmDialog

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Boxes, Info, Layers, ShieldCheck, Tags, Trash2, Upload, X } from 'lucide-react';
+import { Boxes, FileDown, Info, Layers, ShieldCheck, Tags, Trash2, Upload, X } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Badge } from '../components/DataTable';
 import { IconButton } from '../components/Button';
@@ -9,6 +9,7 @@ import type { TabDefinition } from '../components/Tabs';
 import { VulnerabilityPane } from '../components/VulnerabilityPane';
 import { Button } from '../components/Button';
 import { Field, Modal } from '../components/form';
+import { SaveImageDialog, saveImage } from '../components/ImageArchive';
 import { TaskRows, runTask } from '../components/TaskRows';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
@@ -33,6 +34,7 @@ export function ImageDetailPage({ reference }: { reference: string }) {
   // Bumped after a tag is removed, so the inspect runs again.
   const [reloads, setReloads] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const back = useUIStore((s) => s.back);
   const openContainer = useUIStore((s) => s.openContainer);
@@ -102,6 +104,23 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           <button onClick={() => setPushing(true)} className="btn-ghost">
             <Upload size={13} aria-hidden />
             Push
+          </button>
+          <button
+            onClick={() => {
+              // One platform is not a choice worth a dialog; several is.
+              const platforms = detail?.variants.map((v) => v.platform) ?? [];
+              if (platforms.length === 1) {
+                void saveImage(reference, platforms[0], (path) => pushToast(`Saved to ${path}`));
+                return;
+              }
+
+              setSaving(true);
+            }}
+            className="btn-ghost"
+            disabled={!detail}
+          >
+            <FileDown size={13} aria-hidden />
+            Save
           </button>
           <button
             onClick={() => setConfirmingDelete(true)}
@@ -246,6 +265,15 @@ export function ImageDetailPage({ reference }: { reference: string }) {
       )}
 
       {pushing && <PushDialog reference={reference} onClose={() => setPushing(false)} />}
+
+      {saving && detail && (
+        <SaveImageDialog
+          reference={reference}
+          platforms={detail.variants.map((variant) => variant.platform)}
+          onClose={() => setSaving(false)}
+          onSaved={(path) => pushToast(`Saved to ${path}`)}
+        />
+      )}
 
       {confirmingDelete && (
         <ConfirmDialog

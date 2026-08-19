@@ -17,6 +17,12 @@ interface Bridge {
   isFullScreen?: () => Promise<boolean>;
   onFullScreenChange?: (callback: (value: boolean) => void) => () => void;
   pickDirectory?: (title?: string) => Promise<string | null>;
+  pickSaveFile?: (options: {
+    title?: string;
+    defaultName?: string;
+    extension?: string;
+  }) => Promise<string | null>;
+  pickFile?: (options: { title?: string; extension?: string }) => Promise<string | null>;
   pathForFile?: (file: File) => string;
   dragOut?: (container: string, path: string) => Promise<void>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
@@ -100,6 +106,20 @@ export function onOpenContainer(callback: (id: string) => void): () => void {
 /** Opens the native folder chooser; null if the user dismissed it. */
 export function pickDirectory(title?: string): Promise<string | null> {
   return bridge().pickDirectory?.(title) ?? Promise.resolve(null);
+}
+
+/** Where to write a file; null if the user dismissed the dialog. */
+export function pickSaveFile(options: {
+  title?: string;
+  defaultName?: string;
+  extension?: string;
+}): Promise<string | null> {
+  return bridge().pickSaveFile?.(options) ?? Promise.resolve(null);
+}
+
+/** Which file to read; null if the user dismissed the dialog. */
+export function pickFile(options: { title?: string; extension?: string }): Promise<string | null> {
+  return bridge().pickFile?.(options) ?? Promise.resolve(null);
 }
 
 /** Reads a licence from its source, for the ones too large to ship. */

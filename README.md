@@ -31,7 +31,8 @@ everything you do is immediately visible to `container ls` and vice versa.
   line editing, colours and resize. Open it as the image's own user, as root, or as anyone else.
 - **Logs** — follow container, machine and service logs, with filtering and follow-on-scroll.
 - **Images** — build from a Dockerfile with live progress, pull, inspect layers, build history and
-  the config a container inherits. Tags sharing a digest are shown as one image.
+  the config a container inherits. Tags sharing a digest are shown as one image. Save one out as an
+  OCI archive, or load an archive back in.
 - **Files** — browse a container's filesystem, drag files and folders in from Finder, and drag them
   back out again.
 - **Registries** — sign in to a registry, tag an image and push it. Credentials go to Apple's CLI on

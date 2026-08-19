@@ -389,6 +389,25 @@ func (m *Manager) StartBuilderCommand(ctx context.Context) *exec.Cmd {
 	return m.runner.Command(ctx, "builder", "start")
 }
 
+// SaveCommand writes an image out as an OCI archive: the way to move one to a
+// machine with no registry between them, or to keep a copy of a build. Streamed
+// because a large image takes a while and the file grows silently until it is
+// done.
+func (m *Manager) SaveCommand(ctx context.Context, reference, platform, output string) *exec.Cmd {
+	args := []string{"image", "save", reference, "--output", output}
+	if platform != "" {
+		args = append(args, "--platform", platform)
+	}
+
+	return m.runner.Command(ctx, args...)
+}
+
+// LoadCommand reads such an archive back in. The images it contains land under
+// the references they were saved as; nothing here chooses them.
+func (m *Manager) LoadCommand(ctx context.Context, input string) *exec.Cmd {
+	return m.runner.Command(ctx, "image", "load", "--input", input)
+}
+
 func (m *Manager) Delete(ctx context.Context, reference string) error {
 	if _, err := m.runner.Run(ctx, "image", "delete", reference); err != nil {
 		m.logger.Error("Failed to delete image", "reference", reference, "error", err)

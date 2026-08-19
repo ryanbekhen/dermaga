@@ -508,6 +508,35 @@ ipcMain.handle('dermaga:pick-directory', async (_event, title) => {
   return result.canceled ? null : (result.filePaths[0] ?? null);
 });
 
+// Saving an image writes a file the user picks; loading reads one. Same reason
+// as the directory picker: the window has no filesystem of its own, and the
+// choice made here is what grants access to that one path.
+ipcMain.handle('dermaga:pick-save-file', async (_event, { title, defaultName, extension } = {}) => {
+  if (!mainWindow) return null;
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: title || 'Save as',
+    defaultPath: defaultName,
+    filters: extension ? [{ name: extension.toUpperCase(), extensions: [extension] }] : undefined,
+    properties: ['createDirectory'],
+  });
+
+  return result.canceled ? null : (result.filePath ?? null);
+});
+
+ipcMain.handle('dermaga:pick-file', async (_event, { title, extension } = {}) => {
+  if (!mainWindow) return null;
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: title || 'Choose a file',
+    filters: extension ? [{ name: extension.toUpperCase(), extensions: [extension] }] : undefined,
+    properties: ['openFile'],
+    buttonLabel: 'Choose',
+  });
+
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
+
 // Licences too large to ship are read from source when someone asks to see
 // them. The renderer has no network of its own, and this is not a general
 // fetch: only these addresses can be asked for, so a compromised window cannot

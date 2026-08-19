@@ -4,6 +4,7 @@ import {
   BellRing,
   Boxes,
   CloudUpload,
+  FileDown,
   FolderTree,
   Hammer,
   Keyboard,
@@ -95,6 +96,16 @@ export function HelpView({ version }: { version: string }) {
               <strong>Build</strong> on the Images page takes a context folder, a tag and the usual
               build arguments. Progress appears as a row in the list rather than a log window, and
               the builder container is started for you the first time.
+            </p>
+          </Card>
+
+          <Card icon={FileDown} title="Images as files">
+            <p>
+              <strong>Save</strong> &mdash; on an image&rsquo;s page, or on its row in the list
+              &mdash; writes it out as an OCI archive, and <strong>Load</strong> on the Images page
+              reads one back in &mdash; how to move an image to a Mac with no registry between them.
+              An archive holds a single platform, so one is chosen when the image has more than one;
+              only the variants actually pulled here can be written out.
             </p>
           </Card>
 
