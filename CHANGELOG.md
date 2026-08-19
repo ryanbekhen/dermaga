@@ -7,6 +7,27 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## Unreleased
+
+### Added
+
+- **A menu bar item.** It reports the runtime rather than the app — whether the container services
+  are up, how many containers are running, and each of them by name, a click away from its page.
+  Below that: Open Dermaga, Start services when they are stopped, and Quit. The icon is the logo cut
+  down to what survives at 16pt, filled while the services run and hollow when they do not.
+- **Open Dermaga at login**, in Settings. Opened that way it starts in the menu bar with no window
+  and no splash — nobody logging in asked for a window — while the agent runs and exit notices still
+  arrive. The setting belongs to macOS, so changing it in System Settings changes it here too.
+- **Closing the window leaves the Dock.** With no window open Dermaga is a menu bar app; the icon
+  comes back the moment a window does.
+
+### Fixed
+
+- **Only one Dermaga at a time.** Opening the app while it was already running started a second copy,
+  with a second agent, a second watcher and duplicate exit notifications. It now brings the running
+  one forward — which matters more than it used to, since an app with no Dock icon is opened by
+  launching it again.
+
 ## [v1.5.0] — 2026-08-19
 
 ### Added

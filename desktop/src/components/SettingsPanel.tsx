@@ -1,7 +1,7 @@
-import { type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { openNotificationSettings } from '../services/ipc';
+import { getOpenAtLogin, openNotificationSettings, setOpenAtLogin } from '../services/ipc';
 import { useSettingsStore, type Theme } from '../store/settingsStore';
 import { SegmentedControl, type Segment } from './SegmentedControl';
 
@@ -48,6 +48,10 @@ export function SettingsPanel() {
               />
               <span className="text-xs text-ink-600 dark:text-ink-400">lines</span>
             </label>
+          </Card>
+
+          <Card title="Startup" hint="Managed by macOS; System Settings shows it too.">
+            <OpenAtLogin />
           </Card>
 
           <Card title="Behaviour">
@@ -110,20 +114,64 @@ function Card({
   );
 }
 
+/**
+ * Whether macOS opens Dermaga at login.
+ *
+ * Read from macOS rather than kept in our settings file, so a change made in
+ * System Settings is reflected here instead of contradicted. Opened that way,
+ * Dermaga starts in the menu bar with no window: nobody logging in asked for
+ * one.
+ */
+function OpenAtLogin() {
+  const [enabled, setEnabled] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    void getOpenAtLogin().then((value) => {
+      setEnabled(value);
+      setReady(true);
+    });
+  }, []);
+
+  return (
+    <>
+      <Toggle
+        checked={enabled}
+        onChange={(value) => {
+          // The answer is what macOS says afterwards, not what was asked for.
+          setEnabled(value);
+          void setOpenAtLogin(value).then(setEnabled);
+        }}
+        label="Open Dermaga at login"
+        disabled={!ready}
+      />
+      {enabled && (
+        <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
+          It starts in the menu bar with no window, and says when a container stops on its own.
+        </p>
+      )}
+    </>
+  );
+}
+
 function Toggle({
   checked,
   onChange,
   label,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
   label: string;
+  /** While the real value is still being read back from macOS. */
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-2.5 text-sm">
+    <label className={`flex items-center gap-2.5 text-sm ${disabled ? 'opacity-50' : ''}`}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 accent-brand-600"
       />

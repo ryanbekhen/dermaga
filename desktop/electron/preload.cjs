@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('dermaga', {
 
   openNotificationSettings: () => ipcRenderer.invoke('dermaga:open-notification-settings'),
 
+  getOpenAtLogin: () => ipcRenderer.invoke('dermaga:get-open-at-login'),
+  setOpenAtLogin: (value) => ipcRenderer.invoke('dermaga:set-open-at-login', value),
 
   onOpenContainer: (callback) => {
     const handler = (_event, id) => callback(id);

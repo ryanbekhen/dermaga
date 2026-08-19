@@ -27,6 +27,8 @@ interface Bridge {
   dragOut?: (container: string, path: string) => Promise<void>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
+  getOpenAtLogin?: () => Promise<boolean>;
+  setOpenAtLogin?: (value: boolean) => Promise<boolean>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
   fetchLicence?: (key: string) => Promise<string>;
   checkUpdate?: () => Promise<UpdateCheck>;
@@ -99,6 +101,19 @@ export function openNotificationSettings(): Promise<void> {
 }
 
 /** Fires when a notification about a stopped container is clicked. */
+/**
+ * Whether macOS opens Dermaga at login. The setting belongs to macOS -- it can
+ * be changed in System Settings too -- so it is read back rather than stored,
+ * and both calls answer with what macOS now says.
+ */
+export function getOpenAtLogin(): Promise<boolean> {
+  return bridge().getOpenAtLogin?.() ?? Promise.resolve(false);
+}
+
+export function setOpenAtLogin(value: boolean): Promise<boolean> {
+  return bridge().setOpenAtLogin?.(value) ?? Promise.resolve(false);
+}
+
 export function onOpenContainer(callback: (id: string) => void): () => void {
   return bridge().onOpenContainer?.(callback) ?? (() => {});
 }

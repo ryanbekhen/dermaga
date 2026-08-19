@@ -18,6 +18,21 @@ const path = require('node:path');
 const { Agent } = require('./agent.cjs');
 const { createTray, updateTray } = require('./tray.cjs');
 
+// One window's worth of Dermaga per Mac. Without this, opening the app while
+// it is already running -- which is exactly what someone does when it has no
+// Dock icon to click -- starts a second copy with a second agent, two watchers
+// and two sets of exit notifications.
+const primary = app.requestSingleInstanceLock();
+
+if (!primary) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showWindow();
+  });
+}
+
 const isDev = !app.isPackaged;
 const DEV_ORIGIN = `http://localhost:${process.env.DERMAGA_DEV_PORT || 3000}`;
 
@@ -398,8 +413,24 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+
+    // Closing the window does not quit on macOS, and now it does not leave a
+    // Dock icon behind either: the app keeps watching from the menu bar, which
+    // is where it can be opened again. Quit lives there too, because an app
+    // with no window has no menu to press Cmd-Q against.
+    if (BrowserWindow.getAllWindows().length === 0) app.dock?.hide();
   });
 }
+
+// macOS owns this setting -- it can also be changed in System Settings, and
+// under the hood it is a registration with SMAppService rather than a value of
+// ours -- so it is read back from there rather than mirrored in our config.
+ipcMain.handle('dermaga:get-open-at-login', () => app.getLoginItemSettings().openAtLogin);
+
+ipcMain.handle('dermaga:set-open-at-login', (_event, openAtLogin) => {
+  app.setLoginItemSettings({ openAtLogin: Boolean(openAtLogin) });
+  return app.getLoginItemSettings().openAtLogin;
+});
 
 ipcMain.handle('dermaga:invoke', async (_event, method, params) => {
   if (!agent) throw new Error('The Dermaga agent is not running');
@@ -656,7 +687,14 @@ async function ensureKernel() {
  */
 async function startUp() {
   const startedAt = Date.now();
-  createSplash();
+
+  // macOS opened this, not the user: it starts in the menu bar with no window,
+  // no splash and no Dock icon. Someone who launches Dermaga themselves is
+  // asking for a window; someone logging in is not.
+  const atLogin = app.getLoginItemSettings().wasOpenedAtLogin;
+
+  if (atLogin) app.dock?.hide();
+  else createSplash();
 
   // 1. The agent itself.
   splashStep('agent', 'active');
@@ -729,6 +767,10 @@ async function startUp() {
   // even when nothing is open.
   startTray();
 
+  // Launched at login, this is the whole of startup: the agent is up, the
+  // menu bar is watching, and exit notices work without anything on screen.
+  if (atLogin) return;
+
   // 6. The window itself.
   splashStep('ui', 'active');
   createWindow();
@@ -757,6 +799,21 @@ async function startUp() {
 }
 
 /**
+ * Puts the window in front, creating it if this launch never made one.
+ *
+ * Also the moment the Dock icon comes back: an app with a window belongs in
+ * the Dock, an app without one belongs only in the menu bar.
+ */
+function showWindow() {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+
+  void app.dock?.show();
+  mainWindow?.show();
+  mainWindow?.focus();
+  app.focus({ steal: true });
+}
+
+/**
  * Brings up the menu bar item and keeps it current.
  *
  * Main subscribes to the agent in its own right rather than relying on the
@@ -775,17 +832,9 @@ function startTray() {
 
 function trayUp() {
   createTray({
-    onOpen: () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
-      mainWindow?.show();
-      mainWindow?.focus();
-      app.focus({ steal: true });
-    },
+    onOpen: showWindow,
     onOpenContainer: (id) => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
-      mainWindow?.show();
-      mainWindow?.focus();
-      app.focus({ steal: true });
+      showWindow();
       mainWindow?.webContents.send('dermaga:open-container', id);
     },
     onStartServices: () => {
@@ -821,10 +870,7 @@ app.whenReady().then(() => {
   applyDevIcon();
   void startUp();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    mainWindow?.show();
-  });
+  app.on('activate', () => showWindow());
 });
 
 app.on('window-all-closed', () => {
