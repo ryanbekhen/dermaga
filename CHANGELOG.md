@@ -11,6 +11,15 @@ change means to someone using Dermaga, not for how much code moved.
 
 ### Added
 
+- **Restart policies.** Apple's CLI has none, so Dermaga has one: pick *Always* or *Unless stopped*
+  when creating or editing a container, and it is started again when it stops without being asked to.
+  The policy is a label on the container, not a record kept here — it travels with the container, is
+  visible to `container inspect`, and leaves nothing behind if the container is deleted from a
+  terminal. Attempts back off and eventually give up rather than booting a broken container all
+  night, and *Unless stopped* means it: a container stopped from Dermaga stays down, across a restart
+  of the agent too. There is deliberately no *On failure* — the CLI reports no exit code, so a policy
+  that treated every exit as a failure would be a lie.
+
 - **The agent can run as a background service.** A switch in Settings installs it as a per-user
   launchd job, so it starts at login and keeps watching containers whether or not a window is open —
   which is what a restart policy will need to mean anything. Installing hands the socket over: the

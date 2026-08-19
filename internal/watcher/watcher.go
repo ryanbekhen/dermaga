@@ -24,6 +24,12 @@ import (
 // made outside the app, like `container run` in a terminal.
 const Interval = 2 * time.Second
 
+// How often to look when nobody is subscribed. The agent still has work to do
+// with no window open -- a container with a restart policy has to be noticed
+// when it dies -- but nothing is being drawn, so two seconds would be spending
+// the battery on a list no one is reading.
+const IdleInterval = 10 * time.Second
+
 // subscriberBuffer keeps a slow subscriber from blocking the watch loop.
 const subscriberBuffer = 4
 
@@ -97,16 +103,25 @@ func (w *Watcher) Run(ctx context.Context) {
 	ticker := time.NewTicker(Interval)
 	defer ticker.Stop()
 
+	var lastIdle time.Time
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-w.poke:
 			w.refresh(ctx)
-		case <-ticker.C:
+		case now := <-ticker.C:
+			// With a window open, keep up with it. With none, keep watching
+			// anyway but slowly: something still has to notice a container
+			// that dies while nobody is looking.
 			if w.SubscriberCount() == 0 {
-				continue
+				if now.Sub(lastIdle) < IdleInterval {
+					continue
+				}
+				lastIdle = now
 			}
+
 			w.refresh(ctx)
 		}
 	}
