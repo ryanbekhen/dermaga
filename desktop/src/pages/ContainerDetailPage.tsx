@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import {
+  Activity,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
-import { Meter } from '../components/Meter';
+import { Gauge } from '../components/Gauge';
 import { UsageChart, asBytes, asPercent } from '../components/UsageChart';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
@@ -40,6 +41,7 @@ const TerminalPane = lazy(() =>
 
 const TABS: TabDefinition[] = [
   { id: 'overview', label: 'Overview', icon: Info },
+  { id: 'usage', label: 'Usage', icon: Activity },
   { id: 'logs', label: 'Logs', icon: ScrollText },
   { id: 'files', label: 'Files', icon: FolderTree },
   { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
@@ -209,6 +211,8 @@ export function ContainerDetailPage({ container, tab: requested }: ContainerDeta
     >
       {tab === 'overview' && <OverviewTab container={container} />}
 
+      {tab === 'usage' && <UsageTab container={container} />}
+
       {tab === 'logs' && (
         <DetailPane>
           <LogPane method="containers.logs" params={{ id: container.id, tail: logTail }} />
@@ -252,6 +256,76 @@ export function ContainerDetailPage({ container, tab: requested }: ContainerDeta
         />
       )}
     </DetailLayout>
+  );
+}
+
+/**
+ * What the container is using, now and over the last half hour.
+ *
+ * The two belong together: a meter answers "is it busy?" and the chart behind
+ * it answers "has it been?". Split across the overview they were two unrelated
+ * boxes competing with the facts around them.
+ */
+function UsageTab({ container }: { container: Container }) {
+  const running = container.status === 'running';
+  const cores = container.cpuAllocation ?? 1;
+  const history = useUsageHistory(container.id, container.cpuUsage, running);
+
+  return (
+    <DetailGrid>
+      <Section title="Now" plain>
+        <div className="grid grid-cols-2 gap-4 pt-1">
+          <Gauge
+            value={running ? (container.cpuUsage ?? 0) : 0}
+            label="CPU"
+            reading={running ? `${(container.cpuUsage ?? 0).toFixed(1)}%` : 'idle'}
+            caption={`of ${cores} core${cores > 1 ? 's' : ''}`}
+            idle={!running}
+          />
+          <Gauge
+            value={running ? (container.memoryUsagePercent ?? 0) : 0}
+            label="Memory"
+            reading={
+              running && container.memoryUsage ? formatMemory(container.memoryUsage) : 'idle'
+            }
+            caption={`of ${formatMemory(container.memoryAllocation)}`}
+            idle={!running}
+          />
+        </div>
+      </Section>
+
+      <Section title="Last 30 minutes" plain>
+        {/* Apple's CLI reports a container's usage now and nothing else, so the
+            history is ours: the agent samples every five seconds and keeps half
+            an hour of it in memory. */}
+        <p className="pb-1 text-tiny text-ink-600 dark:text-ink-400">
+          Dermaga records this itself — the CLI keeps no history. Samples are taken every five
+          seconds while Dermaga runs, and are forgotten when it quits.
+        </p>
+
+        {running ? (
+          <>
+            <UsageChart
+              points={history}
+              label="CPU"
+              value={(point) => point.cpuPercent}
+              ceiling={100}
+              format={asPercent}
+            />
+            <UsageChart
+              points={history}
+              label="Memory"
+              value={(point) => point.memoryBytes}
+              format={asBytes}
+            />
+          </>
+        ) : (
+          <p className="text-xs text-ink-600 dark:text-ink-400">
+            Nothing is sampled while the container is stopped.
+          </p>
+        )}
+      </Section>
+    </DetailGrid>
   );
 }
 
@@ -307,7 +381,6 @@ function OverviewTab({ container }: { container: Container }) {
     (dns?.options.length ?? 0) > 0 ||
     Boolean(dns?.domain);
   const sysctls = Object.entries(container.sysctls ?? {});
-  const history = useUsageHistory(container.id, container.cpuUsage, running);
   const env = container.environmentVariables ?? [];
 
   return (
@@ -321,40 +394,13 @@ function OverviewTab({ container }: { container: Container }) {
         <Row label="Image" value={container.image} mono copyable wide />
       </Section>
 
-      <Section title="Resources" plain>
-        <Meter
-          value={running ? (container.cpuUsage ?? 0) : 0}
-          label={`CPU · ${container.cpuAllocation ?? 1} core${(container.cpuAllocation ?? 1) > 1 ? 's' : ''}`}
-          detail={running ? `${(container.cpuUsage ?? 0).toFixed(1)}%` : 'idle'}
+      <Section title="Resources">
+        <Row
+          label="CPU"
+          value={`${container.cpuAllocation ?? 1} core${(container.cpuAllocation ?? 1) > 1 ? 's' : ''}`}
         />
-        <Meter
-          value={running ? (container.memoryUsagePercent ?? 0) : 0}
-          label="Memory"
-          detail={
-            running && container.memoryUsage
-              ? `${formatMemory(container.memoryUsage)} / ${formatMemory(container.memoryAllocation)}`
-              : formatMemory(container.memoryAllocation)
-          }
-        />
+        <Row label="Memory" value={formatMemory(container.memoryAllocation)} />
       </Section>
-
-      {running && (
-        <Section title="Last 30 minutes" plain>
-          <UsageChart
-            points={history}
-            label="CPU"
-            value={(point) => point.cpuPercent}
-            ceiling={100}
-            format={asPercent}
-          />
-          <UsageChart
-            points={history}
-            label="Memory"
-            value={(point) => point.memoryBytes}
-            format={asBytes}
-          />
-        </Section>
-      )}
 
       <Section title="Networking" span={(container.interfaces?.length ?? 0) > 1} plain>
         {container.interfaces && container.interfaces.length > 0 ? (

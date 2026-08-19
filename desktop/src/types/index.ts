@@ -394,7 +394,7 @@ export interface NetworkSpec {
   internal?: boolean;
 }
 
-export type ContainerTab = 'overview' | 'logs' | 'files' | 'terminal';
+export type ContainerTab = 'overview' | 'usage' | 'logs' | 'files' | 'terminal';
 export type MachineTab = 'overview' | 'logs' | 'terminal';
 
 export type Route =
