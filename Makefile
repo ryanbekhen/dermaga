@@ -14,7 +14,7 @@ DMG     := desktop/release/Dermaga-$(VERSION)-arm64.dmg
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
 
-.PHONY: all agent icon notices changelog desktop-deps dev check test lint fmt dist verify-dist install release publish notes version clean
+.PHONY: all agent icon notices changelog desktop-deps dev wails wails-dev check test lint fmt dist verify-dist install release publish notes version clean
 
 all: agent
 
@@ -50,14 +50,33 @@ changelog:
 dev: agent icon notices changelog
 	cd desktop && npm run dev:app
 
+## --- Wails ------------------------------------------------------------
+##
+## The same app without Chromium: the Go process that already speaks to the
+## agent draws the window through WKWebView, and the React frontend is
+## unchanged. Both shells live here until this one replaces the other.
+
+## Build Dermaga.app around the Wails binary.
+wails: agent notices changelog
+	cd desktop && npm run build
+	VERSION=$(VERSION) ./scripts/bundle-wails.sh
+
+## Build it and open it.
+wails-dev: wails
+	open desktop/release-wails/Dermaga.app
+
 ## Everything that has to pass: vet, tests, types, lint.
 check: test lint
 	go vet ./...
 	cd desktop && npx tsc -b --force
 
-test:
+test: desktop/dist/index.html
 	go test ./...
 	cd desktop && npm test
+
+## The Go app embeds the built frontend, so it cannot be compiled without one.
+desktop/dist/index.html:
+	cd desktop && npm run build
 
 lint:
 	gofmt -l . | tee /dev/stderr | (! read)
@@ -147,4 +166,4 @@ version:
 	@echo "dmg:     $(DMG)"
 
 clean:
-	rm -rf bin desktop/dist desktop/release desktop/build/icon.png desktop/electron/splash-logo.png
+	rm -rf bin desktop/dist desktop/release desktop/release-wails desktop/build/icon.png desktop/electron/splash-logo.png

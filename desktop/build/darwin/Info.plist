@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleName</key>
+	<string>Dermaga</string>
+	<key>CFBundleDisplayName</key>
+	<string>Dermaga</string>
+	<key>CFBundleExecutable</key>
+	<string>Dermaga</string>
+	<!-- The notification centre refuses an app without one of these, and the
+	     login item registration is filed under it too. -->
+	<key>CFBundleIdentifier</key>
+	<string>dev.ryanbekhen.dermaga</string>
+	<key>CFBundleVersion</key>
+	<string>__VERSION__</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleIconFile</key>
+	<string>icons</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Achmad Irianto Eka Putra. MIT licensed.</string>
+</dict>
+</plist>
