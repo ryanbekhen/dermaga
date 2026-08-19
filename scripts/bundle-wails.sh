@@ -11,6 +11,17 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="${VERSION:-0.0.0}"
 
+# A development bundle is the same bundle without the production tag, which is
+# what lets Wails serve the window from the Vite dev server instead of from the
+# files embedded at build time. It is still a bundle: notifications refuse to
+# register without a bundle identifier, so there is no lighter way to run this.
+tags="production"
+strip="-s -w"
+if [ "${1:-}" = "--dev" ]; then
+	tags=""
+	strip=""
+fi
+
 app="$root/desktop/release-wails/Dermaga.app"
 contents="$app/Contents"
 
@@ -31,8 +42,8 @@ mkdir -p "$contents/MacOS" "$contents/Resources"
 #     build tells nobody anything.
 echo "==> building Dermaga $version"
 MACOSX_DEPLOYMENT_TARGET=11.0 go build \
-	-tags production \
-	-ldflags "-X main.Version=$version -s -w -extldflags=-Wl,-no_warn_duplicate_libraries" \
+	-tags "$tags" \
+	-ldflags "-X main.Version=$version $strip -extldflags=-Wl,-no_warn_duplicate_libraries" \
 	-o "$contents/MacOS/Dermaga" \
 	./desktop/
 

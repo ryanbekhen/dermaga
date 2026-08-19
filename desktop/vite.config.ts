@@ -17,6 +17,10 @@ export default defineConfig({
     },
   },
   server: {
+    // IPv4 explicitly. Left to itself Vite binds [::1] only, and the Wails
+    // asset server proxies over tcp4 -- which is a connection refused with
+    // nothing on either side saying why. Electron reaches it either way.
+    host: '127.0.0.1',
     port: 3000,
     // Electron loads localhost:3000 and the dev script waits on it, so a Vite
     // that quietly moved to the next free port would leave the window pointing

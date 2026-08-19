@@ -67,10 +67,15 @@ wails: agent notices changelog
 	cd desktop && npm run build
 	VERSION=$(VERSION) ./scripts/bundle-wails.sh
 
-## Build it and run it. This is the one to use while working.
-wails-dev: wails
-	open desktop/release-wails/Dermaga.app
-	@echo "running from the checkout -- its agent is on ~/.dermaga/dev.sock"
+## Run it against the Vite dev server, with hot reload.
+##
+## The equivalent of `make dev`: Vite serves the frontend, Wails proxies to it,
+## and a saved file is on screen without a rebuild. Ctrl-C stops both.
+wails-dev: agent notices changelog desktop/dist/index.html
+	VERSION=$(VERSION) ./scripts/bundle-wails.sh --dev
+	cd desktop && npx concurrently -k -n vite,dermaga -c cyan,magenta \
+		"npx vite" \
+		"npx wait-on tcp:127.0.0.1:3000 && FRONTEND_DEVSERVER_URL=http://localhost:3000 ./release-wails/Dermaga.app/Contents/MacOS/Dermaga"
 
 ## Put it in /Applications, where it becomes the installed copy and takes over
 ## the usual socket. Replaces the Electron build.

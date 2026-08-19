@@ -109,7 +109,13 @@ func main() {
 		}
 	})
 
-	go app.startUp()
+	// Startup waits for the application to be ready rather than racing it from
+	// a goroutine: in a development build Wails has to reach the frontend dev
+	// server before it can serve a window anything, and a window created
+	// before then loads nothing at all.
+	app.wails.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		go app.startUp()
+	})
 
 	if err := app.wails.Run(); err != nil {
 		log.Fatal(err)
@@ -122,6 +128,13 @@ func main() {
 // through the bridge, so nothing here should ever open a connection. The
 // runtime is served from the same origin, which is why 'self' is enough.
 func contentSecurityPolicy(next http.Handler) http.Handler {
+	// Vite's HMR client needs inline scripts and a websocket of its own, so a
+	// development build gets none of this. The policy is about what a shipped
+	// window may reach, and a shipped window has no dev server in front of it.
+	if os.Getenv("FRONTEND_DEVSERVER_URL") != "" {
+		return next
+	}
+
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Security-Policy",
 			"default-src 'self'; connect-src 'self'"+cspConnectExtra+
