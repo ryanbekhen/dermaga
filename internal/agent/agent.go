@@ -6,8 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
@@ -155,7 +158,7 @@ func (f notifierFunc) Changed() { f() }
 
 // Run starts the background work and serves requests until the client goes
 // away, then tears down anything still streaming.
-func (a *Agent) Run(ctx context.Context) error {
+func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -165,7 +168,26 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	a.register()
 
-	err := a.server.Serve(ctx)
+	err := a.server.Serve(ctx, in, out)
+	a.streams.closeAll()
+
+	return err
+}
+
+// Listen does the same for an agent that outlives any one client: it serves a
+// Unix socket, so the desktop app can come and go while the watching, the
+// scanning and the supervising carry on.
+func (a *Agent) Listen(ctx context.Context, socket string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go a.containers.Stats().Run(ctx)
+	go a.watcher.Run(ctx)
+	a.scanner.Start(ctx)
+
+	a.register()
+
+	err := a.server.Listen(ctx, socket)
 	a.streams.closeAll()
 
 	return err
@@ -1349,4 +1371,15 @@ func (a *Agent) registerStreams() {
 
 		return map[string]any{}, nil
 	})
+}
+
+// SocketPath is where an agent serving a socket puts it: beside the settings
+// and the scan results, in a directory only this user can read.
+func SocketPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(home, ".dermaga", "agent.sock"), nil
 }

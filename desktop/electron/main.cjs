@@ -207,6 +207,9 @@ function agentBinary() {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
+// Connects to whichever agent is running, starting one if none is. Returns a
+// promise so startup can wait for an agent that answers rather than for a
+// process that exists.
 function startAgent() {
   const binary = agentBinary();
 
@@ -221,6 +224,7 @@ function startAgent() {
 
   agent = new Agent({
     binary,
+    socket: path.join(os.homedir(), '.dermaga', 'agent.sock'),
     env: { ...process.env, PATH: mergedPath },
     // Everything the agent pushes -- snapshots, stream chunks, terminal output
     // -- is forwarded to the renderer as one channel.
@@ -243,10 +247,10 @@ function startAgent() {
 
       mainWindow?.webContents.send('dermaga:notify', message);
     },
-    onExit: (code) => console.warn('[dermaga] agent exited with code', code),
+    onExit: (code) => console.warn('[dermaga] lost the agent', code ?? '(connection closed)'),
   });
 
-  agent.start();
+  return agent.start();
 }
 
 /**
@@ -696,9 +700,13 @@ async function startUp() {
   if (atLogin) app.dock?.hide();
   else createSplash();
 
-  // 1. The agent itself.
+  // 1. The agent itself: the one already running, or one started here.
   splashStep('agent', 'active');
-  startAgent();
+  try {
+    await startAgent();
+  } catch (error) {
+    console.error('[dermaga] could not reach an agent:', error.message);
+  }
 
   let toolchain;
   try {
