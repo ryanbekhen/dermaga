@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
+	"syscall"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
@@ -24,13 +26,17 @@ func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier
 }
 
 type Volume struct {
-	Name        string            `json:"name"`
-	Driver      string            `json:"driver"`
-	Format      string            `json:"format"`
-	Source      string            `json:"source"`
-	SizeInBytes int64             `json:"sizeInBytes"`
-	CreatedAt   string            `json:"createdAt"`
-	Labels      map[string]string `json:"labels"`
+	Name        string `json:"name"`
+	Driver      string `json:"driver"`
+	Format      string `json:"format"`
+	Source      string `json:"source"`
+	SizeInBytes int64  `json:"sizeInBytes"`
+	// What the volume is actually costing on disk. The size above is the cap
+	// the image was created with -- half a terabyte by default -- which says
+	// nothing at all about how full it is.
+	UsedBytes int64             `json:"usedBytes"`
+	CreatedAt string            `json:"createdAt"`
+	Labels    map[string]string `json:"labels"`
 	/** Containers currently mounting this volume, filled in by the watcher. */
 	UsedBy []string `json:"usedBy"`
 }
@@ -81,6 +87,7 @@ func parse(output []byte) ([]Volume, error) {
 			Format:      r.Configuration.Format,
 			Source:      r.Configuration.Source,
 			SizeInBytes: r.Configuration.SizeInBytes,
+			UsedBytes:   onDisk(r.Configuration.Source),
 			CreatedAt:   r.Configuration.CreationDate,
 			Labels:      labels,
 			UsedBy:      []string{},
@@ -88,6 +95,27 @@ func parse(output []byte) ([]Volume, error) {
 	}
 
 	return volumes, nil
+}
+
+// onDisk measures the volume image the way the finder does: by the blocks it
+// actually occupies. The file is sparse, so its apparent length is the cap and
+// not the answer to "what is this costing me?".
+func onDisk(source string) int64 {
+	if source == "" {
+		return 0
+	}
+
+	info, err := os.Stat(source)
+	if err != nil {
+		return 0
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return info.Size()
+	}
+
+	return stat.Blocks * 512
 }
 
 type Spec struct {

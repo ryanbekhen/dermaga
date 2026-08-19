@@ -24,6 +24,7 @@ import { NetworkDetailPage } from './pages/NetworkDetailPage';
 import { NetworksPage } from './pages/NetworksPage';
 import { ServicesOffline } from './pages/ServicesOffline';
 import { SystemPage } from './pages/SystemPage';
+import { VolumeDetailPage } from './pages/VolumeDetailPage';
 import { VolumesPage } from './pages/VolumesPage';
 import { useResourceStore } from './store/resourceStore';
 import { useUIStore } from './store/uiStore';
@@ -54,6 +55,7 @@ export function App() {
   const containers = useResourceStore((s) => s.containers);
   const machines = useResourceStore((s) => s.machines);
   const networks = useResourceStore((s) => s.networks);
+  const volumes = useResourceStore((s) => s.volumes);
   const error = useResourceStore((s) => s.error);
 
   const [system, setSystem] = useState<SystemStatus | null>(null);
@@ -123,6 +125,8 @@ export function App() {
     route.name === 'machine' ? machines.find((m) => m.id === route.id) : undefined;
   const selectedNetwork =
     route.name === 'network' ? networks.find((n) => n.name === route.network) : undefined;
+  const selectedVolume =
+    route.name === 'volume' ? volumes.find((v) => v.name === route.volume) : undefined;
 
   useEffect(() => {
     if (route.name === 'container' && containers.length > 0 && !selectedContainer) {
@@ -134,14 +138,19 @@ export function App() {
     if (route.name === 'network' && networks.length > 0 && !selectedNetwork) {
       navigate({ name: 'networks' });
     }
+    if (route.name === 'volume' && volumes.length > 0 && !selectedVolume) {
+      navigate({ name: 'volumes' });
+    }
   }, [
     route,
     containers.length,
     machines.length,
     networks.length,
+    volumes.length,
     selectedContainer,
     selectedMachine,
     selectedNetwork,
+    selectedVolume,
     navigate,
   ]);
 
@@ -174,7 +183,11 @@ export function App() {
 
             {route.name === 'container' &&
               (selectedContainer ? (
-                <ContainerDetailPage container={selectedContainer} tab={route.tab} />
+                <ContainerDetailPage
+                  container={selectedContainer}
+                  tab={route.tab}
+                  path={route.path}
+                />
               ) : (
                 <Loading />
               ))}
@@ -184,6 +197,9 @@ export function App() {
             {route.name === 'image' && <ImageDetailPage reference={route.reference} />}
 
             {route.name === 'volumes' && <VolumesPage />}
+
+            {route.name === 'volume' &&
+              (selectedVolume ? <VolumeDetailPage volume={selectedVolume} /> : <Loading />)}
 
             {route.name === 'networks' && <NetworksPage />}
 

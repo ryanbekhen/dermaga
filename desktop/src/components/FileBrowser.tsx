@@ -23,8 +23,22 @@ import type { FileEntry } from '../types';
  * and both directions are a drag -- in from Finder, out to it -- because that
  * is how every other file lives on a Mac.
  */
-export function FileBrowser({ container, running }: { container: string; running: boolean }) {
-  const [path, setPath] = useState('/');
+export function FileBrowser({
+  container,
+  running,
+  /** The floor: browsing starts here and cannot go above it. */
+  root = '/',
+  rootLabel = '/',
+  /** Where to land, when that is deeper than the floor. */
+  start,
+}: {
+  container: string;
+  running: boolean;
+  root?: string;
+  rootLabel?: string;
+  start?: string;
+}) {
+  const [path, setPath] = useState(start ?? root);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,7 +112,10 @@ export function FileBrowser({ container, running }: { container: string; running
     }
   };
 
-  const segments = path.split('/').filter(Boolean);
+  // Below the root the crumbs are relative to it: browsing a volume mounted at
+  // /volume should read "/ data logs", not the helper container's own tree.
+  const base = root === '/' ? '' : root;
+  const segments = path.slice(base.length).split('/').filter(Boolean);
 
   return (
     // The whole pane takes the drop, not just the rows: a directory with three
@@ -143,14 +160,14 @@ export function FileBrowser({ container, running }: { container: string; running
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 pb-2.5 dark:border-ink-700">
         <nav className="flex min-w-0 flex-wrap items-center text-xs" aria-label="Path">
-          <button onClick={() => setPath('/')} className="btn-ghost px-1.5 py-0.5 font-mono">
-            /
+          <button onClick={() => setPath(root)} className="btn-ghost px-1.5 py-0.5 font-mono">
+            {rootLabel}
           </button>
           {segments.map((segment, index) => (
             <span key={`${segment}-${index}`} className="flex items-center">
               <ChevronRight size={12} className="text-ink-400" aria-hidden />
               <button
-                onClick={() => setPath(`/${segments.slice(0, index + 1).join('/')}`)}
+                onClick={() => setPath(`${base}/${segments.slice(0, index + 1).join('/')}`)}
                 className="btn-ghost px-1.5 py-0.5 font-mono"
               >
                 {segment}

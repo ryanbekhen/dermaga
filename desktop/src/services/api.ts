@@ -180,6 +180,15 @@ export const api = {
     await invoke('containers.stop', { id, timeout });
   },
 
+  /**
+   * Creates a container and waits for it, rather than streaming its progress
+   * as a task. For the helper containers Dermaga runs on the user's behalf,
+   * where a progress row would be noise about something they did not ask for.
+   */
+  async runContainer(spec: ContainerSpec): Promise<void> {
+    await invoke('containers.run', spec);
+  },
+
   async removeContainer(id: string, force = false): Promise<void> {
     await invoke('containers.remove', { id, force });
   },

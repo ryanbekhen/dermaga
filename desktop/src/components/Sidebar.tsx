@@ -37,7 +37,7 @@ const PRIMARY_NAV: NavEntry[] = [
     label: 'Containers',
   },
   { target: { name: 'images' }, owns: ['images', 'image'], icon: Layers, label: 'Images' },
-  { target: { name: 'volumes' }, owns: ['volumes'], icon: Database, label: 'Volumes' },
+  { target: { name: 'volumes' }, owns: ['volumes', 'volume'], icon: Database, label: 'Volumes' },
   { target: { name: 'networks' }, owns: ['networks', 'network'], icon: Network, label: 'Networks' },
   { target: { name: 'registries' }, owns: ['registries'], icon: CloudUpload, label: 'Registries' },
   { target: { name: 'machines' }, owns: ['machines', 'machine'], icon: Server, label: 'Machines' },

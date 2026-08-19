@@ -28,10 +28,12 @@ interface UIState {
   navigateWith: (route: Route, intent: Intent, target?: string) => void;
   /** Called by the page once it has acted on the intent, or dismissed it. */
   clearIntent: () => void;
-  openContainer: (id: string, tab?: ContainerTab) => void;
+  /** `path` opens the files tab at a directory, e.g. a volume's mount point. */
+  openContainer: (id: string, tab?: ContainerTab, path?: string) => void;
   openMachine: (id: string, tab?: MachineTab) => void;
   openImage: (reference: string) => void;
   openNetwork: (name: string) => void;
+  openVolume: (name: string) => void;
   /** Switches tabs within the current detail route; ignored elsewhere. */
   setTab: (tab: string) => void;
   back: () => void;
@@ -48,14 +50,16 @@ export const useUIStore = create<UIState>((set) => ({
   navigate: (route) => set({ route, intent: null, intentTarget: null }),
   navigateWith: (route, intent, target) => set({ route, intent, intentTarget: target ?? null }),
   clearIntent: () => set({ intent: null, intentTarget: null }),
-  openContainer: (id, tab = 'overview') =>
-    set({ route: { name: 'container', id, tab }, intent: null, intentTarget: null }),
+  openContainer: (id, tab = 'overview', path) =>
+    set({ route: { name: 'container', id, tab, path }, intent: null, intentTarget: null }),
   openMachine: (id, tab = 'overview') =>
     set({ route: { name: 'machine', id, tab }, intent: null, intentTarget: null }),
   openImage: (reference) =>
     set({ route: { name: 'image', reference }, intent: null, intentTarget: null }),
   openNetwork: (name) =>
     set({ route: { name: 'network', network: name }, intent: null, intentTarget: null }),
+  openVolume: (name) =>
+    set({ route: { name: 'volume', volume: name }, intent: null, intentTarget: null }),
   setTab: (tab) =>
     set((state) => {
       if (state.route.name === 'container') {
@@ -73,6 +77,7 @@ export const useUIStore = create<UIState>((set) => ({
       if (state.route.name === 'machine') return { route: { name: 'machines' }, ...cleared };
       if (state.route.name === 'image') return { route: { name: 'images' }, ...cleared };
       if (state.route.name === 'network') return { route: { name: 'networks' }, ...cleared };
+      if (state.route.name === 'volume') return { route: { name: 'volumes' }, ...cleared };
       return state;
     }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),

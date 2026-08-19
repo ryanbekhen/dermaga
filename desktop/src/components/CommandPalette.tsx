@@ -51,12 +51,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const images = useResourceStore((s) => s.images);
   const machines = useResourceStore((s) => s.machines);
   const networks = useResourceStore((s) => s.networks);
+  const volumes = useResourceStore((s) => s.volumes);
   const navigate = useUIStore((s) => s.navigate);
   const navigateWith = useUIStore((s) => s.navigateWith);
   const openContainer = useUIStore((s) => s.openContainer);
   const openImage = useUIStore((s) => s.openImage);
   const openMachine = useUIStore((s) => s.openMachine);
   const openNetwork = useUIStore((s) => s.openNetwork);
+  const openVolume = useUIStore((s) => s.openVolume);
   const pushToast = useToastStore((s) => s.push);
 
   const [query, setQuery] = useState('');
@@ -242,6 +244,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         run: () => navigateWith({ name: 'containers' }, 'container.create', image.reference),
       })),
 
+      ...volumes.map((volume) => ({
+        id: `volume:${volume.name}`,
+        label: volume.name,
+        detail: volume.usedBy.length > 0 ? `${volume.usedBy.length} in use` : undefined,
+        section: 'Volumes',
+        icon: Database,
+        run: () => openVolume(volume.name),
+      })),
+
       ...machines.map((machine) => ({
         id: `machine:${machine.id}`,
         label: machine.id,
@@ -256,12 +267,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     images,
     machines,
     networks,
+    volumes,
     navigate,
     navigateWith,
     openContainer,
     openImage,
     openMachine,
     openNetwork,
+    openVolume,
     pushToast,
   ]);
 
@@ -330,7 +343,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Search containers, images, networks and pages…"
+            placeholder="Search containers, images, volumes, networks and pages…"
             autoFocus
             className="w-full bg-transparent py-3 text-sm outline-hidden placeholder:text-ink-500 focus-visible:ring-0"
             aria-label="Command"

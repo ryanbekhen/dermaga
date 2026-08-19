@@ -24,7 +24,8 @@ const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(160px,1.4fr)' },
   { key: 'driver', label: 'Driver', width: '96px' },
   { key: 'format', label: 'Format', width: '88px' },
-  { key: 'used', label: 'Used by', width: 'minmax(140px,1.2fr)' },
+  { key: 'used', label: 'Containers', width: '92px', align: 'right' },
+  { key: 'disk', label: 'On disk', width: '96px', align: 'right' },
   { key: 'size', label: 'Max size', width: '96px', align: 'right' },
   { key: 'created', label: 'Created', width: '80px', align: 'right' },
 ];
@@ -33,8 +34,7 @@ export function VolumesPage() {
   const volumes = useResourceStore((s) => s.volumes);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
-  const openContainer = useUIStore((s) => s.openContainer);
-  const containers = useResourceStore((s) => s.containers);
+  const openVolume = useUIStore((s) => s.openVolume);
   const pushToast = useToastStore((s) => s.push);
 
   const creating = useDialog('volume.create');
@@ -64,7 +64,7 @@ export function VolumesPage() {
     <div className="flex min-h-0 flex-col gap-3">
       <PageHeader
         title="Volumes"
-        subtitle="Persistent storage that outlives the containers using it"
+        subtitle="Open one to see what is inside it"
         search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search volumes…' }}
         actions={
           selected.size > 0 ? (
@@ -93,6 +93,7 @@ export function VolumesPage() {
         rows={visible}
         rowKey={(volume) => volume.name}
         selection={{ selected, onChange: setSelected }}
+        onOpen={(volume) => openVolume(volume.name)}
         empty={volumes.length === 0 ? 'No volumes yet.' : 'No volumes match your search.'}
         cells={(volume) => [
           <NameCell key="name">
@@ -101,27 +102,8 @@ export function VolumesPage() {
           </NameCell>,
           <Muted key="driver">{volume.driver || '—'}</Muted>,
           <Muted key="format">{volume.format || '—'}</Muted>,
-          <div key="used" className="flex flex-wrap gap-1">
-            {volume.usedBy.length === 0 ? (
-              <Muted>—</Muted>
-            ) : (
-              volume.usedBy.map((name) => {
-                const container = containers.find((c) => c.name === name);
-                return (
-                  <button
-                    key={name}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (container) openContainer(container.id);
-                    }}
-                    className="truncate text-xs text-brand-700 hover:underline dark:text-brand-400"
-                  >
-                    {name}
-                  </button>
-                );
-              })
-            )}
-          </div>,
+          <Muted key="used">{volume.usedBy.length || '—'}</Muted>,
+          <Muted key="disk">{formatBytes(volume.usedBytes ?? 0)}</Muted>,
           <Muted key="size">{formatBytes(volume.sizeInBytes)}</Muted>,
           <Muted key="created">{volume.createdAt ? formatDuration(volume.createdAt) : '—'}</Muted>,
         ]}

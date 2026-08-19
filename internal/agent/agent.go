@@ -685,6 +685,25 @@ func (a *Agent) registerContainers() {
 		return map[string]any{"streamId": id}, nil
 	})
 
+	// containers.create streams its progress because a pull can take minutes and
+	// the user is watching. This one is for containers Dermaga starts on its own
+	// account -- a helper to read a volume with -- where the caller wants the
+	// container to exist by the time the call returns and there is no progress
+	// worth showing.
+	a.server.Register("containers.run", func(ctx context.Context, params json.RawMessage) (any, error) {
+		spec, err := decodeParams[containers.ContainerSpec](params)
+		if err != nil {
+			return nil, err
+		}
+
+		container, err := a.containers.Create(ctx, spec)
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return container, nil
+	})
+
 	a.server.Register("containers.logs", func(ctx context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			ID     string `json:"id"`

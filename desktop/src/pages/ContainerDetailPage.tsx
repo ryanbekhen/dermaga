@@ -56,9 +56,11 @@ type Action = 'start' | 'stop' | 'restart' | 'remove';
 interface ContainerDetailPageProps {
   container: Container;
   tab: ContainerTab;
+  /** A directory to open the files tab at, when something linked to one. */
+  path?: string;
 }
 
-export function ContainerDetailPage({ container, tab: requested }: ContainerDetailPageProps) {
+export function ContainerDetailPage({ container, tab: requested, path }: ContainerDetailPageProps) {
   const [pending, setPending] = useState<Action | null>(null);
   // Empty means whoever the image runs as; root is the other one people reach
   // for, usually to install something inside a running container.
@@ -221,7 +223,7 @@ export function ContainerDetailPage({ container, tab: requested }: ContainerDeta
 
       {tab === 'files' && (
         <DetailPane>
-          <FileBrowser container={container.id} running={running} />
+          <FileBrowser container={container.id} running={running} start={path} />
         </DetailPane>
       )}
 

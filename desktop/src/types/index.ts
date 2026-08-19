@@ -164,7 +164,10 @@ export interface Volume {
   driver: string;
   format: string;
   source: string;
+  /** The cap the image was created with, not how full it is. */
   sizeInBytes: number;
+  /** Blocks the sparse image actually occupies on the Mac. */
+  usedBytes: number;
   createdAt: string;
   labels: Record<string, string>;
   usedBy: string[];
@@ -400,10 +403,11 @@ export type MachineTab = 'overview' | 'logs' | 'terminal';
 
 export type Route =
   | { name: 'containers' }
-  | { name: 'container'; id: string; tab: ContainerTab }
+  | { name: 'container'; id: string; tab: ContainerTab; path?: string }
   | { name: 'images' }
   | { name: 'image'; reference: string }
   | { name: 'volumes' }
+  | { name: 'volume'; volume: string }
   | { name: 'networks' }
   | { name: 'network'; network: string }
   | { name: 'registries' }
