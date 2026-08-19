@@ -52,9 +52,8 @@ and restarting the ones you asked it to, while Dermaga is closed.
 - **Volumes** — create and delete, see which containers mount one and where it lands inside each,
   and read what it actually costs on disk rather than the half-terabyte cap it was created with.
   Open one and look inside it, even when no container has it mounted.
-- **Restart policies** — Apple's CLI has none, so Dermaga has one. Set a container to come back
-  **always**, or **unless you stopped it yourself**, and it is started again when it stops on its
-  own. Honoured while Dermaga runs, or around the clock with the background service on.
+- **Containers that start with Dermaga** — mark one and it comes up when the agent does: when you
+  open the app, or at login with the background service on. Apple's CLI has nothing like it.
 - **Machines** — create, boot, stop, resize (CPU, memory, home mount) and delete the Linux VMs.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
 - **Speaks up** — a container that stops without being asked to is reported: in the window, as a
@@ -294,10 +293,10 @@ directory, scanned there and deleted; no image, digest or finding is sent anywhe
 
 ## Behaviour worth knowing
 
-**A restart policy only holds while something is running.** Without the background service the agent
-belongs to the app: close Dermaga and nothing is watching, so nothing is restarted until you open it
-again. Switch the service on in **Settings → Startup** and that gap closes — the agent starts at
-login and keeps its eye on your containers whether or not a window is open.
+**Starting with Dermaga means with Dermaga.** A marked container comes up when the agent starts —
+when you open the app, or at login if the background service is on. It is not a restart policy:
+nothing watches a container that dies later, because without the service there is nothing running to
+watch it, and a promise that only half holds is worse than none.
 
 **Browsing a container needs a shell in it.** Apple's CLI cannot read a container's filesystem, so
 Dermaga runs `ls` inside the container and reads what it prints. An image built `FROM scratch` has

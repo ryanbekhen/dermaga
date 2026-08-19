@@ -28,21 +28,15 @@ const EMPTY: Partial<ContainerSpec> = {
   mounts: [],
 };
 
-/** Where a container's restart policy lives; the agent reads the same label. */
-const RESTART_LABEL = 'dermaga.restart';
+/** Marks a container to be started when Dermaga starts; the agent reads it. */
+const AUTO_BOOT_LABEL = 'dermaga.autoboot';
 
-const RESTART_POLICIES = [
-  { value: '', label: 'Never' },
-  { value: 'always', label: 'Always' },
-  { value: 'unless-stopped', label: 'Unless stopped' },
-];
-
-/** Labels with the policy set, or without it when there is none to set. */
-function withRestart(labels: Record<string, string> | undefined, policy: string) {
+/** Labels with the mark set, or without it when it is not wanted. */
+function withAutoBoot(labels: Record<string, string> | undefined, wanted: boolean) {
   const next = { ...(labels ?? {}) };
 
-  if (policy) next[RESTART_LABEL] = policy;
-  else delete next[RESTART_LABEL];
+  if (wanted) next[AUTO_BOOT_LABEL] = 'true';
+  else delete next[AUTO_BOOT_LABEL];
 
   return Object.keys(next).length > 0 ? next : undefined;
 }
@@ -66,9 +60,9 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
   const [readOnly, setReadOnly] = useState(base.readOnly ?? false);
   const [init, setInit] = useState(base.init ?? false);
   const [removeOnExit, setRemoveOnExit] = useState(base.removeOnExit ?? false);
-  // Kept as a label on the container, so the policy travels with the thing it
+  // Kept as a label on the container, so it travels with the thing it
   // describes rather than living in a file of ours.
-  const [restart, setRestart] = useState(base.labels?.[RESTART_LABEL] ?? '');
+  const [autoBoot, setAutoBoot] = useState(base.labels?.[AUTO_BOOT_LABEL] === 'true');
 
   // Held as text: it is what people paste in, and what they read back.
   const [envText, setEnvText] = useState(formatEnv(base.env ?? []));
@@ -145,7 +139,7 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
     readOnly,
     init,
     removeOnExit,
-    labels: withRestart(base.labels, restart),
+    labels: withAutoBoot(base.labels, autoBoot),
   });
 
   // The dialog closes immediately and the work reports itself in the list, so
@@ -291,24 +285,12 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
           />
         </Field>
 
-        <Field
-          label="Restart policy"
-          hint="Honoured while Dermaga runs, or always if the background service is on."
-        >
-          <select
-            value={restart}
-            onChange={(e) => setRestart(e.target.value)}
-            className="input appearance-none"
-          >
-            {RESTART_POLICIES.map((policy) => (
-              <option key={policy.value} value={policy.value}>
-                {policy.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-
         <div className="flex flex-col justify-end gap-2 pb-1">
+          <Checkbox
+            checked={autoBoot}
+            onChange={setAutoBoot}
+            label="Start this container when Dermaga starts"
+          />
           <Checkbox checked={init} onChange={setInit} label="Run an init process" />
           <Checkbox checked={readOnly} onChange={setReadOnly} label="Read-only root filesystem" />
           <Checkbox

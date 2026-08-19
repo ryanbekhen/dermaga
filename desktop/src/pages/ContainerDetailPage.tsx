@@ -484,13 +484,8 @@ function OverviewTab({ container }: { container: Container }) {
 
       <Section title="Runtime options" plain>
         <Row
-          label="Restart policy"
-          value={
-            {
-              always: 'always',
-              'unless-stopped': 'unless stopped',
-            }[container.labels['dermaga.restart'] ?? ''] ?? 'never'
-          }
+          label="Starts with Dermaga"
+          value={container.labels['dermaga.autoboot'] === 'true' ? 'yes' : 'no'}
         />
         <Flags
           flags={[

@@ -46,8 +46,7 @@ type Agent struct {
 	streams *streams
 	// Set when serving a socket: how to let go of it, so another agent -- the
 	// background service -- can take over without anyone guessing at pids.
-	standDown  context.CancelFunc
-	supervisor *supervisor
+	standDown context.CancelFunc
 
 	containers *containers.Manager
 	files      *files.Manager
@@ -140,21 +139,11 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	}, logger)
 	agent.watcher = pending
 
-	agent.supervisor = newSupervisor(func(ctx context.Context, id string) error {
-		_, err := agent.containers.Start(ctx, id)
-		return err
-	}, logger)
-
 	// Images pulled in a terminal never touch a Dermaga manager, so the only
 	// place they show up is the watcher. Scanning follows what is actually
 	// there, not only what this app did.
 	pending.OnChange(func(snapshot watcher.Snapshot) {
 		agent.scanner.Sweep()
-
-		// Apple's CLI has no restart policy, so this is one: whatever was meant
-		// to stay up and is not gets started again, here rather than in the
-		// window, so it still happens when nobody is looking.
-		agent.supervisor.Check(context.Background(), snapshot.Containers)
 
 		// A container that stopped without being asked to is worth saying out
 		// loud: the window is often not the thing the user is looking at.
@@ -179,6 +168,7 @@ func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
+	go a.autoBoot(ctx)
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -200,6 +190,7 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
+	go a.autoBoot(ctx)
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -664,9 +655,6 @@ func (a *Agent) registerContainers() {
 			return nil, err
 		}
 
-		// Asked to run again, it is no longer a container the user put down.
-		a.supervisor.Started(args.ID)
-
 		return a.containers.Start(ctx, args.ID)
 	})
 
@@ -685,7 +673,6 @@ func (a *Agent) registerContainers() {
 
 		// Asked for, so it stops quietly.
 		a.exits.Expect(args.ID)
-		a.supervisor.Stopped(args.ID)
 
 		return a.containers.Stop(ctx, args.ID, args.Timeout)
 	})
@@ -700,7 +687,6 @@ func (a *Agent) registerContainers() {
 		}
 
 		a.exits.Expect(args.ID)
-		a.supervisor.Stopped(args.ID)
 
 		if err := a.containers.Remove(ctx, args.ID, args.Force); err != nil {
 			return nil, rpc.Fail(err.Error())
