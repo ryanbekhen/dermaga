@@ -5,6 +5,11 @@ go 1.26
 require github.com/creack/pty v1.1.24
 
 require (
+	golang.org/x/image v0.41.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
+)
+
+require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/coder/websocket v1.8.14 // indirect

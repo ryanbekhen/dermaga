@@ -135,65 +135,56 @@ func contentSecurityPolicy(next http.Handler) http.Handler {
 
 // socketPath is where this build's agent listens.
 //
-// A development build keeps to its own socket, inside the checkout it was
-// built from. Sharing the installed app's socket meant the build you are
-// working on quietly driving the agent of the one you have installed -- and
-// later, with the background service running, never starting your own agent at
-// all.
+// A build under test keeps to its own socket. Sharing the installed app's
+// socket meant the build you are working on quietly driving the agent of the
+// one you have installed -- and later, with the background service running,
+// never starting your own agent at all.
+//
+// The two are told apart by where the bundle sits rather than by a build flag,
+// because that is the thing that actually decides it: the copy in
+// /Applications is the one the user opens, and anything else is a build
+// somebody is trying out.
 func socketPath() string {
 	// An explicit socket wins over both: it is how the agent itself is told
-	// where to listen, and how a build under test is kept off the socket the
-	// installed app is holding.
+	// where to listen.
 	if socket := os.Getenv("DERMAGA_SOCKET"); socket != "" {
 		return socket
 	}
 
-	if isPackaged {
+	if isInstalled() {
 		return filepath.Join(homeDir(), ".dermaga", "agent.sock")
 	}
 
-	return filepath.Join(checkoutRoot(), ".dermaga", "agent.sock")
+	return filepath.Join(homeDir(), ".dermaga", "dev.sock")
 }
 
-func agentBinary() string {
-	var candidates []string
-
-	if isPackaged {
-		executable, err := os.Executable()
-		if err == nil {
-			resources := filepath.Join(filepath.Dir(filepath.Dir(executable)), "Resources", "dermaga-agent")
-			candidates = append(candidates, resources)
-		}
-	} else {
-		candidates = append(candidates, filepath.Join(checkoutRoot(), "bin", "dermaga-agent"))
-	}
-
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-
-	return ""
-}
-
-// checkoutRoot is the repository this build came from, for a development run.
-func checkoutRoot() string {
-	if root := os.Getenv("DERMAGA_ROOT"); root != "" {
-		return root
-	}
-
-	wd, err := os.Getwd()
+// isInstalled reports whether this is the copy in /Applications.
+func isInstalled() bool {
+	executable, err := os.Executable()
 	if err != nil {
-		return "."
+		return false
 	}
 
-	// `wails3 dev` runs from desktop/; the checkout is its parent.
-	if filepath.Base(wd) == "desktop" {
-		return filepath.Dir(wd)
+	return strings.HasPrefix(executable, "/Applications/")
+}
+
+// agentBinary is the agent this app starts when nothing else is serving.
+//
+// It travels in the bundle's Resources, so it is always the one that matches
+// this build -- an app and an agent that disagree about the protocol between
+// them is a failure with no good error message.
+func agentBinary() string {
+	executable, err := os.Executable()
+	if err != nil {
+		return ""
 	}
 
-	return wd
+	candidate := filepath.Join(filepath.Dir(filepath.Dir(executable)), "Resources", "dermaga-agent")
+	if _, err := os.Stat(candidate); err != nil {
+		return ""
+	}
+
+	return candidate
 }
 
 // --- the agent ------------------------------------------------------------

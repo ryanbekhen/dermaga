@@ -14,7 +14,7 @@ DMG     := desktop/release/Dermaga-$(VERSION)-arm64.dmg
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
 
-.PHONY: all agent icon notices changelog desktop-deps dev wails wails-dev check test lint fmt dist verify-dist install release publish notes version clean
+.PHONY: all agent icon notices changelog desktop-deps dev wails wails-dev install-wails check test lint fmt dist verify-dist install release publish notes version clean
 
 all: agent
 
@@ -57,13 +57,28 @@ dev: agent icon notices changelog
 ## unchanged. Both shells live here until this one replaces the other.
 
 ## Build Dermaga.app around the Wails binary.
+##
+## Notifications need a bundle identifier, so there is no useful way to run
+## this outside a .app: the bundle is the development build as well as the
+## shipped one. What tells them apart is where it sits -- a bundle anywhere
+## but /Applications keeps to its own agent socket, so trying a build out
+## never disturbs the Dermaga you have installed.
 wails: agent notices changelog
 	cd desktop && npm run build
 	VERSION=$(VERSION) ./scripts/bundle-wails.sh
 
-## Build it and open it.
+## Build it and run it. This is the one to use while working.
 wails-dev: wails
 	open desktop/release-wails/Dermaga.app
+	@echo "running from the checkout -- its agent is on ~/.dermaga/dev.sock"
+
+## Put it in /Applications, where it becomes the installed copy and takes over
+## the usual socket. Replaces the Electron build.
+install-wails: wails
+	rm -rf /Applications/Dermaga.app
+	cp -R desktop/release-wails/Dermaga.app /Applications/
+	xattr -dr com.apple.quarantine /Applications/Dermaga.app
+	@echo "installed: /Applications/Dermaga.app"
 
 ## Everything that has to pass: vet, tests, types, lint.
 check: test lint
