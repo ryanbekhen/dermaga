@@ -12,10 +12,13 @@ import { useUIStore, type Intent } from '../store/uiStore';
 export function useDialog(intent: Intent) {
   const [open, setOpen] = useState(false);
   const wanted = useUIStore((s) => s.intent) === intent;
+  const target = useUIStore((s) => s.intentTarget);
   const clearIntent = useUIStore((s) => s.clearIntent);
 
   return {
     open: open || wanted,
+    /** What the intent named, for dialogs that act on one thing. */
+    target: wanted ? target : null,
     show: () => setOpen(true),
     close: () => {
       setOpen(false);

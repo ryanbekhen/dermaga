@@ -7,7 +7,7 @@ import { useUIStore } from './uiStore';
  */
 describe('intents', () => {
   beforeEach(() => {
-    useUIStore.setState({ route: { name: 'containers' }, intent: null });
+    useUIStore.setState({ route: { name: 'containers' }, intent: null, intentTarget: null });
   });
 
   it('travels with the route it was given', () => {
@@ -31,6 +31,19 @@ describe('intents', () => {
       move();
       expect(useUIStore.getState().intent, `${name} left an intent behind`).toBeNull();
     }
+  });
+
+  it('carries what it is about, and lets go of it together', () => {
+    // "Detach web from backend" is one intent about one container; the target
+    // must not outlive it, or the next detach would name the wrong one.
+    useUIStore
+      .getState()
+      .navigateWith({ name: 'network', network: 'backend' }, 'network.detach', 'web');
+
+    expect(useUIStore.getState().intentTarget).toBe('web');
+
+    useUIStore.getState().clearIntent();
+    expect(useUIStore.getState().intentTarget).toBeNull();
   });
 
   it('is dropped when the page it was meant for hands it back', () => {

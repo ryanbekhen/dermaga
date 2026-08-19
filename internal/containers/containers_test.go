@@ -158,6 +158,33 @@ func TestParseLogsLine(t *testing.T) {
 	}
 }
 
+// Apple's CLI takes one --network per attachment, so a container on two
+// networks has to render two flags -- and a round trip through SpecOf has to
+// keep both, or editing a container quietly drops one of its networks.
+func TestSpecArgsRendersEveryNetwork(t *testing.T) {
+	spec := ContainerSpec{Image: "alpine:latest", Networks: []string{"frontend", "backend"}}
+
+	args := spec.Args()
+	var seen []string
+	for i, arg := range args {
+		if arg == "--network" && i+1 < len(args) {
+			seen = append(seen, args[i+1])
+		}
+	}
+
+	if len(seen) != 2 || seen[0] != "frontend" || seen[1] != "backend" {
+		t.Fatalf("got networks %v, want [frontend backend]", seen)
+	}
+}
+
+func TestSpecOfKeepsEveryNetwork(t *testing.T) {
+	spec := SpecOf(&Container{Name: "api", Image: "alpine", Networks: []string{"frontend", "backend"}})
+
+	if len(spec.Networks) != 2 || spec.Networks[0] != "frontend" || spec.Networks[1] != "backend" {
+		t.Fatalf("got networks %v, want [frontend backend]", spec.Networks)
+	}
+}
+
 // Every edit, attach and detach goes through delete-and-run, so a setting the
 // spec forgets is a setting the container silently loses: a read-only root
 // comes back writable, a dropped capability comes back granted. Anything the

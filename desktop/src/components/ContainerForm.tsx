@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Check, Network as NetworkIcon } from 'lucide-react';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
@@ -39,7 +40,7 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
   const [command, setCommand] = useState((base.command ?? []).join(' '));
   const [cpus, setCpus] = useState(base.cpus ?? 1);
   const [memory, setMemory] = useState(base.memory ?? '512m');
-  const [network, setNetwork] = useState(base.network ?? '');
+  const [attached, setAttached] = useState<string[]>(base.networks ?? []);
   const [workdir, setWorkdir] = useState(base.workdir ?? '');
   const [user, setUser] = useState(base.user ?? '');
   const [readOnly, setReadOnly] = useState(base.readOnly ?? false);
@@ -115,7 +116,7 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
     mounts: mounts.filter((m) => m.source && m.target),
     cpus: Number(cpus) || undefined,
     memory: memory.trim() || undefined,
-    network: network || undefined,
+    networks: attached.length > 0 ? attached : undefined,
     workdir: workdir.trim() || undefined,
     user: user.trim() || undefined,
     readOnly,
@@ -230,21 +231,6 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
           />
         </Field>
 
-        <Field label="Network">
-          <select
-            value={network}
-            onChange={(e) => setNetwork(e.target.value)}
-            className="input appearance-none"
-          >
-            <option value="">default</option>
-            {networks.map((n) => (
-              <option key={n.name} value={n.name}>
-                {n.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
         <Field label="Working directory">
           <input
             value={workdir}
@@ -291,6 +277,41 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
           />
         </div>
       </div>
+
+      <Fieldset
+        legend="Networks"
+        hint="A container can sit on several at once. Pick none and the CLI puts it on the built-in default network."
+      >
+        {networks.length === 0 ? (
+          <p className="text-tiny text-ink-600 dark:text-ink-400">
+            No networks yet — create one on the Networks page.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {networks.map((n) => {
+              const on = attached.includes(n.name);
+
+              return (
+                <button
+                  key={n.name}
+                  type="button"
+                  aria-pressed={on}
+                  title={n.ipv4Subnet || n.mode}
+                  onClick={() =>
+                    setAttached(
+                      on ? attached.filter((name) => name !== n.name) : [...attached, n.name]
+                    )
+                  }
+                  className={on ? 'btn-primary' : 'btn-ghost'}
+                >
+                  {on ? <Check size={12} aria-hidden /> : <NetworkIcon size={12} aria-hidden />}
+                  {n.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Fieldset>
 
       <Fieldset
         legend="Ports"

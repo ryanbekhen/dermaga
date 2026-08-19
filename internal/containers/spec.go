@@ -21,12 +21,15 @@ type ContainerSpec struct {
 	Labels     map[string]string `json:"labels,omitempty"`
 	CPUs       int               `json:"cpus,omitempty"`
 	Memory     string            `json:"memory,omitempty"`
-	Network    string            `json:"network,omitempty"`
-	WorkDir    string            `json:"workdir,omitempty"`
-	User       string            `json:"user,omitempty"`
-	ReadOnly   bool              `json:"readOnly,omitempty"`
-	Init       bool              `json:"init,omitempty"`
-	RemoveOnE  bool              `json:"removeOnExit,omitempty"`
+	// Every network the container is attached to. `container run` takes one
+	// --network per attachment, and a container with none lands on the
+	// built-in default network.
+	Networks  []string `json:"networks,omitempty"`
+	WorkDir   string   `json:"workdir,omitempty"`
+	User      string   `json:"user,omitempty"`
+	ReadOnly  bool     `json:"readOnly,omitempty"`
+	Init      bool     `json:"init,omitempty"`
+	RemoveOnE bool     `json:"removeOnExit,omitempty"`
 
 	// Carried through a recreate rather than edited anywhere. The CLI reports
 	// these on inspect and accepts them as flags, so leaving them out of the
@@ -147,8 +150,10 @@ func (s ContainerSpec) Args() []string {
 	if s.Memory != "" {
 		args = append(args, "--memory", s.Memory)
 	}
-	if s.Network != "" {
-		args = append(args, "--network", s.Network)
+	for _, n := range s.Networks {
+		if n != "" {
+			args = append(args, "--network", n)
+		}
 	}
 	if s.WorkDir != "" {
 		args = append(args, "--workdir", s.WorkDir)
@@ -255,11 +260,6 @@ func SpecOf(c *Container) ContainerSpec {
 		})
 	}
 
-	network := ""
-	if len(c.Networks) > 0 {
-		network = c.Networks[0]
-	}
-
 	spec := ContainerSpec{
 		Name:           c.Name,
 		Image:          c.Image,
@@ -271,7 +271,7 @@ func SpecOf(c *Container) ContainerSpec {
 		Labels:         c.Labels,
 		CPUs:           c.CPUAllocation,
 		Memory:         c.MemoryAllocation,
-		Network:        network,
+		Networks:       append([]string(nil), c.Networks...),
 		WorkDir:        c.WorkingDir,
 		User:           c.User,
 		ReadOnly:       c.ReadOnlyRoot,

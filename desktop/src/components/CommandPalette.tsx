@@ -11,12 +11,14 @@ import {
   Layers,
   Network,
   Play,
+  Plug,
   Plus,
   Scale,
   Search,
   Server,
   Settings,
   Square,
+  Unplug,
   type LucideIcon,
 } from 'lucide-react';
 import { loadImage } from './ImageArchive';
@@ -184,6 +186,29 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               .catch((error: Error) => pushToast(error.message, 'error'));
           },
         })),
+
+      // Attaching means recreating the container, so this stops at the dialog
+      // that says so rather than doing it on the spot.
+      ...networks.map((network) => ({
+        id: `attach:${network.name}`,
+        label: `Attach a container to ${network.name}`,
+        section: 'Actions',
+        icon: Plug,
+        run: () => navigateWith({ name: 'network', network: network.name }, 'network.attach'),
+      })),
+
+      // One per attachment that exists, rather than every container against
+      // every network: the pairs that are real are the only ones worth listing.
+      ...containers.flatMap((container) =>
+        (container.networks ?? []).map((name) => ({
+          id: `detach:${container.id}:${name}`,
+          label: `Detach ${container.name} from ${name}`,
+          section: 'Actions',
+          icon: Unplug,
+          run: () =>
+            navigateWith({ name: 'network', network: name }, 'network.detach', container.id),
+        }))
+      ),
 
       ...images.map((image) => ({
         id: `image:${image.reference}`,

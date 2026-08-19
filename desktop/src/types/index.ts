@@ -202,7 +202,8 @@ export interface ContainerSpec {
   labels?: Record<string, string>;
   cpus?: number;
   memory?: string;
-  network?: string;
+  /** Every network to attach at creation; empty means the default network. */
+  networks?: string[];
   workdir?: string;
   user?: string;
   readOnly?: boolean;
