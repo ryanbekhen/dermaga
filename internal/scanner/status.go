@@ -126,6 +126,12 @@ func (m *Manager) followProgress(stderr io.Reader) {
 
 		m.setState(StateUpdatingDB, "Downloading the vulnerability database…", int(value))
 	}
+
+	// Only the percentage stops arriving; the download itself is Trivy's and
+	// carries on. Worth a line in the log, not a word to the user.
+	if err := scanner.Err(); err != nil {
+		m.logger.Debug("Stopped following the download progress", "error", err)
+	}
 }
 
 func scanLinesOrReturns(data []byte, atEOF bool) (int, []byte, error) {

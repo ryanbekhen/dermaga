@@ -141,7 +141,16 @@ func (s *streams) runCommand(ctx context.Context, prefix string, build func(cont
 			s.data(id, scanner.Text())
 		}
 
-		s.end(id, cmd.Wait())
+		// The loop also ends when reading fails -- a line longer than the
+		// buffer, a pipe torn down mid-write -- and the output is then
+		// truncated rather than finished. Saying so beats reporting whatever
+		// the command happened to exit with, which may well be success.
+		err := cmd.Wait()
+		if readErr := scanner.Err(); readErr != nil && err == nil {
+			err = fmt.Errorf("output ended early: %w", readErr)
+		}
+
+		s.end(id, err)
 	}()
 
 	return id, nil
@@ -248,8 +257,18 @@ func (s *streams) runCommandTTY(
 			s.data(id, line)
 		}
 
+		// A pty read that fails ends the session as surely as the command
+		// exiting, and the reason belongs in the same place.
+		readErr := scanner.Err()
+
 		_ = ptmx.Close()
-		s.end(id, cmd.Wait())
+
+		err := cmd.Wait()
+		if readErr != nil && err == nil {
+			err = fmt.Errorf("session ended early: %w", readErr)
+		}
+
+		s.end(id, err)
 	}()
 
 	return id, nil
