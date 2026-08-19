@@ -189,7 +189,7 @@ export function SystemPage({
             <Row label="Transport" value="JSON-RPC over stdio" />
           </Section>
 
-          <Section title="Apple Container CLI">
+          <Section title="Apple Container CLI" plain>
             <Row label="Version" value={toolchain?.version ?? status?.cliVersion} />
             <Row
               label="Installed with"
@@ -230,10 +230,10 @@ export function SystemPage({
           </Section>
 
           <Section title="Paths">
-            <Row label="Config file" value={configPath} mono copyable />
-            <Row label="App root" value={status?.appRoot} mono copyable />
-            <Row label="Install root" value={status?.installRoot} mono copyable />
-            <Row label="Log root" value={status?.logRoot || 'macOS log facility'} mono />
+            <Row label="Config file" value={configPath} mono copyable wide />
+            <Row label="App root" value={status?.appRoot} mono copyable wide />
+            <Row label="Install root" value={status?.installRoot} mono copyable wide />
+            <Row label="Log root" value={status?.logRoot || 'macOS log facility'} mono wide />
           </Section>
 
           <Section
@@ -265,6 +265,7 @@ export function SystemPage({
           <Section
             title="Disk usage"
             span
+            plain
             action={
               running && reclaimable > 0 ? (
                 <Button

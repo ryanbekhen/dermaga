@@ -172,8 +172,8 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           )}
 
           <Section title="Image">
-            <Row label="Reference" value={detail.reference} mono copyable />
-            <Row label="Digest" value={detail.digest} mono copyable />
+            <Row label="Reference" value={detail.reference} mono copyable wide />
+            <Row label="Digest" value={detail.digest} mono copyable wide />
             <Row label="Platform" value={variant.platform} />
             <Row label="Size" value={formatBytes(variant.sizeInBytes)} />
             <Row label="Layers" value={variant.layers} />
@@ -184,21 +184,21 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           </Section>
 
           <Section title="Default configuration">
-            <Row label="Entrypoint" value={variant.entrypoint.join(' ')} mono />
-            <Row label="Command" value={variant.command.join(' ')} mono />
-            <Row label="Working directory" value={variant.workingDir} mono />
+            <Row label="Entrypoint" value={variant.entrypoint.join(' ')} mono wide />
+            <Row label="Command" value={variant.command.join(' ')} mono wide />
+            <Row label="Working directory" value={variant.workingDir} mono wide />
             <Row label="User" value={variant.user || 'root'} mono />
-            <Row label="Exposed ports" value={variant.exposedPorts.join(', ')} mono />
+            <Row label="Exposed ports" value={variant.exposedPorts.join(', ')} mono wide />
           </Section>
 
           <Section title={`Environment (${variant.env.length})`}>
             {variant.env.map((entry) => {
               const [key, value] = splitEnv(entry);
-              return <Row key={key} label={key} value={value || '—'} mono copyable />;
+              return <Row key={key} label={key} value={value || '—'} mono copyable wide />;
             })}
           </Section>
 
-          <Section title="Used by">
+          <Section title="Used by" plain>
             {users.length === 0 ? (
               <p className="text-xs text-ink-600 dark:text-ink-400">
                 No container is running this image.
@@ -222,7 +222,7 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           {Object.keys(variant.labels).length > 0 && (
             <Section title="Labels">
               {Object.entries(variant.labels).map(([key, value]) => (
-                <Row key={key} label={key} value={value} />
+                <Row key={key} label={key} value={value} wide />
               ))}
             </Section>
           )}
@@ -230,6 +230,7 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           <Section
             title={`Build history (${variant.history.length} steps)`}
             span={showHistory}
+            plain
             action={
               <button
                 onClick={() => setShowHistory((prev) => !prev)}

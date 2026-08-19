@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from 'react';
-import { Check, Copy, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Badge } from '../components/DataTable';
 import { DetailLayout } from '../components/DetailLayout';
-import { Section } from '../components/DetailRow';
+import { Row, Section } from '../components/DetailRow';
 import { NetworkTopology } from '../components/NetworkTopology';
 import { StatusDot } from '../components/StatusBadge';
 import { api } from '../services/api';
@@ -78,25 +78,21 @@ export function NetworkDetailPage({ network }: { network: Network }) {
 
         <aside className="-mr-5 flex shrink-0 flex-col gap-5 overflow-y-auto pr-5 lg:w-80">
           <Section title="Addressing">
-            <Facts>
-              <Fact label="Subnet" value={network.ipv4Subnet} mono copyable />
-              <Fact label="Gateway" value={network.ipv4Gateway} mono copyable />
-              <Fact label="IPv6 subnet" value={network.ipv6Subnet} mono copyable wide />
-            </Facts>
+            <Row label="Subnet" value={network.ipv4Subnet} mono copyable />
+            <Row label="Gateway" value={network.ipv4Gateway} mono copyable />
+            <Row label="IPv6 subnet" value={network.ipv6Subnet} mono copyable wide />
           </Section>
 
           <Section title="Network">
-            <Facts>
-              <Fact label="Mode" value={network.mode} />
-              <Fact
-                label="Created"
-                value={network.createdAt ? `${formatDuration(network.createdAt)} ago` : undefined}
-              />
-              <Fact label="Plugin" value={network.plugin} wide />
-            </Facts>
+            <Row label="Mode" value={network.mode} />
+            <Row
+              label="Created"
+              value={network.createdAt ? `${formatDuration(network.createdAt)} ago` : undefined}
+            />
+            <Row label="Plugin" value={network.plugin} wide />
           </Section>
 
-          <Section title={`Attached (${attached.length})`}>
+          <Section title={`Attached (${attached.length})`} plain>
             {attached.length === 0 ? (
               <p className="text-xs text-ink-600 dark:text-ink-400">
                 Nothing is attached yet. Pick this network when you create a container.
@@ -131,11 +127,9 @@ export function NetworkDetailPage({ network }: { network: Network }) {
 
           {Object.keys(network.labels ?? {}).length > 0 && (
             <Section title="Labels">
-              <Facts>
-                {Object.entries(network.labels).map(([key, value]) => (
-                  <Fact key={key} label={key} value={value} mono wide />
-                ))}
-              </Facts>
+              {Object.entries(network.labels).map(([key, value]) => (
+                <Row key={key} label={key} value={value} mono wide />
+              ))}
             </Section>
           )}
         </aside>
@@ -155,75 +149,5 @@ export function NetworkDetailPage({ network }: { network: Network }) {
         />
       )}
     </DetailLayout>
-  );
-}
-
-/**
- * Facts in this column are addresses, and an address that has been cut short is
- * worse than no address at all -- it looks like a value rather than reading as
- * one. So the label sits above its value and the value wraps rather than
- * truncating: every column is the same width, everything aligns on one left
- * edge, and an IPv6 prefix is shown whole.
- */
-function Facts({ children }: { children: ReactNode }) {
-  return <dl className="grid grid-cols-2 gap-x-4 gap-y-3">{children}</dl>;
-}
-
-function Fact({
-  label,
-  value,
-  mono = false,
-  copyable = false,
-  /** Spans both columns -- for the values no half-width column can hold. */
-  wide = false,
-}: {
-  label: string;
-  value?: string | number | null;
-  mono?: boolean;
-  copyable?: boolean;
-  wide?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const text = value === undefined || value === null || value === '' ? '—' : String(value);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      // Clipboard access can be denied; the value is still selectable.
-    }
-  };
-
-  return (
-    <div className={`group flex min-w-0 flex-col gap-0.5 ${wide ? 'col-span-2' : ''}`}>
-      <dt className="truncate text-tiny text-ink-500" title={label}>
-        {label}
-      </dt>
-      <dd className="flex items-start gap-1">
-        <span
-          className={`selectable min-w-0 break-all leading-snug text-ink-800 dark:text-ink-100 ${
-            mono ? 'font-mono text-xs' : 'text-xs'
-          }`}
-        >
-          {text}
-        </span>
-        {copyable && text !== '—' && (
-          <button
-            onClick={() => void copy()}
-            className="mt-0.5 shrink-0 text-ink-400 opacity-0 transition-opacity hover:text-brand-600 focus-visible:opacity-100 group-hover:opacity-100"
-            title={`Copy ${label}`}
-            aria-label={`Copy ${label}`}
-          >
-            {copied ? (
-              <Check size={12} className="text-emerald-600" aria-hidden />
-            ) : (
-              <Copy size={12} aria-hidden />
-            )}
-          </button>
-        )}
-      </dd>
-    </div>
   );
 }

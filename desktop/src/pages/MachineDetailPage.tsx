@@ -257,9 +257,9 @@ function OverviewTab({ machine }: { machine: Machine }) {
       </Section>
 
       <Section title="Host integration">
-        <Row label="Home mount" value={machine.homeMount} />
+        <Row label="Home mount" value={machine.homeMount} wide />
         <Row label="User" value={machine.username} />
-        <Row label="Image" value={machine.image} mono copyable />
+        <Row label="Image" value={machine.image} mono copyable wide />
         <p className="pt-1 text-tiny text-ink-600 dark:text-ink-400">
           CPU, memory and home mount can be changed from the toolbar; they apply on restart.
         </p>

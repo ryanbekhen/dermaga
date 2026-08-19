@@ -23,7 +23,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import type { TabDefinition } from '../components/Tabs';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Flags, Row, Section } from '../components/DetailRow';
+import { Facts, Flags, Row, Section } from '../components/DetailRow';
 import { ContainerForm } from '../components/ContainerForm';
 import { api } from '../services/api';
 import { useSettingsStore } from '../store/settingsStore';
@@ -297,6 +297,7 @@ function useUsageHistory(id: string, tick: number | undefined, enabled: boolean)
 }
 
 function OverviewTab({ container }: { container: Container }) {
+  const openNetwork = useUIStore((s) => s.openNetwork);
   const [showEnv, setShowEnv] = useState(false);
   const running = container.status === 'running';
   const dns = container.dns;
@@ -316,11 +317,11 @@ function OverviewTab({ container }: { container: Container }) {
         <Row label="Uptime" value={running ? formatDuration(container.startedAt) : '—'} />
         <Row label="Created" value={`${formatDuration(container.createdAt)} ago`} />
         <Row label="ID" value={container.id} mono copyable />
-        <Row label="Image" value={container.image} mono copyable />
         <Row label="Platform" value={container.platform} />
+        <Row label="Image" value={container.image} mono copyable wide />
       </Section>
 
-      <Section title="Resources">
+      <Section title="Resources" plain>
         <Meter
           value={running ? (container.cpuUsage ?? 0) : 0}
           label={`CPU · ${container.cpuAllocation ?? 1} core${(container.cpuAllocation ?? 1) > 1 ? 's' : ''}`}
@@ -338,7 +339,7 @@ function OverviewTab({ container }: { container: Container }) {
       </Section>
 
       {running && (
-        <Section title="Last 30 minutes">
+        <Section title="Last 30 minutes" plain>
           <UsageChart
             points={history}
             label="CPU"
@@ -355,25 +356,33 @@ function OverviewTab({ container }: { container: Container }) {
         </Section>
       )}
 
-      <Section title="Networking" span={(container.interfaces?.length ?? 0) > 1}>
+      <Section title="Networking" span={(container.interfaces?.length ?? 0) > 1} plain>
         {container.interfaces && container.interfaces.length > 0 ? (
           <div
             className={
-              container.interfaces.length > 1 ? 'grid grid-cols-2 gap-x-8 gap-y-3' : 'contents'
+              container.interfaces.length > 1 ? 'grid grid-cols-2 gap-x-8 gap-y-4' : 'contents'
             }
           >
             {container.interfaces.map((iface) => (
-              <div key={`${iface.network}-${iface.macAddress}`} className="flex flex-col gap-1.5">
-                {container.interfaces!.length > 1 && (
-                  <p className="text-xs font-semibold">{iface.network}</p>
-                )}
-                <Row label="Network" value={iface.network} />
-                <Row label="Hostname" value={iface.hostname} mono copyable />
-                <Row label="IPv4" value={iface.ipv4Address} mono copyable />
-                <Row label="Gateway" value={iface.ipv4Gateway} mono copyable />
-                <Row label="IPv6" value={iface.ipv6Address} mono copyable />
-                <Row label="MAC" value={iface.macAddress} mono copyable />
-                <Row label="MTU" value={iface.mtu} />
+              <div key={`${iface.network}-${iface.macAddress}`} className="flex flex-col gap-2">
+                {/* The network names itself once, at the head of its own
+                    addresses, instead of again as a row among them. */}
+                <button
+                  onClick={() => openNetwork(iface.network)}
+                  className="self-start text-xs font-semibold hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+                  title={`Open ${iface.network}`}
+                >
+                  {iface.network}
+                </button>
+
+                <Facts>
+                  <Row label="IPv4" value={iface.ipv4Address} mono copyable />
+                  <Row label="Gateway" value={iface.ipv4Gateway} mono copyable />
+                  <Row label="IPv6" value={iface.ipv6Address} mono copyable wide />
+                  <Row label="MAC" value={iface.macAddress} mono copyable />
+                  <Row label="MTU" value={iface.mtu} />
+                  <Row label="Hostname" value={iface.hostname} mono copyable wide />
+                </Facts>
               </div>
             ))}
           </div>
@@ -400,7 +409,7 @@ function OverviewTab({ container }: { container: Container }) {
       </Section>
 
       {container.ports.length > 0 && (
-        <Section title="Published ports">
+        <Section title="Published ports" plain>
           {container.ports.map((port) => (
             <PortRow
               key={`${port.protocol}-${port.host}-${port.container}`}
@@ -412,7 +421,7 @@ function OverviewTab({ container }: { container: Container }) {
       )}
 
       {container.mounts.length > 0 && (
-        <Section title="Mounts">
+        <Section title="Mounts" plain>
           {container.mounts.map((mount) => (
             <div key={mount.destination} className="flex flex-col gap-0.5">
               <p className="selectable truncate font-mono text-xs">{mount.destination}</p>
@@ -425,7 +434,7 @@ function OverviewTab({ container }: { container: Container }) {
         </Section>
       )}
 
-      <Section title="Runtime options">
+      <Section title="Runtime options" plain>
         <Flags
           flags={[
             { label: 'init', on: Boolean(container.useInit) },
@@ -460,6 +469,7 @@ function OverviewTab({ container }: { container: Container }) {
         <Section
           title={`Environment (${env.length})`}
           span={showEnv}
+          plain
           action={
             <button
               onClick={() => setShowEnv((prev) => !prev)}
@@ -475,7 +485,7 @@ function OverviewTab({ container }: { container: Container }) {
           }
         >
           {showEnv ? (
-            <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
               {env.map((entry) => {
                 const [key, value] = splitEnv(entry);
                 return <Row key={key} label={key} value={value || '—'} mono copyable />;
