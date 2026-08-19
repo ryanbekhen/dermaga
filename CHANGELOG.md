@@ -26,8 +26,11 @@ change means to someone using Dermaga, not for how much code moved.
   "this volume is not empty" and refuse to set themselves up: redis prints *"Notice: Unknown file
   './lost+found' found in data dir. Permissions will not be modified"*, then drops to its own user
   and fails with `Can't open or create append-only dir appendonlydir: Permission denied`. Volumes
-  created in Dermaga no longer carry one, so `redis-server --appendonly yes` works on a fresh volume
-  with nothing to configure. Volumes made elsewhere can be tidied from their page.
+  are prepared wherever they come into being — including the usual way, which is typing a name into a
+  container's mount and letting it be created for you. `redis-server --appendonly yes` on a container
+  with a brand new volume now simply runs, with nothing to set and no second visit to the volume page.
+  A volume made outside Dermaga is prepared the first time a container mounts it, and can also be
+  tidied from its own page.
 - **A volume's owner, and a way to change it.** The Permissions section on a volume reports who owns
   its root directory and hands it to someone else in one step. This is the answer to most "permission
   denied" in a container with a volume: a volume is born owned by root, while the official database

@@ -675,6 +675,11 @@ func (a *Agent) registerContainers() {
 			return nil, err
 		}
 
+		// Naming a volume in the form is how most volumes come into being --
+		// the CLI creates whatever is not there yet -- so this is where a
+		// volume has to be made fit to write to, not the New volume dialog.
+		a.prepareVolumes(ctx, spec)
+
 		id, err := a.streams.runCommand(ctx, "create", func(ctx context.Context) (*exec.Cmd, error) {
 			return a.containers.CreateCommand(ctx, spec)
 		})
@@ -861,6 +866,48 @@ func (a *Agent) registerImages() {
 		}
 		return map[string]any{}, nil
 	})
+}
+
+// prepareVolumes makes every named volume a container is about to mount fit for
+// an image to write to, creating the ones that do not exist yet.
+//
+// A volume is an ext4 filesystem and so is born with a lost+found in it, which
+// images that inspect their data directory read as "not empty": redis then
+// declines to fix permissions and cannot write, Postgres refuses to initialise.
+// Removing it is idempotent, so this asks no questions first -- and it is best
+// effort, because a container that starts with a rough volume is better than a
+// container that did not start at all.
+//
+// Only the create path calls this. The helper containers Dermaga runs on its
+// own account already know what they are mounting.
+func (a *Agent) prepareVolumes(ctx context.Context, spec containers.ContainerSpec) {
+	known := map[string]bool{}
+	if list, err := a.volumes.List(ctx); err == nil {
+		for _, volume := range list {
+			known[volume.Name] = true
+		}
+	}
+
+	for _, mount := range spec.Mounts {
+		if mount.Type != "volume" || mount.Source == "" {
+			continue
+		}
+
+		// Creating it here rather than leaving it to `container run` means it
+		// arrives tidied, and one fewer thing to reason about afterwards.
+		if !known[mount.Source] {
+			if err := a.volumes.Create(ctx, volumes.Spec{Name: mount.Source}); err != nil {
+				a.logger.Warn("Could not create the volume for a new container",
+					"volume", mount.Source, "error", err)
+			}
+			continue
+		}
+
+		if err := a.volumes.Tidy(ctx, mount.Source, a.volumeMount(ctx, mount.Source)); err != nil {
+			a.logger.Warn("Could not prepare the volume for a new container",
+				"volume", mount.Source, "error", err)
+		}
+	}
 }
 
 // volumeMount finds a running container holding the volume, so the work can go
