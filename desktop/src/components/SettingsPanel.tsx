@@ -1,7 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getOpenAtLogin, openNotificationSettings, setOpenAtLogin } from '../services/ipc';
+import {
+  getOpenAtLogin,
+  installService,
+  openNotificationSettings,
+  serviceStatus,
+  setOpenAtLogin,
+  uninstallService,
+} from '../services/ipc';
+import { useToastStore } from '../store/toastStore';
 import { useSettingsStore, type Theme } from '../store/settingsStore';
 import { SegmentedControl, type Segment } from './SegmentedControl';
 
@@ -52,6 +60,7 @@ export function SettingsPanel() {
 
           <Card title="Startup" hint="Managed by macOS; System Settings shows it too.">
             <OpenAtLogin />
+            <BackgroundService />
           </Card>
 
           <Card title="Behaviour">
@@ -150,6 +159,60 @@ function OpenAtLogin() {
           It starts in the menu bar with no window, and says when a container stops on its own.
         </p>
       )}
+    </>
+  );
+}
+
+/**
+ * The agent as a launchd service.
+ *
+ * Without it the agent belongs to this window: close Dermaga and nothing is
+ * watching your containers. With it the agent starts at login and keeps
+ * watching, which is what a restart policy needs to mean anything. Opt-in,
+ * because a background process nobody asked for is not a feature.
+ */
+function BackgroundService() {
+  const [installed, setInstalled] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const pushToast = useToastStore((s) => s.push);
+
+  useEffect(() => {
+    void serviceStatus().then((status) => {
+      setInstalled(status.installed);
+      setReady(true);
+    });
+  }, []);
+
+  const change = async (wanted: boolean) => {
+    setBusy(true);
+
+    try {
+      const status = wanted ? await installService() : await uninstallService();
+      setInstalled(status.installed);
+      pushToast(
+        status.installed ? 'Dermaga keeps watching in the background' : 'Background service removed'
+      );
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not change the service', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Toggle
+        checked={installed}
+        onChange={(value) => void change(value)}
+        label="Keep watching while Dermaga is closed"
+        disabled={!ready || busy}
+      />
+      <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
+        {installed
+          ? 'The agent runs as a background service, started at login. Containers are watched, and exits are noticed, whether or not a window is open. Removing it puts the agent back inside the app.'
+          : 'The agent lives inside Dermaga: close the window and nothing is watching your containers. Turn this on to keep one small process running instead.'}
+      </p>
     </>
   );
 }

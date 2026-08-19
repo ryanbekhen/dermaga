@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld('dermaga', {
 
   openNotificationSettings: () => ipcRenderer.invoke('dermaga:open-notification-settings'),
 
+  serviceStatus: () => ipcRenderer.invoke('dermaga:service-status'),
+  installService: () => ipcRenderer.invoke('dermaga:install-service'),
+  uninstallService: () => ipcRenderer.invoke('dermaga:uninstall-service'),
+
   getOpenAtLogin: () => ipcRenderer.invoke('dermaga:get-open-at-login'),
   setOpenAtLogin: (value) => ipcRenderer.invoke('dermaga:set-open-at-login', value),
 

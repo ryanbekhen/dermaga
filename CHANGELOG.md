@@ -11,6 +11,12 @@ change means to someone using Dermaga, not for how much code moved.
 
 ### Added
 
+- **The agent can run as a background service.** A switch in Settings installs it as a per-user
+  launchd job, so it starts at login and keeps watching containers whether or not a window is open —
+  which is what a restart policy will need to mean anything. Installing hands the socket over: the
+  agent the app started is asked to stand down, and the service takes its place. Removing it puts the
+  agent back inside the app. Opt-in, because a background process nobody asked for is not a feature.
+
 - **A menu bar item.** It reports the runtime rather than the app — whether the container services
   are up, how many containers are running, and each of them by name, a click away from its page.
   Below that: Open Dermaga, Start services when they are stopped, and Quit. The icon is the logo cut

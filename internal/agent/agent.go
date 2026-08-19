@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/containers"
@@ -43,6 +44,9 @@ type Agent struct {
 	runner  *cli.Runner
 	server  *rpc.Server
 	streams *streams
+	// Set when serving a socket: how to let go of it, so another agent -- the
+	// background service -- can take over without anyone guessing at pids.
+	standDown context.CancelFunc
 
 	containers *containers.Manager
 	files      *files.Manager
@@ -181,6 +185,8 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	a.standDown = cancel
+
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
 	a.scanner.Start(ctx)
@@ -202,6 +208,25 @@ func (a *Agent) register() {
 	a.registerSystem()
 	a.server.Register("app.info", func(_ context.Context, _ json.RawMessage) (any, error) {
 		return a.build, nil
+	})
+
+	// Asks this agent to let go, so another can take the socket -- installing
+	// the background service means handing over to a process launchd owns, and
+	// guessing which process holds the socket from outside is worse than
+	// asking it politely over the socket itself.
+	a.server.Register("agent.stand-down", func(_ context.Context, _ json.RawMessage) (any, error) {
+		if a.standDown == nil {
+			return nil, rpc.Fail("this agent cannot stand down")
+		}
+
+		// After the reply, so the caller hears the answer before the socket
+		// goes.
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			a.standDown()
+		}()
+
+		return map[string]any{"standingDown": true}, nil
 	})
 
 	a.registerSettings()

@@ -16,6 +16,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { Agent } = require('./agent.cjs');
+const service = require('./service.cjs');
 const { createTray, updateTray } = require('./tray.cjs');
 
 // One window's worth of Dermaga per Mac. Without this, opening the app while
@@ -429,6 +430,37 @@ function createWindow() {
 // macOS owns this setting -- it can also be changed in System Settings, and
 // under the hood it is a registration with SMAppService rather than a value of
 // ours -- so it is read back from there rather than mirrored in our config.
+// The background service: the agent as a launchd job, so containers are still
+// watched -- and, with a restart policy, still restarted -- when no window is
+// open. Installing it hands over the socket the app's own agent is holding.
+ipcMain.handle('dermaga:service-status', () => service.status());
+
+ipcMain.handle('dermaga:install-service', async () => {
+  const binary = agentBinary();
+  if (!binary) throw new Error('The Dermaga agent binary is missing');
+
+  const installed = await service.install(binary, {
+    releaseSocket: async () => {
+      agent?.stop();
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    },
+  });
+
+  // The service is holding the socket now; reconnect to it.
+  await startAgent();
+
+  return installed;
+});
+
+ipcMain.handle('dermaga:uninstall-service', async () => {
+  const removed = await service.uninstall();
+
+  // Nothing is serving any more, so the app goes back to running its own.
+  await startAgent();
+
+  return removed;
+});
+
 ipcMain.handle('dermaga:get-open-at-login', () => app.getLoginItemSettings().openAtLogin);
 
 ipcMain.handle('dermaga:set-open-at-login', (_event, openAtLogin) => {

@@ -27,6 +27,9 @@ interface Bridge {
   dragOut?: (container: string, path: string) => Promise<void>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
+  serviceStatus?: () => Promise<ServiceStatus>;
+  installService?: () => Promise<ServiceStatus>;
+  uninstallService?: () => Promise<ServiceStatus>;
   getOpenAtLogin?: () => Promise<boolean>;
   setOpenAtLogin?: (value: boolean) => Promise<boolean>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
@@ -101,6 +104,24 @@ export function openNotificationSettings(): Promise<void> {
 }
 
 /** Fires when a notification about a stopped container is clicked. */
+/** Whether the agent is installed as a launchd service, and where it points. */
+export interface ServiceStatus {
+  installed: boolean;
+  binary: string | null;
+}
+
+export function serviceStatus(): Promise<ServiceStatus> {
+  return bridge().serviceStatus?.() ?? Promise.resolve({ installed: false, binary: null });
+}
+
+export function installService(): Promise<ServiceStatus> {
+  return bridge().installService?.() ?? Promise.resolve({ installed: false, binary: null });
+}
+
+export function uninstallService(): Promise<ServiceStatus> {
+  return bridge().uninstallService?.() ?? Promise.resolve({ installed: false, binary: null });
+}
+
 /**
  * Whether macOS opens Dermaga at login. The setting belongs to macOS -- it can
  * be changed in System Settings too -- so it is read back rather than stored,
