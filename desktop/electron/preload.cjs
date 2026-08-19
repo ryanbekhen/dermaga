@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('dermaga', {
 
   openNotificationSettings: () => ipcRenderer.invoke('dermaga:open-notification-settings'),
 
+  takePendingOpen: () => ipcRenderer.invoke('dermaga:take-pending-open'),
+
   serviceStatus: () => ipcRenderer.invoke('dermaga:service-status'),
   installService: () => ipcRenderer.invoke('dermaga:install-service'),
   uninstallService: () => ipcRenderer.invoke('dermaga:uninstall-service'),

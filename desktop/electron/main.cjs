@@ -306,11 +306,7 @@ function notifyExit(exit) {
     silent: false,
   });
 
-  notification.on('click', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
-    mainWindow?.webContents.send('dermaga:open-container', exit.id);
-  });
+  notification.on('click', () => openContainerInWindow(exit.id));
 
   notification.show();
 }
@@ -861,6 +857,43 @@ async function startUp() {
 }
 
 /**
+ * A container the user asked for before there was a window to show it in.
+ *
+ * Clicking a notification or a menu bar entry with everything closed has to
+ * build the window first, and a window that is still loading cannot be told
+ * anything -- the renderer has no listener yet. So the request waits here and
+ * the renderer collects it as it starts.
+ */
+let pendingOpen = null;
+
+ipcMain.handle('dermaga:take-pending-open', () => {
+  const id = pendingOpen;
+  pendingOpen = null;
+
+  return id;
+});
+
+/**
+ * Opens a container, from wherever the ask came: a notification about a
+ * container that died, or the menu bar. Both are used precisely when there is
+ * no window, which is what made them do nothing at all.
+ */
+function openContainerInWindow(id) {
+  const had = BrowserWindow.getAllWindows().length > 0;
+
+  showWindow();
+
+  // A window that was already up has a renderer listening; a new one does not,
+  // and will ask for this the moment it can.
+  if (had && mainWindow && !mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.send('dermaga:open-container', id);
+    return;
+  }
+
+  pendingOpen = id;
+}
+
+/**
  * Puts the window in front, creating it if this launch never made one.
  *
  * Also the moment the Dock icon comes back: an app with a window belongs in
@@ -895,10 +928,7 @@ function startTray() {
 function trayUp() {
   createTray({
     onOpen: showWindow,
-    onOpenContainer: (id) => {
-      showWindow();
-      mainWindow?.webContents.send('dermaga:open-container', id);
-    },
+    onOpenContainer: openContainerInWindow,
     onStartServices: () => {
       void startServices()
         .then(refreshTrayServices)

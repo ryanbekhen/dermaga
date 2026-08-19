@@ -7,6 +7,16 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## Unreleased
+
+### Fixed
+
+- **A notification, or the menu bar, opens the container even with no window.** Clicking *"web
+  stopped"* did nothing at all when Dermaga was sitting in the menu bar with everything closed — and
+  that is exactly when a notification about a container that died is worth clicking. The window is
+  built first now, and the request waits for it: a renderer that does not exist yet cannot be told
+  anything, so it collects the container it was opened for as it starts.
+
 ## [v1.6.0] — 2026-08-19
 
 ### Added

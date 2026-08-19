@@ -27,6 +27,7 @@ interface Bridge {
   dragOut?: (container: string, path: string) => Promise<void>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
+  takePendingOpen?: () => Promise<string | null>;
   serviceStatus?: () => Promise<ServiceStatus>;
   installService?: () => Promise<ServiceStatus>;
   uninstallService?: () => Promise<ServiceStatus>;
@@ -149,6 +150,14 @@ export function getOpenAtLogin(): Promise<boolean> {
 
 export function setOpenAtLogin(value: boolean): Promise<boolean> {
   return bridge().setOpenAtLogin?.(value) ?? Promise.resolve(false);
+}
+
+/**
+ * A container asked for before this window existed -- from a notification about
+ * one that died, or from the menu bar. Collected once, as the window starts.
+ */
+export function takePendingOpen(): Promise<string | null> {
+  return bridge().takePendingOpen?.() ?? Promise.resolve(null);
 }
 
 export function onOpenContainer(callback: (id: string) => void): () => void {

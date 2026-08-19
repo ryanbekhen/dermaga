@@ -7,7 +7,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { Toasts } from './components/Toasts';
-import { onOpenContainer, syncSettings } from './services/ipc';
+import { onOpenContainer, syncSettings, takePendingOpen } from './services/ipc';
 import { subscribeToScanner } from './store/scannerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { useEventStream } from './hooks/useEventStream';
@@ -48,6 +48,14 @@ export function App() {
 
   // Clicking a "container stopped" notification opens that container.
   useEffect(() => onOpenContainer((id) => openContainer(id)), [openContainer]);
+
+  // And one asked for before this window existed -- the same notification, or
+  // the menu bar, with everything closed -- is waiting to be collected.
+  useEffect(() => {
+    void takePendingOpen().then((id) => {
+      if (id) openContainer(id);
+    });
+  }, [openContainer]);
 
   // The main process raises notifications itself, so it needs to know when the
   // user has asked it not to.
