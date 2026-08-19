@@ -108,8 +108,16 @@ export function DataTable<T>({
             const isSelected = selection?.selected.has(key) ?? false;
 
             return (
+              // The click belongs to the row, not to each cell: hung on the
+              // cells, the gutters between columns belonged to nothing, so
+              // they neither opened the row nor matched it -- and the pointer
+              // flickered between a hand and an arrow at every column edge.
+              //
+              // No hand, either. This app draws the arrow everywhere, as a Mac
+              // does; the row lights up on hover to say it can be opened.
               <li
                 key={key}
+                onClick={onOpen ? () => onOpen(row) : undefined}
                 className={`group col-span-full grid grid-cols-subgrid items-center px-3 transition-colors ${
                   isSelected
                     ? 'bg-brand-600/5 dark:bg-brand-600/10'
@@ -117,18 +125,20 @@ export function DataTable<T>({
                 }`}
               >
                 {selection && (
-                  <RowCheckbox
-                    checked={isSelected}
-                    onChange={() => toggle(key)}
-                    label={`Select ${key}`}
-                  />
+                  // Picking a row is not opening it.
+                  <span onClick={(event) => event.stopPropagation()} className="contents">
+                    <RowCheckbox
+                      checked={isSelected}
+                      onChange={() => toggle(key)}
+                      label={`Select ${key}`}
+                    />
+                  </span>
                 )}
 
                 {cells(row).map((cell, index) => (
                   <div
                     key={columns[index]?.key ?? index}
-                    onClick={onOpen ? () => onOpen(row) : undefined}
-                    className={`min-w-0 py-2 ${onOpen ? 'cursor-pointer' : ''} ${
+                    className={`min-w-0 py-2 ${
                       columns[index]?.align === 'right' ? 'text-right' : ''
                     }`}
                   >
@@ -136,7 +146,12 @@ export function DataTable<T>({
                   </div>
                 ))}
 
-                <div className="flex items-center justify-end gap-1 py-1">{actions?.(row)}</div>
+                <div
+                  onClick={(event) => event.stopPropagation()}
+                  className="flex items-center justify-end gap-1 py-1"
+                >
+                  {actions?.(row)}
+                </div>
               </li>
             );
           })}
