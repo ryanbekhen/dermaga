@@ -69,6 +69,11 @@ export function DataTable<T>({
     );
   }
 
+  // One grid owns the columns; the header and every row are subgrids of it.
+  // Sizing them separately let the trailing actions track resolve to nothing
+  // in the header and a button's width in the rows, and the difference came
+  // out of the flexible column -- so every heading sat a few pixels left of
+  // the values underneath it.
   const template = {
     gridTemplateColumns: [
       ...(selection ? ['22px'] : []),
@@ -78,67 +83,65 @@ export function DataTable<T>({
   };
 
   return (
-    <div className="-mr-5 flex min-h-0 flex-col overflow-hidden pr-5">
-      <div
-        style={template}
-        className="grid items-center gap-3 border-b border-ink-200 px-3 pb-2.5 pt-1 text-tiny font-semibold uppercase tracking-wide text-ink-500 dark:border-ink-700"
-      >
-        {selection && (
-          <RowCheckbox
-            checked={allSelected}
-            indeterminate={selectedHere.length > 0 && !allSelected}
-            onChange={toggleAll}
-            label="Select all"
-          />
-        )}
-        {columns.map((column) => (
-          <span key={column.key} className={column.align === 'right' ? 'text-right' : undefined}>
-            {column.label}
-          </span>
-        ))}
-        <span />
+    <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
+      <div style={template} className="grid gap-x-3">
+        <div className="sticky top-0 z-10 col-span-full grid grid-cols-subgrid items-center border-b border-ink-200 bg-white px-3 pb-2.5 pt-1 text-tiny font-semibold uppercase tracking-wide text-ink-500 dark:border-ink-700 dark:bg-ink-950">
+          {selection && (
+            <RowCheckbox
+              checked={allSelected}
+              indeterminate={selectedHere.length > 0 && !allSelected}
+              onChange={toggleAll}
+              label="Select all"
+            />
+          )}
+          {columns.map((column) => (
+            <span key={column.key} className={column.align === 'right' ? 'text-right' : undefined}>
+              {column.label}
+            </span>
+          ))}
+          <span />
+        </div>
+
+        <ul className="col-span-full grid grid-cols-subgrid divide-y divide-ink-200 dark:divide-ink-700">
+          {rows.map((row) => {
+            const key = rowKey(row);
+            const isSelected = selection?.selected.has(key) ?? false;
+
+            return (
+              <li
+                key={key}
+                className={`group col-span-full grid grid-cols-subgrid items-center px-3 transition-colors ${
+                  isSelected
+                    ? 'bg-brand-600/5 dark:bg-brand-600/10'
+                    : 'hover:bg-ink-50 dark:hover:bg-ink-800/50'
+                }`}
+              >
+                {selection && (
+                  <RowCheckbox
+                    checked={isSelected}
+                    onChange={() => toggle(key)}
+                    label={`Select ${key}`}
+                  />
+                )}
+
+                {cells(row).map((cell, index) => (
+                  <div
+                    key={columns[index]?.key ?? index}
+                    onClick={onOpen ? () => onOpen(row) : undefined}
+                    className={`min-w-0 py-2 ${onOpen ? 'cursor-pointer' : ''} ${
+                      columns[index]?.align === 'right' ? 'text-right' : ''
+                    }`}
+                  >
+                    {cell}
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-end gap-1 py-1">{actions?.(row)}</div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
-
-      <ul className="min-h-0 divide-y divide-ink-200 overflow-y-auto dark:divide-ink-700">
-        {rows.map((row) => {
-          const key = rowKey(row);
-          const isSelected = selection?.selected.has(key) ?? false;
-
-          return (
-            <li
-              key={key}
-              style={template}
-              className={`group grid items-center gap-3 px-3 transition-colors ${
-                isSelected
-                  ? 'bg-brand-600/5 dark:bg-brand-600/10'
-                  : 'hover:bg-ink-50 dark:hover:bg-ink-800/50'
-              }`}
-            >
-              {selection && (
-                <RowCheckbox
-                  checked={isSelected}
-                  onChange={() => toggle(key)}
-                  label={`Select ${key}`}
-                />
-              )}
-
-              {cells(row).map((cell, index) => (
-                <div
-                  key={columns[index]?.key ?? index}
-                  onClick={onOpen ? () => onOpen(row) : undefined}
-                  className={`min-w-0 py-2 ${onOpen ? 'cursor-pointer' : ''} ${
-                    columns[index]?.align === 'right' ? 'text-right' : ''
-                  }`}
-                >
-                  {cell}
-                </div>
-              ))}
-
-              <div className="flex items-center justify-end gap-1 py-1">{actions?.(row)}</div>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
