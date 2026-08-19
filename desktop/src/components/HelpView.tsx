@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowDownToLine,
   BellRing,
   Boxes,
@@ -94,6 +95,15 @@ export function HelpView({ version }: { version: string }) {
               <strong>Build</strong> on the Images page takes a context folder, a tag and the usual
               build arguments. Progress appears as a row in the list rather than a log window, and
               the builder container is started for you the first time.
+            </p>
+          </Card>
+
+          <Card icon={Activity} title="What usage looked like">
+            <p>
+              A container&rsquo;s overview keeps the last half hour of CPU and memory. The shape is
+              what a live number cannot show: memory that climbs and never falls is a leak, and CPU
+              pinned against the allocation is a container being starved. Samples are taken every
+              five seconds while the app runs, and are not kept between launches.
             </p>
           </Card>
 

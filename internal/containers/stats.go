@@ -41,6 +41,9 @@ type StatsSampler struct {
 
 	mu      sync.RWMutex
 	samples map[string]sample
+	// Kept alongside the latest sample: the shape over time is what diagnoses
+	// anything, and the sampler is the only place it passes through.
+	history map[string][]Point
 }
 
 func NewStatsSampler(runner *cli.Runner, logger *slog.Logger) *StatsSampler {
@@ -48,6 +51,7 @@ func NewStatsSampler(runner *cli.Runner, logger *slog.Logger) *StatsSampler {
 		runner:  runner,
 		logger:  logger,
 		samples: map[string]sample{},
+		history: map[string][]Point{},
 	}
 }
 
@@ -112,7 +116,14 @@ func (s *StatsSampler) collect(ctx context.Context) {
 		}
 
 		next[r.ID] = cur
+		s.record(r.ID, now, cur.cpuPercent, cur.memoryUsageBytes)
 	}
+
+	live := make(map[string]struct{}, len(next))
+	for id := range next {
+		live[id] = struct{}{}
+	}
+	s.forget(live)
 
 	s.samples = next
 }

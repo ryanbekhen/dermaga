@@ -284,6 +284,13 @@ export interface BuildSpec {
   noCache?: boolean;
 }
 
+/** One sample of a container's usage, for the charts. */
+export interface UsagePoint {
+  at: number;
+  cpuPercent: number;
+  memoryBytes: number;
+}
+
 /** One entry in a container's filesystem. */
 export interface FileEntry {
   name: string;

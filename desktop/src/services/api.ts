@@ -20,6 +20,7 @@ import type {
   RegistryLogin,
   ScannerStatus,
   Volume,
+  UsagePoint,
   VolumeSpec,
   VulnerabilityReport,
 } from '../types';
@@ -160,6 +161,11 @@ export const api = {
 
   async getContainer(id: string): Promise<Container> {
     return invoke('containers.get', { id });
+  },
+
+  /** Half an hour of samples, oldest first; empty for a container just started. */
+  async getContainerHistory(id: string): Promise<UsagePoint[]> {
+    return (await invoke<UsagePoint[]>('containers.history', { id })) ?? [];
   },
 
   async getContainerSpec(id: string): Promise<ContainerSpec> {

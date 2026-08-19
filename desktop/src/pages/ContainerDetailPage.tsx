@@ -16,6 +16,7 @@ import {
 import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
 import { Meter } from '../components/Meter';
+import { UsageChart, asBytes, asPercent } from '../components/UsageChart';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -28,7 +29,7 @@ import { api } from '../services/api';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type { Container, ContainerSpec, ContainerTab, Port } from '../types';
+import type { Container, ContainerSpec, ContainerTab, Port, UsagePoint } from '../types';
 import { formatDuration, formatMemory, shortImage, splitEnv } from '../utils/format';
 
 // xterm is a large dependency and only the Terminal tab needs it, so it stays
@@ -262,6 +263,39 @@ function TabPlaceholder({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * The last half hour of samples for one container.
+ *
+ * Refetched whenever a new sample lands rather than on a timer: the container
+ * in props is replaced by the pushed snapshot, so its usage changing is exactly
+ * the signal that there is one more point to draw.
+ */
+function useUsageHistory(id: string, tick: number | undefined, enabled: boolean) {
+  // Keyed by container so a half-finished fetch from the one just navigated
+  // away from can never draw itself under the new name.
+  const [state, setState] = useState<{ id: string; points: UsagePoint[] }>({ id, points: [] });
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let live = true;
+    api
+      .getContainerHistory(id)
+      .then((points) => {
+        if (live) setState({ id, points });
+      })
+      .catch(() => {
+        // A container that went away mid-request has no history to show.
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [id, tick, enabled]);
+
+  return enabled && state.id === id ? state.points : [];
+}
+
 function OverviewTab({ container }: { container: Container }) {
   const [showEnv, setShowEnv] = useState(false);
   const running = container.status === 'running';
@@ -272,6 +306,7 @@ function OverviewTab({ container }: { container: Container }) {
     (dns?.options.length ?? 0) > 0 ||
     Boolean(dns?.domain);
   const sysctls = Object.entries(container.sysctls ?? {});
+  const history = useUsageHistory(container.id, container.cpuUsage, running);
   const env = container.environmentVariables ?? [];
 
   return (
@@ -301,6 +336,24 @@ function OverviewTab({ container }: { container: Container }) {
           }
         />
       </Section>
+
+      {running && (
+        <Section title="Last 30 minutes">
+          <UsageChart
+            points={history}
+            label="CPU"
+            value={(point) => point.cpuPercent}
+            ceiling={100}
+            format={asPercent}
+          />
+          <UsageChart
+            points={history}
+            label="Memory"
+            value={(point) => point.memoryBytes}
+            format={asBytes}
+          />
+        </Section>
+      )}
 
       <Section title="Networking" span={(container.interfaces?.length ?? 0) > 1}>
         {container.interfaces && container.interfaces.length > 0 ? (

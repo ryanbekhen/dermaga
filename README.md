@@ -25,7 +25,8 @@ everything you do is immediately visible to `container ls` and vice versa.
 
 - **Containers** — create, start, stop, restart, edit and remove; multi-select for bulk actions. Per
   container: live CPU and memory, IPv4/IPv6, gateway, MAC, MTU, DNS, mounts, environment,
-  capabilities and runtime flags. Published ports open in your browser.
+  capabilities and runtime flags, plus the last half hour of CPU and memory as a chart. Published
+  ports open in your browser.
 - **Terminal** — a real shell in any running container or machine, backed by a pty, with a prompt,
   line editing, colours and resize. Open it as the image's own user, as root, or as anyone else.
 - **Logs** — follow container, machine and service logs, with filtering and follow-on-scroll.

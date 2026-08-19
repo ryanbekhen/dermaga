@@ -568,6 +568,20 @@ func (a *Agent) registerContainers() {
 		return a.containers.Get(ctx, args.ID)
 	})
 
+	// The shape over time, which a single live number cannot show: memory that
+	// climbs and never falls is a leak, CPU pinned at the allocation is a
+	// container being starved.
+	a.server.Register("containers.history", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		return a.containers.Stats().History(args.ID), nil
+	})
+
 	a.server.Register("containers.spec", func(ctx context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			ID string `json:"id"`
