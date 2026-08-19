@@ -20,7 +20,7 @@ change means to someone using Dermaga, not for how much code moved.
 
 - **The agent can run as a background service.** A switch in Settings installs it as a per-user
   launchd job, so it starts at login and keeps watching containers whether or not a window is open —
-  which is what a restart policy will need to mean anything. Installing hands the socket over: the
+  and brings up the ones marked to start with Dermaga before you have opened anything. Installing hands the socket over: the
   agent the app started is asked to stand down, and the service takes its place. Removing it puts the
   agent back inside the app. Opt-in, because a background process nobody asked for is not a feature.
 
@@ -59,6 +59,12 @@ change means to someone using Dermaga, not for how much code moved.
   on screen to say so. A development build now keeps its socket inside the checkout, and a background
   service installed from one listens there too.
 
+- **Table headings line up, and the cursor stops flickering.** The click belonged to each cell, so
+  the gutters between columns belonged to nothing: the pointer changed at every column edge, and
+  clicking between two columns did nothing at all. The row owns both now.
+- **A stream that stops because reading failed says so.** A scanner ends on an error exactly as it
+  ends at the end of the input, so a build or a terminal session cut short looked like one that
+  finished.
 - **Only one Dermaga at a time.** Opening the app while it was already running started a second copy,
   with a second agent, a second watcher and duplicate exit notifications. It now brings the running
   one forward — which matters more than it used to, since an app with no Dock icon is opened by
