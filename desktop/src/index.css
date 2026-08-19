@@ -17,6 +17,16 @@
     height: 100%;
   }
 
+  /* WebKit bounces the document itself, which Chromium did not: a scroll that
+     runs past the end drags the whole window down and springs back, taking the
+     title bar strip with it. Nothing here is a document -- every pane scrolls
+     inside itself -- so the page is pinned and the elastic goes with it. */
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     font-family: theme('fontFamily.sans');
     -webkit-font-smoothing: antialiased;
@@ -34,9 +44,14 @@
     user-select: text;
   }
 
-  /* Electron window dragging: chrome moves the window, controls do not. */
+  /* Window dragging: chrome moves the window, controls do not.
+     Both properties are set because both shells are in the tree.
+     -webkit-app-region is Chromium's and does nothing in WKWebView;
+     --wails-draggable is read by the Wails runtime, and it inherits -- so the
+     controls have to say no for themselves or a click on them drags instead. */
   .drag {
     -webkit-app-region: drag;
+    --wails-draggable: drag;
   }
 
   .no-drag,
@@ -45,6 +60,7 @@
   select,
   a {
     -webkit-app-region: no-drag;
+    --wails-draggable: no-drag;
   }
 
   /* Overlay scrollbars, the way a native list scrolls. */

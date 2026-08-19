@@ -345,10 +345,13 @@ const (
 
 func (a *App) createSplash() {
 	window := a.wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Dermaga",
-		Width:            splashWidth,
-		Height:           splashHeight,
-		InitialPosition:  application.WindowCentered,
+		Title:           "Dermaga",
+		Width:           splashWidth,
+		Height:          splashHeight,
+		InitialPosition: application.WindowCentered,
+		// The splash opens where the user is looking, and the window that
+		// follows it opens on the same display a second later.
+		Screen:           a.screenUnderCursor(),
 		Frameless:        true,
 		DisableResize:    true,
 		BackgroundColour: application.NewRGB(13, 13, 17),

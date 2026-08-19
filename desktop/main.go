@@ -450,6 +450,7 @@ func (a *App) servicesRunning() bool {
 // --- the window -----------------------------------------------------------
 
 func (a *App) createWindow() *application.WebviewWindow {
+
 	window := a.wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:           "Dermaga",
 		Width:           1180,
@@ -457,6 +458,7 @@ func (a *App) createWindow() *application.WebviewWindow {
 		MinWidth:        900,
 		MinHeight:       600,
 		InitialPosition: application.WindowCentered,
+		Screen:          a.screenUnderCursor(),
 		Hidden:          true,
 		// A dropped file carries no path of its own to the web side; only this
 		// side can resolve one, and only for files the user actually dropped.
@@ -464,6 +466,17 @@ func (a *App) createWindow() *application.WebviewWindow {
 		Mac: application.MacWindow{
 			TitleBar:                application.MacTitleBarHiddenInset,
 			InvisibleTitleBarHeight: 38,
+			WebviewPreferences: application.MacWebviewPreferences{
+				// WebKit leaves buttons and links out of the tab order unless
+				// asked; Chromium always included them. Without this, Tab
+				// inside a dialog skips every control that is not a text
+				// field, which is most of them.
+				TabFocusesLinks: application.Enabled,
+				// Nothing here is a document, so there is nothing to swipe
+				// back to -- and a two-finger swipe that navigates the window
+				// away from the app has no way back.
+				AllowsBackForwardNavigationGestures: application.Disabled,
+			},
 		},
 		// Avoids a white flash into a dark UI (and the reverse) on launch.
 		BackgroundColour: application.NewRGB(19, 19, 23),
