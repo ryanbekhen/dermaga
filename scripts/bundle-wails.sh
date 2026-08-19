@@ -18,10 +18,21 @@ rm -rf "$app"
 mkdir -p "$contents/MacOS" "$contents/Resources"
 
 # 1. The binary, with the frontend embedded in it.
+#
+# Two things keep the linker quiet, and both are about agreeing on a version
+# rather than hiding a problem:
+#
+#   - cgo compiles Wails' Objective-C against whatever SDK is installed, while
+#     Go links darwin/arm64 for macOS 11. Left alone that is one warning per
+#     object file -- twenty-odd lines burying the actual output. Building the
+#     objects for the same version Go links for is the agreement.
+#
+#   - Wails asks for -lobjc, and so does the toolchain. Saying so once per
+#     build tells nobody anything.
 echo "==> building Dermaga $version"
-go build \
+MACOSX_DEPLOYMENT_TARGET=11.0 go build \
 	-tags production \
-	-ldflags "-X main.Version=$version -s -w" \
+	-ldflags "-X main.Version=$version -s -w -extldflags=-Wl,-no_warn_duplicate_libraries" \
 	-o "$contents/MacOS/Dermaga" \
 	./desktop/
 
