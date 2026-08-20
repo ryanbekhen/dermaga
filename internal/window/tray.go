@@ -1,10 +1,10 @@
-package main
+package window
 
 import (
-	_ "embed"
 	"fmt"
 	"sync"
 
+	"github.com/ryanbekhen/dermaga/internal/window/assets"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -15,12 +15,6 @@ import (
 // through launchd, so they outlive this app -- "is Dermaga running?" answers
 // nothing, while "are the services up, and what is running?" answers the thing
 // people open the window for.
-
-//go:embed electron/icons/trayTemplate@2x.png
-var trayRunningIcon []byte
-
-//go:embed electron/icons/trayStoppedTemplate@2x.png
-var trayStoppedIcon []byte
 
 // Beyond this the menu becomes a list to scroll rather than a glance.
 const maxTrayContainers = 8
@@ -79,6 +73,11 @@ func trayLabel(state TrayState) string {
 func NewTray(app *application.App, handlers TrayHandlers) *Tray {
 	tray := &Tray{app: app, handlers: handlers}
 	tray.tray = app.SystemTray.New()
+
+	// A left click opens the menu, the way every other menu bar item on the Mac
+	// behaves. Wails only wires the menu to the right button by itself, which
+	// leaves the ordinary click doing nothing at all.
+	tray.tray.OnClick(tray.tray.OpenMenu)
 	tray.apply()
 
 	return tray
@@ -106,9 +105,9 @@ func (t *Tray) apply() {
 
 	// Filled while the services are up, hollow when they are not: a broken
 	// runtime is visible without opening the menu.
-	icon := trayRunningIcon
+	icon := assets.TrayRunning
 	if state.Running != nil && !*state.Running {
-		icon = trayStoppedIcon
+		icon = assets.TrayStopped
 	}
 
 	// Template images follow the menu bar into dark mode and under highlights.
