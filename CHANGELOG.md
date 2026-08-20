@@ -7,6 +7,18 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.8.0] — 2026-08-21
+
+### Added
+
+- **Updates install themselves.** An update used to end with the disk image open in Finder and you
+  dragging Dermaga across. Now the download is checked — the signature intact, signed by the same
+  Apple Developer ID as the copy you are running, and notarized — and only then put in place, with
+  the app reopening already updated. Anything that cannot be proven falls back to opening the image,
+  the way it always worked: an update that half happened would be worse than one that asks for a
+  drag. Because the code doing this lives in the version already installed, **this one still has to
+  be dragged across; the next one will not.**
+
 ## [v1.7.1] — 2026-08-21
 
 ### Fixed
@@ -271,6 +283,7 @@ change means to someone using Dermaga, not for how much code moved.
 First release: containers, images, volumes, networks and machines from one window, a terminal and
 logs for each, and a Go agent wrapping Apple's `container` CLI with no daemon and no polling.
 
+[v1.8.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.8.0
 [v1.7.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.7.1
 [v1.7.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.7.0
 [v1.6.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.6.1
