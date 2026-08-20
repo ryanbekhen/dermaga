@@ -12,6 +12,28 @@ DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 DMG     := dist/Dermaga-$(VERSION)-arm64.dmg
 APP     := dist/Dermaga.app
 
+# Every Go command here compiles the Objective-C for the same macOS, which is
+# what keeps the linker quiet.
+#
+# Go links darwin/arm64 for macOS 11 whatever anything says, while cgo compiles
+# Wails' Objective-C against the installed SDK. Left to disagree, that is one
+# warning per object file -- twenty-odd lines burying the actual output. What
+# the app really requires is stated where it is enforced, in
+# LSMinimumSystemVersion; raising this to match would only put the two back at
+# odds.
+#
+# Said through CGO_CFLAGS rather than MACOSX_DEPLOYMENT_TARGET because Go keys
+# its build cache on the one and not on the other. With the environment
+# variable, objects compiled once against the SDK are reused by every later
+# build and warn every time -- which is exactly what adding an Objective-C file
+# and building it once without the variable set does.
+export CGO_CFLAGS := -O2 -g -mmacosx-version-min=11.0
+
+# Wails asks the linker for -lobjc, and so does the toolchain. Saying so once
+# per build tells nobody anything, so the tests link as quietly as the bundle
+# already does.
+QUIET_LD := -extldflags=-Wl,-no_warn_duplicate_libraries
+
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
 
@@ -68,7 +90,7 @@ check: test lint
 	cd desktop && npx tsc -b --force
 
 test: internal/window/assets/dist/index.html
-	go test ./...
+	go test -ldflags "$(QUIET_LD)" ./...
 	cd desktop && npm test
 
 ## The Go app embeds the built frontend, so it cannot be compiled without one.

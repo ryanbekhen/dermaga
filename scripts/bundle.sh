@@ -38,10 +38,16 @@ mkdir -p "$contents/MacOS" "$contents/Resources"
 #     object file -- twenty-odd lines burying the actual output. Building the
 #     objects for the same version Go links for is the agreement.
 #
+#     It is said as a compiler flag rather than as MACOSX_DEPLOYMENT_TARGET
+#     because Go keys its build cache on the flags and not on that variable:
+#     objects compiled against the SDK once are otherwise reused here and warn
+#     every time. The Makefile exports the same value for everything it runs,
+#     so a `go test` beforehand cannot leave mismatched objects behind either.
+#
 #   - Wails asks for -lobjc, and so does the toolchain. Saying so once per
 #     build tells nobody anything.
 echo "==> building Dermaga $version"
-MACOSX_DEPLOYMENT_TARGET=11.0 go build \
+CGO_CFLAGS="-O2 -g -mmacosx-version-min=11.0" go build \
 	-tags "$tags" \
 	-ldflags "-X main.Version=$version $strip -extldflags=-Wl,-no_warn_duplicate_libraries" \
 	-o "$contents/MacOS/Dermaga" \
