@@ -127,6 +127,7 @@ verify-dist:
 	@sh scripts/check-inline-scripts.sh internal/window/assets/dist || exit 1
 	@test -f "$(DMG)" || { echo "FAIL: no DMG at $(DMG)"; exit 1; }
 	@sh scripts/check-signature.sh "$(APP)" "$(DMG)" $(SIGNING) || exit 1
+	@sh scripts/check-version.sh "$(APP)" "$(VERSION)" || exit 1
 	@echo "verify-dist: binary, agent, icon, no inline scripts, DMG"
 
 ## Install the built app locally, clearing the quarantine flag that Gatekeeper
