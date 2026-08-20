@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -453,9 +454,27 @@ func (b *Bridge) DownloadUpdate(assetURL, version string) (string, error) {
 	return target, nil
 }
 
-// InstallUpdate opens the installer and closes Dermaga, so the app can be
-// replaced.
+// InstallUpdate puts the downloaded version in place, and closes Dermaga so it
+// can be.
+//
+// In place when the download can be proven to be Dermaga -- signature intact,
+// the same team that signed this app, and notarized -- and the app can be
+// written to without an administrator. The app comes back already updated and
+// there is nothing to drag.
+//
+// Everything else falls back to opening the disk image, which is what Dermaga
+// has always done and always works. An update that half happened would be far
+// worse than one that asks for a drag, so anything short of certain takes the
+// old road.
 func (b *Bridge) InstallUpdate(dmgPath string) error {
+	if err := b.app.replaceWith(dmgPath); err == nil {
+		b.app.quitAfterOpeningInstaller()
+
+		return nil
+	} else {
+		log.Println("[dermaga] not replacing in place:", err)
+	}
+
 	if err := exec.Command("open", dmgPath).Run(); err != nil {
 		return err
 	}
