@@ -1,5 +1,6 @@
 import { invoke } from './ipc';
 import type {
+  PendingEdit,
   BuilderStatus,
   BuildInfo,
   BuildSpec,
@@ -179,6 +180,31 @@ export const api = {
 
   async stopContainer(id: string, timeout = 10): Promise<void> {
     await invoke('containers.stop', { id, timeout });
+  },
+
+  /**
+   * Stops a container the abrupt way, for one that will not stop politely.
+   * Answers with an error rather than hanging when the container has stopped
+   * answering altogether.
+   */
+  async killContainer(id: string): Promise<void> {
+    await invoke('containers.kill', { id });
+  },
+
+  /**
+   * An edit that was begun and never finished, if there is one.
+   *
+   * Editing recreates the container, and a recreate can fail -- the image was
+   * built here and has since been deleted, a port is taken now. The changes are
+   * written down before anything is taken apart, so they can be offered back
+   * rather than typed again.
+   */
+  async getPendingEdit(id: string): Promise<PendingEdit | null> {
+    return invoke('containers.pendingEdit', { id });
+  },
+
+  async discardPendingEdit(id: string): Promise<void> {
+    await invoke('containers.discardEdit', { id });
   },
 
   /**

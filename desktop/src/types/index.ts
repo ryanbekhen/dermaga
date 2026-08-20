@@ -194,6 +194,22 @@ export interface SpecMount {
 }
 
 /** Everything Dermaga can set when creating or recreating a container. */
+/**
+ * An edit that was begun and never finished.
+ *
+ * Written down before the container is taken apart, so a recreate that fails
+ * does not take the changes with it.
+ */
+export interface PendingEdit {
+  id: string;
+  spec: ContainerSpec;
+  /** What the container was, so a restore that also failed can be retried. */
+  previous: ContainerSpec;
+  /** Why it did not finish, in the runtime's own words. */
+  reason?: string;
+  at: string;
+}
+
 export interface ContainerSpec {
   name: string;
   image: string;

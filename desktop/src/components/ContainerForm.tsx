@@ -3,7 +3,7 @@ import { Check, Network as NetworkIcon } from 'lucide-react';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
-import type { ContainerSpec } from '../types';
+import type { PendingEdit, ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, Modal, Row } from './form';
 import { EnvEditor, formatEnv, parseEnv } from './EnvEditor';
 import { SegmentedControl } from './SegmentedControl';
@@ -15,6 +15,14 @@ interface ContainerFormProps {
   editing?: string;
   /** What to open with: a whole spec when editing, or just an image to run. */
   initial?: Partial<ContainerSpec>;
+  /**
+   * An edit that was begun and never finished, which is what the form has been
+   * filled from. Shown so the user knows these are their own changes coming
+   * back rather than what the container is running now.
+   */
+  resumed?: PendingEdit;
+  /** Throws the unfinished edit away and closes; the container is untouched. */
+  onDiscardResumed?: () => void;
   onClose: () => void;
 }
 
@@ -41,7 +49,13 @@ function withAutoBoot(labels: Record<string, string> | undefined, wanted: boolea
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
-export function ContainerForm({ editing, initial, onClose }: ContainerFormProps) {
+export function ContainerForm({
+  editing,
+  initial,
+  resumed,
+  onDiscardResumed,
+  onClose,
+}: ContainerFormProps) {
   const images = useResourceStore((s) => s.images);
   const volumes = useResourceStore((s) => s.volumes);
   const networks = useResourceStore((s) => s.networks);
@@ -203,6 +217,21 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
         </>
       }
     >
+      {resumed && (
+        <div className="mb-4 rounded-md border border-orange-600/40 bg-orange-600/5 p-3 text-xs">
+          <p className="font-semibold text-orange-700 dark:text-orange-500">
+            Picked up where you left off
+          </p>
+          <p className="mt-1 selectable text-ink-700 dark:text-ink-300">
+            These are the changes from an edit that did not finish
+            {resumed.reason ? `: ${resumed.reason}` : '.'}
+          </p>
+          <button onClick={onDiscardResumed} className="btn-ghost mt-2">
+            Discard them and start from the container
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <Field label="Name" hint="Left blank, the CLI generates one.">
           <input

@@ -12,6 +12,7 @@ import {
   ScrollText,
   Square,
   TerminalSquare,
+  Zap,
   Trash2,
 } from 'lucide-react';
 import { FileBrowser } from '../components/FileBrowser';
@@ -30,7 +31,14 @@ import { api } from '../services/api';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type { Container, ContainerSpec, ContainerTab, Port, UsagePoint } from '../types';
+import type {
+  PendingEdit,
+  Container,
+  ContainerSpec,
+  ContainerTab,
+  Port,
+  UsagePoint,
+} from '../types';
 import { formatDuration, formatMemory, shortImage, splitEnv } from '../utils/format';
 
 // xterm is a large dependency and only the Terminal tab needs it, so it stays
@@ -51,7 +59,7 @@ const TABS: TabDefinition[] = [
 // none, and a tab that can only apologise is worse than no tab.
 const NEEDS_SHELL = ['files', 'terminal'];
 
-type Action = 'start' | 'stop' | 'restart' | 'remove';
+type Action = 'start' | 'stop' | 'kill' | 'restart' | 'remove';
 
 interface ContainerDetailPageProps {
   container: Container;
@@ -70,6 +78,8 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   const [hasShell, setHasShell] = useState<boolean | undefined>(undefined);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [editing, setEditing] = useState<ContainerSpec | null>(null);
+  // An edit that did not finish last time, offered back rather than retyped.
+  const [resumed, setResumed] = useState<PendingEdit | null>(null);
   const [loadingSpec, setLoadingSpec] = useState(false);
 
   const back = useUIStore((s) => s.back);
@@ -144,7 +154,29 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
             >
               Stop
             </Button>
-          ) : (
+          ) : null}
+
+          {/* A container that will not stop politely has to be taken down
+              abruptly -- and one whose runtime has stopped answering cannot be
+              browsed, given a terminal, or stopped at all, which is exactly
+              when this is the only way out. */}
+          {running && (
+            <Button
+              variant="ghost"
+              icon={Zap}
+              busy={pending === 'kill'}
+              busyLabel="Forcing…"
+              disabled={busy}
+              title="Stop it abruptly, for a container that will not stop"
+              onClick={() =>
+                void run('kill', () => api.killContainer(container.id), `Killed ${container.name}`)
+              }
+            >
+              Force stop
+            </Button>
+          )}
+
+          {!running && (
             <Button
               variant="primary"
               icon={Play}
@@ -189,11 +221,18 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
             aria-label="Edit"
             onClick={() => {
               // The spec comes from the server so the form opens with exactly
-              // what the container was created with.
+              // what the container was created with -- unless an earlier edit
+              // never finished, in which case those changes are worth more than
+              // the configuration they were meant to replace.
               setLoadingSpec(true);
-              void api
-                .getContainerSpec(container.id)
-                .then((spec) => setEditing(spec ?? null))
+              void Promise.all([
+                api.getContainerSpec(container.id),
+                api.getPendingEdit(container.id).catch(() => null),
+              ])
+                .then(([spec, pending]) => {
+                  setResumed(pending ?? null);
+                  setEditing(pending?.spec ?? spec ?? null);
+                })
                 .catch(() => pushToast('Could not read this container’s configuration', 'error'))
                 .finally(() => setLoadingSpec(false));
             }}
@@ -241,7 +280,23 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
       )}
 
       {editing && (
-        <ContainerForm editing={container.id} initial={editing} onClose={() => setEditing(null)} />
+        <ContainerForm
+          editing={container.id}
+          initial={editing}
+          resumed={resumed ?? undefined}
+          onDiscardResumed={() => {
+            void api.discardPendingEdit(container.id).catch(() => {
+              // Nothing to tell the user: the form is closing either way, and
+              // the next edit reads the container itself.
+            });
+            setResumed(null);
+            setEditing(null);
+          }}
+          onClose={() => {
+            setEditing(null);
+            setResumed(null);
+          }}
+        />
       )}
 
       {confirmingRemove && (
