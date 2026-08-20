@@ -2,7 +2,7 @@
 #
 # Assembles Dermaga.app around the Wails binary.
 #
-# There is no electron-builder here to do it, and there does not need to be:
+# There is no packaging tool here to do it, and there does not need to be:
 # a macOS bundle is a directory with an Info.plist, an executable and whatever
 # it needs beside it. The agent travels in Resources, exactly where the app
 # looks for it, and packaging fails rather than shipping a bundle without one.
@@ -22,7 +22,7 @@ if [ "${1:-}" = "--dev" ]; then
 	strip=""
 fi
 
-app="$root/desktop/release-wails/Dermaga.app"
+app="$root/dist/Dermaga.app"
 contents="$app/Contents"
 
 rm -rf "$app"
@@ -45,7 +45,7 @@ MACOSX_DEPLOYMENT_TARGET=11.0 go build \
 	-tags "$tags" \
 	-ldflags "-X main.Version=$version $strip -extldflags=-Wl,-no_warn_duplicate_libraries" \
 	-o "$contents/MacOS/Dermaga" \
-	./desktop/
+	./cmd/dermaga/
 
 # 2. The agent, which the app starts when no service is holding the socket.
 test -x "$root/bin/dermaga-agent" || {
@@ -55,7 +55,7 @@ test -x "$root/bin/dermaga-agent" || {
 cp "$root/bin/dermaga-agent" "$contents/Resources/dermaga-agent"
 
 # 3. The Info.plist, stamped with the version this build calls itself.
-sed "s/__VERSION__/$version/g" "$root/desktop/build/darwin/Info.plist" >"$contents/Info.plist"
+sed "s/__VERSION__/$version/g" "$root/build/darwin/Info.plist" >"$contents/Info.plist"
 
 # 4. The icon, derived from the one checked-in logo so it can never be a second
 #    copy that drifts.

@@ -1,6 +1,6 @@
 //go:build mcp
 
-package main
+package window
 
 import (
 	"os"
