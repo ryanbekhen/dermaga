@@ -28,7 +28,7 @@ IPv6 only, and the app's asset server dials IPv4.
 
 ## Layout
 
-See the architecture section in the [README](README.md#architecture). In short:
+The [architecture notes](docs/architecture.md) go through this properly. In short:
 
 - `cmd/dermaga-agent` — the Go process; speaks JSON-RPC on stdio
 - `internal/…` — one package per domain, none of which import each other's
@@ -39,6 +39,12 @@ See the architecture section in the [README](README.md#architecture). In short:
   it is asked for to the agent, and embeds the built frontend
 - `desktop` — the React window, which has no network access of its own;
   Vite writes its build into `internal/window/dist`
+
+## Where the rest is written down
+
+- [Architecture](docs/architecture.md) — the layers, the packages, streaming, the RPC surface
+- [Vulnerability scanning](docs/scanning.md) — what is scanned, when, and what is cached
+- [Building and releasing](docs/releasing.md) — signing, packaging, cutting a release
 
 ## Conventions
 
