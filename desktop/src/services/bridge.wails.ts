@@ -14,10 +14,54 @@ import { Call, Events, Flags } from '@wailsio/runtime';
  * Wails names a bound method after the package it is declared in, so writing it
  * on this side means a call that breaks at runtime the day that package moves.
  */
-const bridge = Flags.GetFlag('bridge') as string;
+let bridgeName = '';
 
-function call<T>(method: string, ...args: unknown[]): Promise<T> {
-  return Call.ByName(`${bridge}.${method}`, ...args) as Promise<T>;
+/** How long to keep waiting for Go to say what the service is called. */
+const bridgeTimeout = 5000;
+const bridgePoll = 20;
+
+/**
+ * The bound service's name, waited for rather than read once.
+ *
+ * Wails hands the flags to the page by running a script in it once the window
+ * has finished navigating -- which is not necessarily before the modules on
+ * that page have run. Reading the flag as this module loads therefore races
+ * the runtime, and losing that race used to throw here: the module never
+ * finished, `window.dermaga` was never set, and the window stayed white with
+ * nothing able to repair it afterwards. A reload that Vite triggers on its own
+ * -- after re-optimising its dependencies, say -- is enough to land there.
+ *
+ * So the name is asked for when it is first wanted, and waited for if it is
+ * not there yet. Arriving a moment late costs nothing; not arriving at all is
+ * worth an error that says so.
+ */
+async function bridge(): Promise<string> {
+  if (bridgeName !== '') {
+    return bridgeName;
+  }
+
+  for (let waited = 0; waited <= bridgeTimeout; waited += bridgePoll) {
+    // GetFlag throws while the flags are still absent, which here is a reason
+    // to wait rather than to fail.
+    try {
+      const name = Flags.GetFlag('bridge') as string;
+      if (name) {
+        bridgeName = name;
+
+        return bridgeName;
+      }
+    } catch {
+      // Not injected yet.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, bridgePoll));
+  }
+
+  throw new Error('the Go side never said what its bridge is called');
+}
+
+async function call<T>(method: string, ...args: unknown[]): Promise<T> {
+  return (await Call.ByName(`${await bridge()}.${method}`, ...args)) as T;
 }
 
 /**
