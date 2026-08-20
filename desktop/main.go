@@ -461,7 +461,11 @@ func (a *App) createWindow() *application.WebviewWindow {
 		// side can resolve one, and only for files the user actually dropped.
 		EnableFileDrop: true,
 		Mac: application.MacWindow{
-			TitleBar:                application.MacTitleBarHiddenInset,
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent: true,
+				HideTitle:          true,
+				FullSizeContent:    true,
+			},
 			InvisibleTitleBarHeight: 38,
 			WebviewPreferences: application.MacWebviewPreferences{
 				// WebKit leaves buttons and links out of the tab order unless
