@@ -66,6 +66,9 @@ func Run(version string) error {
 			application.NewService(app.notify),
 			application.NewService(app.dock),
 		},
+		// The window builds every call from this, so it can never be looking
+		// for a method by a name this side does not answer to.
+		Flags: map[string]any{"bridge": BridgeName()},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets.Frontend),
 			Middleware: contentSecurityPolicy,

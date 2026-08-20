@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,16 @@ func NewBridge(app *App) *Bridge {
 // ServiceName identifies the bridge in Wails' service list.
 func (b *Bridge) ServiceName() string {
 	return "dermaga.bridge"
+}
+
+// BridgeName is what the window calls a bound method by.
+//
+// Wails names a bound method after the package it is declared in, so the name
+// changes whenever this package moves -- and it breaks at runtime, in a call
+// that used to work, rather than at build time. So the name is derived here and
+// handed to the window rather than written out on both sides and left to drift.
+func BridgeName() string {
+	return reflect.TypeOf(Bridge{}).PkgPath() + ".Bridge"
 }
 
 // Invoke passes a method straight through to the agent.

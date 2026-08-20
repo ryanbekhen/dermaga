@@ -8,7 +8,7 @@
 //
 // It listens to the same events the window does, through the runtime it
 // imports for itself.
-const { Events, Call } = await import('/wails/runtime.js');
+const { Events, Call, Flags } = await import('/wails/runtime.js');
 
 // The bootstrap, in order. Only one is ever shown at a time -- a list of
   // five ticks is a progress bar with extra steps, and this reads as calmer.
@@ -61,5 +61,5 @@ const { Events, Call } = await import('/wails/runtime.js');
   });
 
   document.getElementById('quit').addEventListener('click', () => {
-    void Call.ByName('main.Bridge.Quit');
+    void Call.ByName(Flags.GetFlag('bridge') + '.Quit');
   });

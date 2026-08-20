@@ -5,11 +5,19 @@
  * Behind it is the Go process the app is already made of: the same one that
  * speaks to the agent. This file is the whole of the connection.
  */
-import { Call, Events } from '@wailsio/runtime';
+import { Call, Events, Flags } from '@wailsio/runtime';
 
-/** Every bridge method is a Go method on one bound service. */
+/**
+ * Every bridge method is a Go method on one bound service.
+ *
+ * The name of that service comes from Go rather than being written out here:
+ * Wails names a bound method after the package it is declared in, so writing it
+ * on this side means a call that breaks at runtime the day that package moves.
+ */
+const bridge = Flags.GetFlag('bridge') as string;
+
 function call<T>(method: string, ...args: unknown[]): Promise<T> {
-  return Call.ByName(`main.Bridge.${method}`, ...args) as Promise<T>;
+  return Call.ByName(`${bridge}.${method}`, ...args) as Promise<T>;
 }
 
 /**
