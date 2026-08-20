@@ -20,8 +20,11 @@
 	<string>__VERSION__</string>
 	<key>CFBundleIconFile</key>
 	<string>icons</string>
+	<!-- Apple's `container` runtime is supported on macOS 26 and no earlier:
+	     it depends on virtualisation and networking introduced there. An app
+	     that opened on macOS 12 would find nothing it could talk to. -->
 	<key>LSMinimumSystemVersion</key>
-	<string>12.0.0</string>
+	<string>26.0.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
