@@ -291,13 +291,15 @@ type UpdateCheck struct {
 }
 
 type githubRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
-	Assets  []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-		Size int64  `json:"size"`
-	} `json:"assets"`
+	TagName string         `json:"tag_name"`
+	HTMLURL string         `json:"html_url"`
+	Assets  []releaseAsset `json:"assets"`
+}
+
+type releaseAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+	Size int64  `json:"size"`
 }
 
 // isNewer reports whether candidate is a later version than current.
@@ -352,13 +354,20 @@ func (b *Bridge) CheckUpdate() (UpdateCheck, error) {
 		return UpdateCheck{}, err
 	}
 
+	return updateFromRelease(release, current), nil
+}
+
+// updateFromRelease decides what to do about what GitHub answered.
+//
+// Apart from the fetch itself, which is the one thing here that cannot be
+// tested without a network: whether there is an update at all, and which file
+// it is, is the decision that governs whether anybody is ever offered one.
+func updateFromRelease(release githubRelease, current string) UpdateCheck {
 	version := strings.TrimPrefix(release.TagName, "v")
 
-	var asset *struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-		Size int64  `json:"size"`
-	}
+	// A release carries more than one file -- the source archives GitHub adds
+	// on its own, at least -- and only one of them is an installer.
+	var asset *releaseAsset
 	for i := range release.Assets {
 		if strings.HasSuffix(release.Assets[i].Name, ".dmg") {
 			asset = &release.Assets[i]
@@ -366,8 +375,10 @@ func (b *Bridge) CheckUpdate() (UpdateCheck, error) {
 		}
 	}
 
+	// A release with no DMG in it is a release nobody can install, so it is not
+	// worth telling anybody about.
 	if version == "" || asset == nil || !isNewer(version, current) {
-		return UpdateCheck{Available: false, Current: current}, nil
+		return UpdateCheck{Available: false, Current: current}
 	}
 
 	return UpdateCheck{
@@ -377,7 +388,7 @@ func (b *Bridge) CheckUpdate() (UpdateCheck, error) {
 		URL:       release.HTMLURL,
 		AssetURL:  asset.URL,
 		Size:      asset.Size,
-	}, nil
+	}
 }
 
 // DownloadUpdate fetches the DMG, reporting progress as it goes, and returns
