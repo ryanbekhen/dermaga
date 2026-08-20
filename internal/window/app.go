@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -395,7 +396,8 @@ func (a *App) startTray() {
 				a.refreshTrayServices()
 			}()
 		},
-		OnQuit: func() { a.wails.Quit() },
+		OnOpenProject: a.OpenProjectPage,
+		OnQuit:        func() { a.wails.Quit() },
 	})
 
 	if agent := a.Agent(); agent != nil {
@@ -544,6 +546,19 @@ func (a *App) ShowWindow() {
 	a.dock.ShowAppIcon()
 	window.Show()
 	window.Focus()
+}
+
+// OpenProjectPage opens the repository in the user's browser.
+//
+// The address is built from the same constant the update check reads releases
+// from, so the menu bar can never point somewhere the app no longer updates
+// from.
+func (a *App) OpenProjectPage() {
+	url := "https://github.com/" + updateRepo
+
+	if err := exec.Command("open", url).Run(); err != nil {
+		log.Println("[dermaga] could not open", url+":", err)
+	}
 }
 
 // OpenContainer opens a container, from wherever the ask came: a notification

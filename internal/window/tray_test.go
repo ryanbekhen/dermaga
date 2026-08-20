@@ -115,3 +115,43 @@ func TestTrayCarriesTheContainerIDToOpen(t *testing.T) {
 		}
 	}
 }
+
+// Where Dermaga came from, reachable from the one part of it that is always on
+// screen. The row carries an action rather than an address, so what it opens
+// stays a decision the app makes in one place.
+func TestTrayPointsAtTheProject(t *testing.T) {
+	for _, state := range []TrayState{
+		{Running: running(true), Containers: containers(2)},
+		{Running: running(false)},
+		{},
+	} {
+		if !slices.Contains(labels(state), "View on GitHub") {
+			t.Errorf("the menu should always offer the project: %v", labels(state))
+		}
+	}
+
+	var found bool
+	for _, item := range trayMenuItems(TrayState{}) {
+		if item.Action == "project" {
+			found = true
+
+			if item.Disabled {
+				t.Error("a row nobody can click is not a link")
+			}
+		}
+	}
+
+	if !found {
+		t.Error("no row carries the project action")
+	}
+}
+
+// It has to come before the way out, or people find Quit first.
+func TestTrayKeepsQuitLast(t *testing.T) {
+	items := trayMenuItems(TrayState{Running: running(true)})
+	last := items[len(items)-1]
+
+	if last.Action != "quit" {
+		t.Errorf("the last row should be the way out, got %q", last.Label)
+	}
+}

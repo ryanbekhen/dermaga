@@ -36,6 +36,7 @@ type TrayHandlers struct {
 	OnOpen          func()
 	OnOpenContainer func(id string)
 	OnStartServices func()
+	OnOpenProject   func()
 	OnQuit          func()
 }
 
@@ -149,6 +150,11 @@ func trayMenuItems(state TrayState) []trayItem {
 	if state.Running != nil && !*state.Running {
 		items = append(items, trayItem{Label: "Start services", Action: "start-services"})
 	}
+
+	// Where the app came from, one click from the clock. Dermaga is somebody's
+	// weekend rather than a product, and the menu bar is the one part of it
+	// that is always on screen -- so this is where it says so.
+	items = append(items, trayItem{Label: "View on GitHub", Action: "project"})
 
 	return append(items,
 		trayItem{Separator: true},
