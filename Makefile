@@ -110,7 +110,13 @@ fmt:
 dist: agent icon notices changelog
 	cd desktop && npm run build
 	VERSION=$(VERSION) ./scripts/bundle.sh
+	@# Notarized before packaging as well as after: the ticket on the image
+	@# covers the app only while it is still inside the image, and the app is
+	@# dragged out of it within the minute.
+	@if [ -n "$$NOTARY_PROFILE" ] || [ -n "$$APPLE_ID" ]; then ./scripts/notarize.sh $(APP); \
+	else echo "==> not notarizing: neither NOTARY_PROFILE nor APPLE_ID is set"; fi
 	VERSION=$(VERSION) ./scripts/dmg.sh
+	@if [ -n "$$NOTARY_PROFILE" ] || [ -n "$$APPLE_ID" ]; then ./scripts/notarize.sh $(DMG); fi
 	@$(MAKE) --no-print-directory verify-dist
 
 ## Prove the artefact is self-contained before it goes anywhere.
@@ -118,10 +124,10 @@ verify-dist:
 	@test -x "$(APP)/Contents/MacOS/Dermaga" || { echo "FAIL: binary missing from bundle"; exit 1; }
 	@test -x "$(APP)/Contents/Resources/dermaga-agent" || { echo "FAIL: agent missing from bundle"; exit 1; }
 	@test -f "$(APP)/Contents/Resources/icons.icns" || { echo "FAIL: icon missing"; exit 1; }
-	@codesign --verify --deep "$(APP)" || { echo "FAIL: signature does not verify"; exit 1; }
 	@sh scripts/check-inline-scripts.sh internal/window/assets/dist || exit 1
 	@test -f "$(DMG)" || { echo "FAIL: no DMG at $(DMG)"; exit 1; }
-	@echo "verify-dist: binary, agent, icon, signature, no inline scripts, DMG"
+	@sh scripts/check-signature.sh "$(APP)" "$(DMG)" $(SIGNING) || exit 1
+	@echo "verify-dist: binary, agent, icon, no inline scripts, DMG"
 
 ## Install the built app locally, clearing the quarantine flag that Gatekeeper
 ## sets on anything downloaded.
@@ -150,7 +156,7 @@ release:
 	git tag -a "v$(VERSION)" -m "Dermaga v$(VERSION)"
 	git push origin HEAD
 	git push origin "v$(VERSION)"
-	$(MAKE) VERSION=$(VERSION) dist
+	$(MAKE) VERSION=$(VERSION) SIGNING=--release dist
 	$(MAKE) VERSION=$(VERSION) publish
 
 ## Publish an already-tagged, already-built version to GitHub. Split out of

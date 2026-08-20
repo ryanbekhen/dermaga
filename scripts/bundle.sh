@@ -73,9 +73,46 @@ for size in 16 32 64 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$contents/Resources/icons.icns"
 
-# 5. An ad-hoc signature. Without one macOS treats every launch as a new app
-#    and the notification permission is asked for again each time.
-codesign --force --deep --sign - "$app"
+# 5. The signature.
+#
+# Two of them, and which one it is decides what the build is good for:
+#
+#   - A Developer ID identity is what another Mac will accept. It also turns
+#     the hardened runtime on, which notarizing requires, and it is what makes
+#     macOS deliver notifications at all -- unsigned ones it drops without a
+#     word.
+#
+#   - Ad-hoc otherwise, so a contributor with no Apple membership can still
+#     build and run this. Without any signature at all macOS treats every
+#     launch as a new app and asks for the notification permission again each
+#     time.
+#
+# Signed from the inside out rather than with --deep, which Apple has
+# discouraged for years and which quietly gets nested code wrong: the agent is
+# its own executable and needs its own signature first.
+identity="${CODESIGN_IDENTITY:-}"
+
+if [ -z "$identity" ]; then
+	# Ending in `|| true` because having no Developer ID is an ordinary state
+	# here, and grep reports finding nothing as a failure -- which under
+	# `set -o pipefail` would end the build rather than fall through to the
+	# ad-hoc signature that exists for exactly this case.
+	identity="$(security find-identity -v -p codesigning 2>/dev/null |
+		grep "Developer ID Application" | head -1 |
+		sed -n 's/.*"\(.*\)".*/\1/p' || true)"
+fi
+
+if [ -n "$identity" ]; then
+	echo "==> signing as $identity"
+	codesign --force --options runtime --timestamp \
+		--sign "$identity" "$contents/Resources/dermaga-agent"
+	codesign --force --options runtime --timestamp \
+		--sign "$identity" "$app"
+else
+	echo "==> signing ad-hoc: this build runs here and nowhere else"
+	codesign --force --sign - "$contents/Resources/dermaga-agent"
+	codesign --force --sign - "$app"
+fi
 
 echo "==> $app"
 du -sh "$app"
