@@ -13,14 +13,14 @@ node_modules/
 *.tsbuildinfo
 
 # --- Build output -------------------------------------------------------
-desktop/dist/
-desktop/release/
+internal/window/assets/dist/
+dist/
 desktop/.vite/
 coverage/
 
 # Generated from assets/logo.png by `make icon`; the logo itself is tracked.
-desktop/build/icon.png
-desktop/electron/splash-logo.png
+build/icon.png
+desktop/public/splash-logo.png
 
 # --- Local configuration and secrets ------------------------------------
 .env
@@ -46,4 +46,3 @@ yarn-error.log*
 ._*
 .Spotlight-V100
 .Trashes
-desktop/release-wails/

@@ -83,7 +83,7 @@ To build it yourself:
 git clone https://github.com/ryanbekhen/dermaga.git
 cd dermaga
 make desktop-deps
-make dist          # → desktop/release/Dermaga-<version>-arm64.dmg
+make dist          # → dist/Dermaga-<version>-arm64.dmg
 make install       # or build and copy straight to /Applications
 ```
 
@@ -125,7 +125,7 @@ reports where it has got to.
 ## Usage
 
 ```bash
-make dev           # build the agent, then run Vite and Electron together
+make dev           # build the agent, then run Vite and the app together
 ```
 
 Preferences live in `~/.dermaga/config.json` as plain JSON, safe to edit by hand or keep in
@@ -150,12 +150,12 @@ binding over it.
 
 ```mermaid
 flowchart TD
-    R["<b>desktop/src</b><br/>React renderer<br/><i>no network access</i>"]
-    M["<b>desktop/electron</b><br/>Electron main<br/><i>connects, or starts one</i>"]
+    R["<b>desktop/src</b><br/>React window<br/><i>no network access</i>"]
+    M["<b>internal/window</b><br/>the app<br/><i>connects, or starts one</i>"]
     A["<b>cmd/dermaga-agent</b><br/>Go agent<br/><i>wraps the CLI</i>"]
     C["<b>container</b><br/>Apple's CLI"]
 
-    R -- "contextBridge IPC" --> M
+    R -- "bound methods, in-process" --> M
     M -- "JSON-RPC 2.0 over a Unix socket" --> A
     A -- "exec" --> C
     C -. "state" .-> A
@@ -351,7 +351,7 @@ make clean
 ### Signing
 
 Apple Silicon refuses to launch a bundle whose signature does not verify, so unsigned builds are
-ad-hoc signed by `desktop/build/afterPack.cjs`. That is enough to run on the machine that built it,
+ad-hoc signed by `scripts/bundle.sh`. That is enough to run on the machine that built it,
 but **not** enough for a Mac that downloaded it: Gatekeeper quarantines the file and blocks it.
 
 Two ways to hand a build to someone else:
@@ -408,9 +408,8 @@ socket in your own home directory. Three things it does ask about, and asks in t
 background service — a per-user launchd job in `~/Library/LaunchAgents`, which needs no
 administrator either and is removed from the same switch.
 
-> **Launching from an Electron-based terminal:** VS Code, Cursor and Claude Code export
-> `ELECTRON_RUN_AS_NODE=1`, which makes a packaged Electron app exit immediately. Launch from Finder,
-> or clear it: `env -u ELECTRON_RUN_AS_NODE open desktop/release/mac-arm64/Dermaga.app`.
+> **Where the built app lands:** `dist/Dermaga.app`, with the DMG beside it. Open it from Finder,
+> or `open dist/Dermaga.app`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 

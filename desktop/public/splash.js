@@ -6,9 +6,8 @@
 // showing its first frame -- "Starting...", no version, no steps -- with no
 // error anywhere the user would see.
 //
-// It listens to the same events the window does; the runtime is imported
-// rather than handed over by a preload, which is the only thing that changed
-// when Electron went.
+// It listens to the same events the window does, through the runtime it
+// imports for itself.
 const { Events, Call } = await import('/wails/runtime.js');
 
 // The bootstrap, in order. Only one is ever shown at a time -- a list of

@@ -15,12 +15,4 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
-  {
-    files: ['electron/**/*.cjs'],
-    extends: [js.configs.recommended],
-    languageOptions: {
-      sourceType: 'commonjs',
-      globals: { ...globals.node, fetch: 'readonly' },
-    },
-  }
-);
+  );

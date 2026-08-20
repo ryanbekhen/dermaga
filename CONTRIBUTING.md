@@ -4,7 +4,7 @@
 
 ```bash
 make desktop-deps   # npm install for the renderer
-make dev            # builds the agent, then runs Vite + Electron
+make dev            # builds the agent, then runs Vite + the app
 ```
 
 You need Go 1.23+, Node 18+, and Apple's [`container`](https://github.com/apple/container)
@@ -19,10 +19,12 @@ make fmt      # gofmt + prettier
 make notes VERSION=x.y.z   # what the release notes would say
 ```
 
-Changes to the window are worth running: `make dev` builds the agent and starts
-Vite and Electron together. Note that Vite's port is pinned -- if 3000 is busy
-it stops rather than moving, because Electron loads that address and a silent
-move means a blank window.
+Changes to the window are worth running: `make dev` builds the agent, wraps it
+in a bundle and serves the window from Vite, so a saved file is on screen
+without a rebuild. Note that Vite's port is pinned -- if 3000 is busy it stops
+rather than moving, because the app proxies to that address and a silent move
+means a blank window. It is pinned to 127.0.0.1 too: left to itself Vite binds
+IPv6 only, and the app's asset server dials IPv4.
 
 ## Layout
 
@@ -32,8 +34,11 @@ See the architecture section in the [README](README.md#architecture). In short:
 - `internal/…` — one package per domain, none of which import each other's
   transports; `internal/scanner` also owns its own background worker and the
   results it keeps in `~/.dermaga`
-- `desktop/electron` — the Electron shell, which spawns the agent
-- `desktop/src` — the React renderer, which has no network access of its own
+- `cmd/dermaga` — the app's entry point; the window itself is a package
+- `internal/window` — the window: draws through WKWebView, brokers everything
+  it is asked for to the agent, and embeds the built frontend
+- `desktop` — the React window, which has no network access of its own;
+  Vite writes its build into `internal/window/dist`
 
 ## Conventions
 
@@ -76,7 +81,7 @@ feat: multi-select for bulk container actions
 fix: sidebar logo off-centre when collapsed
 perf: skip the watcher tick when nothing is subscribed
 docs: explain the bootstrap sequence
-chore: bump electron to 43
+chore: bump wails to v3.0.0-beta.11
 ```
 
 The prefixes group the release notes, so the subject is what users read.
