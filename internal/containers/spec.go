@@ -356,29 +356,50 @@ func (cm *Manager) Update(ctx context.Context, id string, spec ContainerSpec) (*
 	wasRunning := existing.Status == "running"
 	previous := SpecOf(existing)
 
+	// Written down before anything is taken apart. Everything below this line
+	// can fail, and when it does the changes are still on disk to come back to.
+	cm.pending.Begin(id, spec, previous)
+
 	if wasRunning {
 		if _, err := cm.runner.Run(ctx, "stop", id); err != nil {
-			return nil, fmt.Errorf("could not stop %s: %w", id, err)
+			failure := fmt.Errorf("could not stop %s: %w", id, err)
+			cm.pending.Failed(id, failure)
+
+			return nil, failure
 		}
 	}
 
 	if _, err := cm.runner.Run(ctx, "delete", "--force", id); err != nil {
-		return nil, fmt.Errorf("could not remove %s: %w", id, err)
+		failure := fmt.Errorf("could not remove %s: %w", id, err)
+		cm.pending.Failed(id, failure)
+
+		return nil, failure
 	}
 
 	if _, err := cm.runner.Run(ctx, spec.Args()...); err != nil {
 		cm.logger.Error("Recreate failed; restoring previous configuration", "id", id, "error", err)
 
 		if _, restoreErr := cm.runner.Run(ctx, previous.Args()...); restoreErr != nil {
-			return nil, fmt.Errorf(
-				"could not apply changes (%w) and could not restore the previous container (%v)",
+			failure := fmt.Errorf(
+				"could not apply changes (%w) and could not restore the previous container (%v); your changes were kept and can be picked up again",
 				err, restoreErr,
 			)
+			cm.pending.Failed(id, failure)
+
+			return nil, failure
 		}
 
-		return nil, fmt.Errorf("could not apply changes, previous container restored: %w", err)
+		failure := fmt.Errorf(
+			"could not apply changes, previous container restored: %w; your changes were kept and can be picked up again",
+			err,
+		)
+		cm.pending.Failed(id, failure)
+
+		return nil, failure
 	}
 
+	// It landed: there is nothing left unfinished.
+	cm.pending.Done(id)
 	cm.changed.Changed()
 
 	return cm.Get(ctx, spec.Name)
