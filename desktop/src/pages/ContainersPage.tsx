@@ -101,7 +101,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   };
 
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
       <PageHeader
         title="Containers"
         subtitle={`${running.length} of ${containers.length} running · ${allocatedCpus} CPU · ${formatMemory(

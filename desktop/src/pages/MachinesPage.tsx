@@ -88,7 +88,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
         : 'No machines match your search.';
 
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
       <PageHeader
         title="Machines"
         subtitle="The Linux VMs your containers run inside"

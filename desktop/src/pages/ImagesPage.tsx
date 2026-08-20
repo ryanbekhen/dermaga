@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Download,
-  FileDown,
   FileUp,
   FolderOpen,
   Hammer,
@@ -21,7 +20,7 @@ import {
 } from '../components/DataTable';
 import { ContainerForm } from '../components/ContainerForm';
 import { Checkbox, Field, Modal } from '../components/form';
-import { SaveImageDialog, loadImage, saveImage } from '../components/ImageArchive';
+import { loadImage } from '../components/ImageArchive';
 import { TaskRows, runTask } from '../components/TaskRows';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
@@ -105,12 +104,9 @@ export function ImagesPage() {
 
   const pulling = useDialog('image.pull');
   const building = useDialog('image.build');
-  const [deleting, setDeleting] = useState<ImageGroup | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [savingGroup, setSavingGroup] = useState<ImageGroup | null>(null);
   const [running, setRunning] = useState<string | null>(null);
 
   const groups = useMemo(() => groupByDigest(images), [images]);
@@ -128,44 +124,8 @@ export function ImagesPage() {
   const usersOf = (group: ImageGroup) =>
     containers.filter((c) => group.tags.some((t) => t.reference === c.image)).map((c) => c.name);
 
-  // One platform is not a choice worth a dialog; several is.
-  const startSave = (group: ImageGroup) => {
-    if (group.platforms.length === 1) {
-      void saveImage(group.tags[0].reference, group.platforms[0], (path) =>
-        pushToast(`Saved to ${path}`)
-      );
-      return;
-    }
-
-    setSavingGroup(group);
-  };
-
-  const remove = async (group: ImageGroup) => {
-    setDeleting(null);
-    setRemoving(group.digest);
-
-    // Every reference in the group points at the same image; removing one tag
-    // would leave the others behind, so the row action removes them all.
-    const failures: string[] = [];
-    for (const { reference } of group.tags) {
-      try {
-        await api.deleteImage(reference);
-      } catch {
-        failures.push(reference);
-      }
-    }
-
-    setRemoving(null);
-
-    if (failures.length > 0) {
-      pushToast(`Could not delete ${failures.join(', ')}`, 'error');
-    } else {
-      pushToast(`Deleted ${group.names[0]}`);
-    }
-  };
-
   return (
-    <div className="flex min-h-0 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
       <PageHeader
         title="Images"
         subtitle={`${groups.length} image${groups.length === 1 ? '' : 's'}${
@@ -240,34 +200,13 @@ export function ImagesPage() {
           ];
         }}
         actions={(group) => (
-          <>
-            <IconButton
-              icon={Play}
-              className="border-transparent opacity-0 group-hover:opacity-100"
-              title="Run a container from this image"
-              aria-label={`Run ${group.names[0]}`}
-              onClick={() => setRunning(group.tags[0].reference)}
-            />
-            <IconButton
-              icon={FileDown}
-              className="border-transparent opacity-0 group-hover:opacity-100"
-              title="Save as a file"
-              aria-label={`Save ${group.names[0]}`}
-              onClick={() => startSave(group)}
-            />
-            <IconButton
-              icon={Trash2}
-              busy={removing === group.digest}
-              className={`border-transparent text-orange-700 dark:text-orange-500 ${
-                removing === group.digest ? '' : 'opacity-0 group-hover:opacity-100'
-              }`}
-              title={
-                group.tags.length > 1 ? `Delete all ${group.tags.length} references` : 'Delete'
-              }
-              aria-label={`Delete ${group.names[0]}`}
-              onClick={() => setDeleting(group)}
-            />
-          </>
+          <IconButton
+            icon={Play}
+            className="border-transparent opacity-0 group-hover:opacity-100"
+            title="Run a container from this image"
+            aria-label={`Run ${group.names[0]}`}
+            onClick={() => setRunning(group.tags[0].reference)}
+          />
         )}
       />
 
@@ -311,35 +250,6 @@ export function ImagesPage() {
 
       {building.open && <BuildDialog onClose={() => building.close()} />}
 
-      {savingGroup && (
-        <SaveImageDialog
-          reference={savingGroup.tags[0].reference}
-          platforms={savingGroup.platforms}
-          onClose={() => setSavingGroup(null)}
-          onSaved={(path) => pushToast(`Saved to ${path}`)}
-        />
-      )}
-
-      {deleting && (
-        <ConfirmDialog
-          title={`Delete ${deleting.names[0]}?`}
-          body={[
-            deleting.tags.length > 1
-              ? `All ${deleting.tags.length} references share this image and will be removed: ${deleting.tags
-                  .map((t) => t.reference)
-                  .join(', ')}.`
-              : 'The image will have to be pulled again to use it.',
-            usersOf(deleting).length > 0
-              ? `It is used by ${usersOf(deleting).join(', ')}, which keeps running but cannot be recreated without pulling it again.`
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          confirmLabel="Delete"
-          onConfirm={() => void remove(deleting)}
-          onCancel={() => setDeleting(null)}
-        />
-      )}
     </div>
   );
 }

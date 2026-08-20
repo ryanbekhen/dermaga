@@ -83,7 +83,7 @@ export function DataTable<T>({
   };
 
   return (
-    <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
+    <div className="min-h-0 flex-1 overflow-auto">
       <div style={template} className="grid gap-x-3">
         <div className="sticky top-0 z-10 col-span-full grid grid-cols-subgrid items-center border-b border-ink-200 bg-white px-3 pb-2.5 pt-1 text-tiny font-semibold uppercase tracking-wide text-ink-500 dark:border-ink-700 dark:bg-ink-950">
           {selection && (
