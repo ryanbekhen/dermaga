@@ -1,5 +1,19 @@
 [
   {
+    "version": "v1.7.1",
+    "date": "2026-08-21",
+    "summary": "",
+    "sections": [
+      {
+        "title": "Fixed",
+        "entries": [
+          "**Clicking a notification no longer closes Dermaga.** Clicking *\"web stopped\"* ended the app on the spot: no window, no menu bar item, and its agent left running behind it. Opening it again failed, and only worked on the third try. One fault produced all of that — asking macOS for the Dock icon from the thread a notification arrives on, which deadlocks and takes the app with it.",
+          "**\"The Dermaga agent did not start\", with an agent that had started.** Launching waited for the agent's socket file to appear and then tried to connect once. A socket file left behind by a previous run was already there, so the wait ended immediately and the one attempt arrived before anything was listening. It waits for an answer now, which a leftover file cannot fake. Startup stopped at that point, before the menu bar item was created, which is why a failed launch had no tray either."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.7.0",
     "date": "2026-08-21",
     "summary": "",

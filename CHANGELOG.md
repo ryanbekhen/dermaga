@@ -7,6 +7,21 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.7.1] — 2026-08-21
+
+### Fixed
+
+- **Clicking a notification no longer closes Dermaga.** Clicking *"web stopped"* ended the app on
+  the spot: no window, no menu bar item, and its agent left running behind it. Opening it again
+  failed, and only worked on the third try. One fault produced all of that — asking macOS for the
+  Dock icon from the thread a notification arrives on, which deadlocks and takes the app with it.
+- **"The Dermaga agent did not start", with an agent that had started.** Launching waited for the
+  agent's socket file to appear and then tried to connect once. A socket file left behind by a
+  previous run was already there, so the wait ended immediately and the one attempt arrived before
+  anything was listening. It waits for an answer now, which a leftover file cannot fake. Startup
+  stopped at that point, before the menu bar item was created, which is why a failed launch had no
+  tray either.
+
 ## [v1.7.0] — 2026-08-21
 
 ### Changed
@@ -256,6 +271,7 @@ change means to someone using Dermaga, not for how much code moved.
 First release: containers, images, volumes, networks and machines from one window, a terminal and
 logs for each, and a Go agent wrapping Apple's `container` CLI with no daemon and no polling.
 
+[v1.7.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.7.1
 [v1.7.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.7.0
 [v1.6.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.6.1
 [v1.6.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.6.0
