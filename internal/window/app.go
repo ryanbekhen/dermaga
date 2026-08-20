@@ -384,7 +384,7 @@ func (a *App) updateTrayFromSnapshot(params json.RawMessage) {
 // the window having done so, because the whole point of the menu bar is to be
 // right when there is no window.
 func (a *App) startTray() {
-	a.tray = NewTray(a.wails, TrayHandlers{
+	a.tray = NewTray(TrayHandlers{
 		OnOpen:          a.ShowWindow,
 		OnOpenContainer: a.OpenContainer,
 		OnStartServices: func() {

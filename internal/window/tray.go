@@ -3,9 +3,6 @@ package window
 import (
 	"fmt"
 	"sync"
-
-	"github.com/ryanbekhen/dermaga/internal/window/assets"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // The menu bar item: what Dermaga is watching, without a window.
@@ -42,10 +39,10 @@ type TrayHandlers struct {
 	OnQuit          func()
 }
 
-// Tray keeps the menu bar item current.
+// Tray keeps the menu bar item current. The item itself is drawn in
+// tray_darwin.go, which is where the reason for doing it by hand is written
+// down.
 type Tray struct {
-	app      *application.App
-	tray     *application.SystemTray
 	handlers TrayHandlers
 
 	mu    sync.Mutex
@@ -70,14 +67,8 @@ func trayLabel(state TrayState) string {
 }
 
 // NewTray brings up the menu bar item.
-func NewTray(app *application.App, handlers TrayHandlers) *Tray {
-	tray := &Tray{app: app, handlers: handlers}
-	tray.tray = app.SystemTray.New()
-
-	// A left click opens the menu, the way every other menu bar item on the Mac
-	// behaves. Wails only wires the menu to the right button by itself, which
-	// leaves the ordinary click doing nothing at all.
-	tray.tray.OnClick(tray.tray.OpenMenu)
+func NewTray(handlers TrayHandlers) *Tray {
+	tray := &Tray{handlers: handlers}
 	tray.apply()
 
 	return tray
@@ -96,24 +87,6 @@ func (t *Tray) Update(running *bool, containers []TrayContainer) {
 	t.mu.Unlock()
 
 	t.apply()
-}
-
-func (t *Tray) apply() {
-	t.mu.Lock()
-	state := t.state
-	t.mu.Unlock()
-
-	// Filled while the services are up, hollow when they are not: a broken
-	// runtime is visible without opening the menu.
-	icon := assets.TrayRunning
-	if state.Running != nil && !*state.Running {
-		icon = assets.TrayStopped
-	}
-
-	// Template images follow the menu bar into dark mode and under highlights.
-	t.tray.SetTemplateIcon(icon)
-	t.tray.SetTooltip("Dermaga — " + trayLabel(state))
-	t.tray.SetMenu(t.menu(state))
 }
 
 // trayItem is one row of the menu, as data.
@@ -181,46 +154,4 @@ func trayMenuItems(state TrayState) []trayItem {
 		trayItem{Separator: true},
 		trayItem{Label: "Quit Dermaga", Action: "quit"},
 	)
-}
-
-// menu hangs the handlers on the rows.
-func (t *Tray) menu(state TrayState) *application.Menu {
-	menu := application.NewMenu()
-
-	for _, item := range trayMenuItems(state) {
-		if item.Separator {
-			menu.AddSeparator()
-			continue
-		}
-
-		entry := menu.Add(item.Label)
-		if item.Disabled {
-			entry.SetEnabled(false)
-			continue
-		}
-
-		id, action := item.ID, item.Action
-		entry.OnClick(func(*application.Context) {
-			switch action {
-			case "open":
-				t.call(t.handlers.OnOpen)
-			case "open-container":
-				if t.handlers.OnOpenContainer != nil {
-					t.handlers.OnOpenContainer(id)
-				}
-			case "start-services":
-				t.call(t.handlers.OnStartServices)
-			case "quit":
-				t.call(t.handlers.OnQuit)
-			}
-		})
-	}
-
-	return menu
-}
-
-func (t *Tray) call(handler func()) {
-	if handler != nil {
-		handler()
-	}
 }
