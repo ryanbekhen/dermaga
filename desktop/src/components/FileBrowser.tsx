@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ChevronRight,
-  Download,
-  File,
-  Folder,
-  HardDriveDownload,
-  Link2,
-  Upload,
-} from 'lucide-react';
-import { Button } from './Button';
+import { ChevronRight, Download, File, Folder, HardDriveDownload, Link2 } from 'lucide-react';
 import { api } from '../services/api';
-import { dragOut, pathForFile, pickDirectory } from '../services/ipc';
+import { onFilesDropped, pathForFile, pickDirectory } from '../services/ipc';
 import { useToastStore } from '../store/toastStore';
 import { formatBytes } from '../utils/format';
 import type { FileEntry } from '../types';
@@ -72,14 +63,6 @@ export function FileBrowser({
     if (running) load(path);
   }, [running, path, load]);
 
-  if (!running) {
-    return (
-      <p className="flex flex-1 items-center justify-center text-sm text-ink-600 dark:text-ink-400">
-        Start the container to browse its files.
-      </p>
-    );
-  }
-
   const copyIn = async (paths: string[]) => {
     if (paths.length === 0) return;
 
@@ -95,6 +78,28 @@ export function FileBrowser({
       setBusy(null);
     }
   };
+
+  // Wails catches the drag before the page sees it, so the drop arrives as an
+  // event rather than as a DOM handler. It only fires for a marked target, and
+  // the name says which -- this pane is the only one that answers to it.
+  useEffect(() => {
+    return onFilesDropped((paths, target) => {
+      if (target !== 'container-files') return;
+
+      void copyIn(paths);
+    });
+    // copyIn closes over the directory being shown, which is exactly the one a
+    // drop should land in, so the subscription follows it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [container, path]);
+
+  if (!running) {
+    return (
+      <p className="flex flex-1 items-center justify-center text-sm text-ink-600 dark:text-ink-400">
+        Start the container to browse its files.
+      </p>
+    );
+  }
 
   const saveTo = async (entry: FileEntry) => {
     const dir = await pickDirectory(`Save ${entry.name} to…`);
@@ -122,7 +127,12 @@ export function FileBrowser({
     // files in it left most of the panel inert, so the only place a drop landed
     // was the empty strip below the last row.
     <div
-      className="relative flex min-h-0 flex-1 flex-col"
+      // Wails catches the drag natively, so the events below never fire there.
+      // This attribute is what marks the pane as a target for it, and it adds
+      // `file-drop-target-active` while a file is over it -- which is why the
+      // overlay is driven by CSS as well as by state.
+      data-file-drop-target="container-files"
+      className="drop-target relative flex min-h-0 flex-1 flex-col"
       onDragEnter={(e) => {
         e.preventDefault();
         setDropping(true);
@@ -148,15 +158,17 @@ export function FileBrowser({
         void copyIn(paths);
       }}
     >
-      {dropping && (
-        // Covers the pane so the target is unmistakable, and lets the pointer
-        // through so the events keep reaching the panel underneath.
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-brand-600/50 bg-brand-600/5">
-          <span className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold shadow-panel dark:bg-ink-900">
-            Copy to {path}
-          </span>
-        </div>
-      )}
+      {/* Covers the pane so the target is unmistakable, and lets the pointer
+          through so the events keep reaching the panel underneath. */}
+      <div
+        className={`drop-overlay pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-brand-600/50 bg-brand-600/5 ${
+          dropping ? '' : 'hidden'
+        }`}
+      >
+        <span className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold shadow-panel dark:bg-ink-900">
+          Copy to {path}
+        </span>
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 pb-2.5 dark:border-ink-700">
         <nav className="flex min-w-0 flex-wrap items-center text-xs" aria-label="Path">
@@ -175,19 +187,6 @@ export function FileBrowser({
             </span>
           ))}
         </nav>
-
-        <Button
-          icon={Upload}
-          busy={busy === 'in'}
-          busyLabel="Copying…"
-          onClick={() =>
-            void pickDirectory('Choose a folder to copy in').then((dir) => {
-              if (dir) void copyIn([dir]);
-            })
-          }
-        >
-          Copy in
-        </Button>
       </div>
 
       {error ? (
@@ -204,15 +203,6 @@ export function FileBrowser({
           {entries.map((entry) => (
             <li
               key={entry.path}
-              draggable={!entry.isDir}
-              onDragStart={(e) => {
-                // The drag is started by the main process once the file is on
-                // disk; this only stops the browser starting its own.
-                e.preventDefault();
-                void dragOut(container, entry.path).catch(() =>
-                  pushToast(`Could not take ${entry.name} out`, 'error')
-                );
-              }}
               onDoubleClick={() => entry.isDir && setPath(entry.path)}
               className="group flex items-center gap-3 px-2 py-1.5 hover:bg-ink-50 dark:hover:bg-ink-900"
             >

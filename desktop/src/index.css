@@ -17,10 +17,10 @@
     height: 100%;
   }
 
-  /* WebKit bounces the document itself, which Chromium did not: a scroll that
-     runs past the end drags the whole window down and springs back, taking the
-     title bar strip with it. Nothing here is a document -- every pane scrolls
-     inside itself -- so the page is pinned and the elastic goes with it. */
+  /* WebKit bounces the document itself: a scroll that runs past the end drags
+     the whole window down and springs back, taking the title bar strip with it.
+     Nothing here is a document -- every pane scrolls inside itself -- so the
+     page is pinned and the elastic goes with it. */
   html,
   body {
     overflow: hidden;
@@ -45,12 +45,9 @@
   }
 
   /* Window dragging: chrome moves the window, controls do not.
-     Both properties are set because both shells are in the tree.
-     -webkit-app-region is Chromium's and does nothing in WKWebView;
-     --wails-draggable is read by the Wails runtime, and it inherits -- so the
-     controls have to say no for themselves or a click on them drags instead. */
+     The property inherits, so the controls have to say no for themselves or a
+     click on one drags the window instead of pressing it. */
   .drag {
-    -webkit-app-region: drag;
     --wails-draggable: drag;
   }
 
@@ -59,7 +56,6 @@
   input,
   select,
   a {
-    -webkit-app-region: no-drag;
     --wails-draggable: no-drag;
   }
 
@@ -95,6 +91,17 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-600/60;
   }
+}
+
+/* A file being dragged over a drop target.
+
+   Wails catches the drag before the page ever sees it, and says so by putting
+   this class on the target rather than by firing a DOM event.
+
+   Deliberately outside @layer: the overlay is kept away by Tailwind's `hidden`,
+   and a layered rule loses to a utility however specific it is. */
+.drop-target.file-drop-target-active .drop-overlay {
+  display: flex;
 }
 
 /* Declared as utilities, not components: Tailwind 4 only lets @apply reference

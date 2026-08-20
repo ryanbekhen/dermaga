@@ -1,7 +1,6 @@
-package main
+package window
 
 import (
-	"embed"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ryanbekhen/dermaga/internal/window/assets"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/dock"
@@ -19,16 +19,9 @@ import (
 
 // Dermaga: a native macOS UI for Apple's `container` runtime.
 //
-// A small Go agent wraps the CLI and this app subscribes to it. What used to
-// be an Electron main process brokering between a Chromium renderer and that
-// agent is now this: the same broker, in the same language as the agent, with
-// the system's own webview drawing the window.
-
-//go:embed all:dist
-var assets embed.FS
-
-// Version is stamped at build time by the Makefile.
-var Version = "0.0.0"
+// A small Go agent wraps the CLI and this app subscribes to it. This is the
+// broker between the two, in the same language as the agent, with the system's
+// own webview drawing the window.
 
 // A .app launched from Finder inherits a bare PATH, which will not contain the
 // `container` binary. Put the usual install locations back.
@@ -53,10 +46,14 @@ type App struct {
 	streams map[string]func(method string, params json.RawMessage)
 }
 
-func main() {
+// Run draws the window and does not return until it closes.
+//
+// The version is passed in rather than read from here: it is stamped onto the
+// command at build time, and this package should not have to know how.
+func Run(version string) error {
 	log.SetFlags(0)
 
-	app := &App{version: Version, streams: make(map[string]func(string, json.RawMessage))}
+	app := &App{version: version, streams: make(map[string]func(string, json.RawMessage))}
 	app.bridge = NewBridge(app)
 	app.notify = notifications.New()
 	app.dock = dock.New()
@@ -70,7 +67,7 @@ func main() {
 			application.NewService(app.dock),
 		},
 		Assets: application.AssetOptions{
-			Handler:    application.AssetFileServerFS(assets),
+			Handler:    application.AssetFileServerFS(assets.Frontend),
 			Middleware: contentSecurityPolicy,
 		},
 		Mac: application.MacOptions{
@@ -117,9 +114,7 @@ func main() {
 		go app.startUp()
 	})
 
-	if err := app.wails.Run(); err != nil {
-		log.Fatal(err)
-	}
+	return app.wails.Run()
 }
 
 // contentSecurityPolicy locks the window down to what it actually needs.
@@ -451,9 +446,12 @@ func (a *App) servicesRunning() bool {
 
 func (a *App) createWindow() *application.WebviewWindow {
 	options := application.WebviewWindowOptions{
-		Title:     "Dermaga",
-		Width:     1180,
-		Height:    760,
+		Title: "Dermaga",
+		// Wide enough for the images table to fit without scrolling sideways:
+		// the widest table needs 1030 for its columns, and the sidebar and the
+		// page padding take 248 between them.
+		Width:     1280,
+		Height:    800,
 		MinWidth:  900,
 		MinHeight: 600,
 		Hidden:    true,
@@ -468,10 +466,10 @@ func (a *App) createWindow() *application.WebviewWindow {
 			},
 			InvisibleTitleBarHeight: 38,
 			WebviewPreferences: application.MacWebviewPreferences{
-				// WebKit leaves buttons and links out of the tab order unless
-				// asked; Chromium always included them. Without this, Tab
-				// inside a dialog skips every control that is not a text
-				// field, which is most of them.
+				// WebKit leaves buttons and links out of the tab order
+				// unless asked. Without this, Tab inside a dialog skips
+				// every control that is not a text field, which is most
+				// of them.
 				TabFocusesLinks: application.Enabled,
 				// Nothing here is a document, so there is nothing to swipe
 				// back to -- and a two-finger swipe that navigates the window
@@ -497,11 +495,19 @@ func (a *App) createWindow() *application.WebviewWindow {
 		a.emit("dermaga:fullscreen", false)
 	})
 
-	// A dropped file's path is seen only here; the web side gets a File with
-	// no path on it at all, so the paths are sent across for the drop handler
-	// that fires a moment later.
+	// A file dragged in from Finder never reaches the page: the drag is caught
+	// natively, before the web content sees it, so there is no DOM drop event
+	// to read paths from. What arrives here instead is the drop -- with the
+	// paths, and with the element it landed on, which is how the window knows
+	// the file browser was the target and not some other part of the page.
 	window.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
-		a.emit("dermaga:files-dropped", map[string]any{"paths": event.Context().DroppedFiles()})
+		dropped := map[string]any{"paths": event.Context().DroppedFiles()}
+
+		if target := event.Context().DropTargetDetails(); target != nil {
+			dropped["target"] = target.Attributes["data-file-drop-target"]
+		}
+
+		a.emit("dermaga:files-dropped", dropped)
 	})
 
 	// The window is gone, but the app is not: it keeps watching from the menu
@@ -553,18 +559,6 @@ func (a *App) OpenContainer(id string) {
 	}
 
 	a.bridge.setPendingOpen(id)
-}
-
-// openedAtLogin reports whether macOS started this, rather than the user.
-//
-// launchd sets XPC_SERVICE_NAME to the job label for anything it starts; an
-// app opened from Finder or a terminal gets "0" or nothing at all. That is the
-// only signal available here without dropping into Objective-C, and it is the
-// one that separates "someone logged in" from "someone asked for a window".
-func openedAtLogin() bool {
-	name := os.Getenv("XPC_SERVICE_NAME")
-
-	return name != "" && name != "0"
 }
 
 func (a *App) quitAfterOpeningInstaller() {

@@ -2,9 +2,8 @@
  * The window's side of the bridge.
  *
  * `ipc.ts` talks to `window.dermaga` and knows nothing about what is behind it.
- * Under Electron that was a preload script; here it is the Go process the app
- * is already made of. This file is the whole of the difference, which is why
- * nothing else in `src/` had to change.
+ * Behind it is the Go process the app is already made of: the same one that
+ * speaks to the agent. This file is the whole of the connection.
  */
 import { Call, Events } from '@wailsio/runtime';
 
@@ -57,60 +56,50 @@ async function serviceCall(method: string) {
   return { ...status, binary: orNull(status.binary), socket: orNull(status.socket) };
 }
 
-/**
- * Under Electron the preload has already put a bridge here, and it is read-only
- * -- assigning over it throws and takes the whole renderer with it. Both shells
- * are in the tree, and whichever one is hosting the window owns this object.
- */
-const installed = Boolean(window.dermaga);
+window.dermaga = {
+  platform: 'darwin',
 
-if (!installed)
-  window.dermaga = {
-    platform: 'darwin',
-    // Nothing reads this; it is kept so the bridge shape stays one interface
-    // while both shells exist.
-    isElectron: true,
+  invoke: (method, params) => call('Invoke', method, params ?? null),
 
-    invoke: (method, params) => call('Invoke', method, params ?? null),
+  onNotify: (callback) => on('dermaga:notify', callback),
 
-    onNotify: (callback) => on('dermaga:notify', callback),
+  isFullScreen: () => call('IsFullScreen'),
+  onFullScreenChange: (callback) =>
+    on<boolean>('dermaga:fullscreen', (value) => callback(Boolean(value))),
 
-    isFullScreen: () => call('IsFullScreen'),
-    onFullScreenChange: (callback) =>
-      on<boolean>('dermaga:fullscreen', (value) => callback(Boolean(value))),
+  syncSettings: (settings) => {
+    void call('SyncSettings', settings.notifyOnExit);
+  },
 
-    syncSettings: (settings) => {
-      void call('SyncSettings', settings.notifyOnExit);
-    },
+  openNotificationSettings: () => call('OpenNotificationSettings'),
 
-    openNotificationSettings: () => call('OpenNotificationSettings'),
+  takePendingOpen: async () => orNull(await call<string>('TakePendingOpen')),
+  onOpenContainer: (callback) => on<string>('dermaga:open-container', callback),
 
-    takePendingOpen: async () => orNull(await call<string>('TakePendingOpen')),
-    onOpenContainer: (callback) => on<string>('dermaga:open-container', callback),
+  serviceStatus: () => serviceCall('ServiceStatus'),
+  installService: () => serviceCall('InstallService'),
+  uninstallService: () => serviceCall('UninstallService'),
 
-    serviceStatus: () => serviceCall('ServiceStatus'),
-    installService: () => serviceCall('InstallService'),
-    uninstallService: () => serviceCall('UninstallService'),
+  getOpenAtLogin: () => call('GetOpenAtLogin'),
+  setOpenAtLogin: (value) => call('SetOpenAtLogin', value),
 
-    getOpenAtLogin: () => call('GetOpenAtLogin'),
-    setOpenAtLogin: (value) => call('SetOpenAtLogin', value),
+  pickDirectory: async (title) => orNull(await call<string>('PickDirectory', title ?? '')),
+  pickSaveFile: async ({ title, defaultName, extension } = {}) =>
+    orNull(await call<string>('PickSaveFile', title ?? '', defaultName ?? '', extension ?? '')),
+  pickFile: async ({ title, extension } = {}) =>
+    orNull(await call<string>('PickFile', title ?? '', extension ?? '')),
 
-    pickDirectory: async (title) => orNull(await call<string>('PickDirectory', title ?? '')),
-    pickSaveFile: async ({ title, defaultName, extension } = {}) =>
-      orNull(await call<string>('PickSaveFile', title ?? '', defaultName ?? '', extension ?? '')),
-    pickFile: async ({ title, extension } = {}) =>
-      orNull(await call<string>('PickFile', title ?? '', extension ?? '')),
+  pathForFile: () => droppedPaths[droppedCursor++] ?? '',
+  onFilesDropped: (callback) =>
+    on<{ paths?: string[]; target?: string }>('dermaga:files-dropped', (data) =>
+      callback(data?.paths ?? [], data?.target ?? '')
+    ),
 
-    pathForFile: () => droppedPaths[droppedCursor++] ?? '',
-    dragOut: (container, path) => call('DragOut', container, path),
-
-    fetchLicence: (key) => call('FetchLicence', key),
-
-    checkUpdate: () => call('CheckUpdate'),
-    downloadUpdate: (assetUrl, version) => call('DownloadUpdate', assetUrl, version),
-    installUpdate: (dmgPath) => call('InstallUpdate', dmgPath),
-    onUpdateProgress: (callback) => on('dermaga:update-progress', callback),
-  };
+  checkUpdate: () => call('CheckUpdate'),
+  downloadUpdate: (assetUrl, version) => call('DownloadUpdate', assetUrl, version),
+  installUpdate: (dmgPath) => call('InstallUpdate', dmgPath),
+  onUpdateProgress: (callback) => on('dermaga:update-progress', callback),
+};
 
 /**
  * Tells the Go side the window has something on it, so the splash can stand
@@ -118,7 +107,5 @@ if (!installed)
  * moment late.
  */
 export function announceReady(): void {
-  if (installed) return;
-
   void Events.Emit('dermaga:ready', null);
 }

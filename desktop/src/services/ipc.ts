@@ -1,6 +1,6 @@
 /**
  * The renderer's only way out. Every call is a JSON-RPC method on the agent,
- * brokered by the Electron main process -- there is no HTTP client here and no
+ * brokered by the process that draws it -- there is no HTTP client here and no
  * server to point one at.
  */
 
@@ -11,7 +11,6 @@ export interface Notification {
 
 interface Bridge {
   platform: string;
-  isElectron: boolean;
   invoke: (method: string, params?: unknown) => Promise<unknown>;
   onNotify: (callback: (message: Notification) => void) => () => void;
   isFullScreen?: () => Promise<boolean>;
@@ -24,7 +23,7 @@ interface Bridge {
   }) => Promise<string | null>;
   pickFile?: (options: { title?: string; extension?: string }) => Promise<string | null>;
   pathForFile?: (file: File) => string;
-  dragOut?: (container: string, path: string) => Promise<void>;
+  onFilesDropped?: (callback: (paths: string[], target: string) => void) => () => void;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
   takePendingOpen?: () => Promise<string | null>;
@@ -34,7 +33,6 @@ interface Bridge {
   getOpenAtLogin?: () => Promise<boolean>;
   setOpenAtLogin?: (value: boolean) => Promise<boolean>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
-  fetchLicence?: (key: string) => Promise<string>;
   checkUpdate?: () => Promise<UpdateCheck>;
   downloadUpdate?: (assetUrl: string, version: string) => Promise<string>;
   installUpdate?: (dmgPath: string) => Promise<void>;
@@ -80,18 +78,23 @@ export function onNotify(callback: (message: Notification) => void): () => void 
 }
 
 /**
- * The path of a file dropped from Finder. Electron stopped putting it on the
- * File object, so only the preload can answer.
+ * The path of a file dropped from Finder. A File object carries no path, so
+ * only the shell can answer.
  */
 export function pathForFile(file: File): string | null {
   return bridge().pathForFile?.(file) ?? null;
 }
 
-/** Copies an entry out and hands it to Finder as a drag. */
-export function dragOut(container: string, path: string): Promise<void> {
-  const drag = bridge().dragOut;
-  if (!drag) return Promise.reject(new Error('Only the desktop app can do this'));
-  return drag(container, path);
+/**
+ * Files dragged in from Finder, when the shell catches the drag itself.
+ *
+ * Wails never lets the drag reach the page, so there is no DOM drop event to
+ * read: the paths arrive here instead, with the name of the target they landed
+ * on. Where there is no such channel this does nothing, and the DOM handler
+ * that fires for an ordinary drop stands instead.
+ */
+export function onFilesDropped(callback: (paths: string[], target: string) => void): () => void {
+  return bridge().onFilesDropped?.(callback) ?? (() => {});
 }
 
 /** Keeps the main process in step with preferences it acts on by itself. */
@@ -181,13 +184,6 @@ export function pickSaveFile(options: {
 /** Which file to read; null if the user dismissed the dialog. */
 export function pickFile(options: { title?: string; extension?: string }): Promise<string | null> {
   return bridge().pickFile?.(options) ?? Promise.resolve(null);
-}
-
-/** Reads a licence from its source, for the ones too large to ship. */
-export function fetchLicence(key: string): Promise<string> {
-  const fetchIt = bridge().fetchLicence;
-  if (!fetchIt) return Promise.reject(new Error('Only the desktop app can fetch this'));
-  return fetchIt(key);
 }
 
 export const updates = {
