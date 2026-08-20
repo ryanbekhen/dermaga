@@ -450,16 +450,13 @@ func (a *App) servicesRunning() bool {
 // --- the window -----------------------------------------------------------
 
 func (a *App) createWindow() *application.WebviewWindow {
-
-	window := a.wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:           "Dermaga",
-		Width:           1180,
-		Height:          760,
-		MinWidth:        900,
-		MinHeight:       600,
-		InitialPosition: application.WindowCentered,
-		Screen:          a.screenUnderCursor(),
-		Hidden:          true,
+	options := application.WebviewWindowOptions{
+		Title:     "Dermaga",
+		Width:     1180,
+		Height:    760,
+		MinWidth:  900,
+		MinHeight: 600,
+		Hidden:    true,
 		// A dropped file carries no path of its own to the web side; only this
 		// side can resolve one, and only for files the user actually dropped.
 		EnableFileDrop: true,
@@ -481,7 +478,16 @@ func (a *App) createWindow() *application.WebviewWindow {
 		// Avoids a white flash into a dark UI (and the reverse) on launch.
 		BackgroundColour: application.NewRGB(19, 19, 23),
 		URL:              "/",
-	})
+	}
+
+	if x, y, ok := placeUnderCursor(options.Width, options.Height); ok {
+		options.InitialPosition = application.WindowXY
+		options.X, options.Y = x, y
+	} else {
+		options.InitialPosition = application.WindowCentered
+	}
+
+	window := a.wails.Window.NewWithOptions(options)
 
 	// The traffic lights disappear in fullscreen, so the UI needs to know.
 	window.OnWindowEvent(events.Common.WindowFullscreen, func(*application.WindowEvent) {

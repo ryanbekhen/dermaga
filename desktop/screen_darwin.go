@@ -5,56 +5,78 @@ package main
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
 
-// The identifier of the display the pointer is on, or 0 if it is on none.
-//
-// Wails knows every screen but not where the pointer is, and AppKit is the
-// only thing that does. The identifier is what comes back rather than a
-// position, because a position would have to be converted between Cocoa's
-// coordinates and Wails' before it meant anything, and the identifier needs no
-// conversion at all: Wails builds Screen.ID from this same number.
-static unsigned int displayUnderCursor(void) {
-	NSPoint where = [NSEvent mouseLocation];
+typedef struct {
+	int found;
+	int x;
+	int y;
+	int width;
+	int height;
+} WorkArea;
 
-	for (NSScreen *screen in [NSScreen screens]) {
-		if (NSPointInRect(where, [screen frame])) {
-			NSNumber *number = [[screen deviceDescription] objectForKey:@"NSScreenNumber"];
-			return [number unsignedIntValue];
-		}
+// The usable area of the display the pointer is on.
+//
+// Cocoa puts the origin at the bottom left of the primary screen with y going
+// up; every window API here works top-left with y going down, so the origin is
+// flipped on the way out. That is the same conversion Wails makes for its own
+// screen list, which is what makes the two agree.
+static WorkArea workAreaUnderCursor(void) {
+	WorkArea out = {0, 0, 0, 0, 0};
+
+	NSArray<NSScreen *> *screens = [NSScreen screens];
+	if ([screens count] == 0) {
+		return out;
 	}
 
-	return 0;
+	// The first screen is the one with the menu bar, and every other screen's
+	// position is measured against it.
+	CGFloat primaryHeight = [[screens objectAtIndex:0] frame].size.height;
+	NSPoint where = [NSEvent mouseLocation];
+
+	for (NSScreen *screen in screens) {
+		if (!NSPointInRect(where, [screen frame])) {
+			continue;
+		}
+
+		NSRect area = [screen visibleFrame];
+
+		out.found = 1;
+		out.x = (int)area.origin.x;
+		out.y = (int)(primaryHeight - area.origin.y - area.size.height);
+		out.width = (int)area.size.width;
+		out.height = (int)area.size.height;
+
+		return out;
+	}
+
+	return out;
 }
 */
 import "C"
 
-import (
-	"strconv"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
-)
-
-// screenUnderCursor is where the user is looking.
+// placeUnderCursor is where a window of this size should open.
 //
 // Windows open on the display the pointer is on, not on whichever one macOS
-// calls primary. It is the best available guess and it is what every other Mac
-// app does -- on a two-monitor desk, a window that always opens on the other
+// calls primary. On a two-monitor desk a window that always opens on the other
 // screen is the difference between an app that behaves and one that does not.
 //
-// Returns nil when there is no answer, which leaves the placement to the
+// AppKit is asked directly rather than Wails' screen list, because that list is
+// still empty when the splash is created -- which put the splash on one display
+// and the window that followed it on another.
+//
+// Returns ok false when there is no answer, which leaves the placement to the
 // system rather than putting the window somewhere worse.
-func (a *App) screenUnderCursor() *application.Screen {
-	display := uint(C.displayUnderCursor())
-	if display == 0 {
-		return nil
+func placeUnderCursor(width, height int) (x int, y int, ok bool) {
+	area := C.workAreaUnderCursor()
+	if area.found == 0 {
+		return 0, 0, false
 	}
 
-	id := strconv.FormatUint(uint64(display), 10)
+	// A window larger than the display it lands on would otherwise be pushed
+	// off-screen.
+	fittedWidth := min(width, int(area.width))
+	fittedHeight := min(height, int(area.height))
 
-	for _, screen := range a.wails.Screen.GetAll() {
-		if screen.ID == id {
-			return screen
-		}
-	}
-
-	return nil
+	return int(area.x) + (int(area.width)-fittedWidth)/2,
+		int(area.y) + (int(area.height)-fittedHeight)/2,
+		true
 }

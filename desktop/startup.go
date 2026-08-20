@@ -344,14 +344,10 @@ const (
 )
 
 func (a *App) createSplash() {
-	window := a.wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:           "Dermaga",
-		Width:           splashWidth,
-		Height:          splashHeight,
-		InitialPosition: application.WindowCentered,
-		// The splash opens where the user is looking, and the window that
-		// follows it opens on the same display a second later.
-		Screen:           a.screenUnderCursor(),
+	options := application.WebviewWindowOptions{
+		Title:            "Dermaga",
+		Width:            splashWidth,
+		Height:           splashHeight,
 		Frameless:        true,
 		DisableResize:    true,
 		BackgroundColour: application.NewRGB(13, 13, 17),
@@ -360,7 +356,18 @@ func (a *App) createSplash() {
 		// exactly that in 1.3.1. A query string cannot fail once the page has
 		// loaded at all.
 		URL: "/splash.html?version=" + a.version,
-	})
+	}
+
+	// The splash opens where the user is looking, and the window that follows
+	// it a second later opens on the same display.
+	if x, y, ok := placeUnderCursor(options.Width, options.Height); ok {
+		options.InitialPosition = application.WindowXY
+		options.X, options.Y = x, y
+	} else {
+		options.InitialPosition = application.WindowCentered
+	}
+
+	window := a.wails.Window.NewWithOptions(options)
 
 	a.mu.Lock()
 	a.splash = window
