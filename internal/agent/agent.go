@@ -169,6 +169,7 @@ func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
 	go a.autoBoot(ctx)
+	go a.volumes.KeepHelper(ctx)
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -191,6 +192,7 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
 	go a.autoBoot(ctx)
+	go a.volumes.KeepHelper(ctx)
 	a.scanner.Start(ctx)
 
 	a.register()

@@ -161,6 +161,12 @@ watch it, and a promise that only half holds is worse than none.
 Dermaga runs `ls` inside the container and reads what it prints. An image built `FROM scratch` has
 no `ls`, and says so rather than pretending to be empty.
 
+**A volume opens without a network.** Reading a volume that no container has mounted means starting a
+small helper container, and `container run` fetches its image when it is missing — which would put a
+registry between you and your own data. Dermaga keeps its own copy as an OCI archive in
+`~/.dermaga/helper-image.tar` and loads that back when the image is gone. The copy is refreshed once
+a week, and left exactly as it is whenever the registry cannot be reached.
+
 **Local registries speak plain HTTP.** A registry on this machine has no TLS, and the CLI told to
 use HTTPS anyway fails with `-9836: bad protocol version` — sometimes after a push has reached 100%.
 Pull, push and login default to plain HTTP for `localhost` and friends; the checkbox is there to

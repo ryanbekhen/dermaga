@@ -20,10 +20,22 @@ type Manager struct {
 	runner  *cli.Runner
 	logger  *slog.Logger
 	changed notify.Notifier
+	// The copy of the image a helper container is built from, kept outside the
+	// runtime so a volume can still be opened with nothing to pull from.
+	helper *helperStore
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
-	return &Manager{runner: runner, logger: logger, changed: changed}
+	manager := &Manager{runner: runner, logger: logger, changed: changed}
+	manager.helper = newHelperStore(manager)
+
+	return manager
+}
+
+// KeepHelper keeps that copy current for as long as the context lives. The
+// agent starts it alongside its other background work.
+func (m *Manager) KeepHelper(ctx context.Context) {
+	m.helper.keep(ctx)
 }
 
 type Volume struct {
@@ -185,8 +197,12 @@ type Mount struct {
 }
 
 // The image a helper container is built from when nothing else has the volume.
-// Small, and almost certainly already on the machine.
-const helperImage = "alpine:latest"
+// Small, and almost certainly already on the machine -- and when it is not, a
+// copy of it is, which is what helper.go is about.
+//
+// Spelled out in full because that is the name the CLI reports back, whatever
+// was typed to pull it, and the copy has to be able to recognise it.
+const helperImage = "docker.io/library/alpine:latest"
 
 // Where the helper mounts the volume it was started for.
 const helperPath = "/volume"
@@ -223,7 +239,7 @@ func (m *Manager) Inspect(ctx context.Context, name string, in *Mount) (State, e
 		`stat -c %%u:%%g %s; [ -d %s/lost+found ] && echo yes || echo no`, path, path,
 	)
 
-	out, err := m.runner.Run(ctx, commandIn(withVolume(in, name), []string{"sh", "-c", script})...)
+	out, err := m.runIn(ctx, in, name, []string{"sh", "-c", script})
 	if err != nil {
 		return State{}, fmt.Errorf("could not read %s: %w", name, err)
 	}
@@ -244,7 +260,7 @@ func (m *Manager) Inspect(ctx context.Context, name string, in *Mount) (State, e
 func (m *Manager) Tidy(ctx context.Context, name string, in *Mount) error {
 	target := pathOf(in) + "/lost+found"
 
-	if _, err := m.runner.Run(ctx, commandIn(withVolume(in, name), []string{"rm", "-rf", target})...); err != nil {
+	if _, err := m.runIn(ctx, in, name, []string{"rm", "-rf", target}); err != nil {
 		return fmt.Errorf("could not tidy %s: %w", name, err)
 	}
 
@@ -257,9 +273,7 @@ func (m *Manager) Tidy(ctx context.Context, name string, in *Mount) error {
 // container: the image runs as somebody other than root, and a volume is born
 // owned by root.
 func (m *Manager) Owner(ctx context.Context, name string, in *Mount) (string, error) {
-	args := commandIn(withVolume(in, name), []string{"stat", "-c", "%u:%g", pathOf(in)})
-
-	out, err := m.runner.Run(ctx, args...)
+	out, err := m.runIn(ctx, in, name, []string{"stat", "-c", "%u:%g", pathOf(in)})
 	if err != nil {
 		return "", fmt.Errorf("could not read the owner of %s: %w", name, err)
 	}
@@ -274,9 +288,7 @@ func (m *Manager) SetOwner(ctx context.Context, name, owner string, in *Mount) e
 		return fmt.Errorf("owner must be a uid or uid:gid, not %q", owner)
 	}
 
-	args := commandIn(withVolume(in, name), []string{"chown", "-R", owner, pathOf(in)})
-
-	if _, err := m.runner.Run(ctx, args...); err != nil {
+	if _, err := m.runIn(ctx, in, name, []string{"chown", "-R", owner, pathOf(in)}); err != nil {
 		return fmt.Errorf("could not set the owner of %s: %w", name, err)
 	}
 
@@ -303,6 +315,23 @@ func pathOf(in *Mount) string {
 	}
 
 	return helperPath
+}
+
+// runIn runs a command where the volume is reachable, having first made sure
+// there is something to reach it with.
+func (m *Manager) runIn(ctx context.Context, in *Mount, name string, command []string) ([]byte, error) {
+	mount := withVolume(in, name)
+
+	// Only a helper needs an image of its own. Going in through a container
+	// that already holds the volume asks nothing of anything not already
+	// running.
+	if mount.Container == "" {
+		if err := m.helper.ensure(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	return m.runner.Run(ctx, commandIn(mount, command)...)
 }
 
 // commandIn runs the command wherever the volume is reachable: through the

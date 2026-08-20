@@ -1,10 +1,12 @@
 package volumes
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A volume image is sparse: created with a half-terabyte cap and holding a few
@@ -92,5 +94,75 @@ func TestTidyRemovesLostFoundWhereverTheVolumeIs(t *testing.T) {
 
 	if !strings.Contains(free, "run --rm") || !strings.Contains(free, helperPath+"/lost+found") {
 		t.Errorf("free volume: got %s", free)
+	}
+}
+
+// The name the CLI reports is fully qualified whatever was typed to pull the
+// image, so a copy that compares against the short form would decide the image
+// is missing on a machine that has it -- and restore over it, every time.
+func TestHelperImageIsRecognisedInTheImageList(t *testing.T) {
+	list := []byte(`[
+		{"configuration":{"name":"docker.io/library/alpine:3.20"}},
+		{"configuration":{"name":"docker.io/library/redis:8.10-alpine"}},
+		{"configuration":{"name":"docker.io/library/alpine:latest"}}
+	]`)
+
+	held, err := holdsHelper(list)
+	if err != nil {
+		t.Fatalf("reading the image list: %v", err)
+	}
+	if !held {
+		t.Errorf("the helper image is in that list; %q was not found in it", helperImage)
+	}
+
+	without := []byte(`[{"configuration":{"name":"docker.io/library/alpine:3.20"}}]`)
+
+	held, err = holdsHelper(without)
+	if err != nil {
+		t.Fatalf("reading the image list: %v", err)
+	}
+	if held {
+		t.Errorf("alpine:3.20 is not the helper image, but it was taken for it")
+	}
+}
+
+// Absent is older than old: a machine with no copy has to take one, and the
+// upkeep decides that by asking this.
+func TestNoCopyCountsAsStale(t *testing.T) {
+	store := &helperStore{path: filepath.Join(t.TempDir(), helperArchive)}
+
+	if !store.stale() {
+		t.Fatal("a copy that is not there should be stale")
+	}
+
+	if err := os.WriteFile(store.path, []byte("archive"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if store.stale() {
+		t.Error("a copy written a moment ago should not be stale")
+	}
+
+	old := time.Now().Add(-helperMaxAge - time.Hour)
+	if err := os.Chtimes(store.path, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if !store.stale() {
+		t.Errorf("a copy older than %s should be stale", helperMaxAge)
+	}
+}
+
+// Nowhere to keep a copy is not a failure, it is the state Dermaga was in
+// before any copy was kept: the runtime fetches the image when it needs it.
+func TestWithoutSomewhereToKeepItNothingHappens(t *testing.T) {
+	store := &helperStore{}
+
+	if store.stale() {
+		t.Error("with nowhere to keep a copy there is nothing to call stale")
+	}
+
+	if err := store.restore(t.Context()); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("restoring from nowhere should report that there is nothing there, got %v", err)
 	}
 }
