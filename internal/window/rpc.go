@@ -96,9 +96,7 @@ func (a *Agent) Start() error {
 		return err
 	}
 
-	a.waitForSocket()
-
-	if !a.connect() {
+	if !a.waitForAgent() {
 		return errors.New("the Dermaga agent did not come up")
 	}
 
@@ -151,12 +149,38 @@ func (a *Agent) spawn() error {
 	return nil
 }
 
-// The socket appears a moment after the process does.
-func (a *Agent) waitForSocket() bool {
-	for i := 0; i < 50; i++ {
-		if _, err := os.Stat(a.socket); err == nil {
+// waitForAgent waits until the agent answers, which is not the same as waiting
+// for its socket to appear.
+//
+// The file is not the thing. One is nearly always there already, left behind by
+// a run that ended badly, and the agent removes it and binds its own on the way
+// up. Waiting for the file therefore waited for nothing at all -- the stale one
+// was there before the agent was even asked to start -- and the single
+// connection attempt that used to follow arrived before anything was listening.
+// That is how a perfectly good agent came to be reported as one that did not
+// start, on every launch after an unclean exit.
+//
+// Waiting for an answer instead cannot be fooled by a leftover: nothing answers
+// on a socket nobody is holding.
+func (a *Agent) waitForAgent() bool {
+	// Ten seconds, which is far longer than starting an agent takes and short
+	// enough that a real failure is still reported rather than hung on. Dialing
+	// a socket nobody holds fails at once, so this is a hundred quick tries
+	// rather than a hundred timeouts.
+	for i := 0; i < 100; i++ {
+		if a.connect() {
 			return true
 		}
+
+		// Nothing to wait for if the process is already gone.
+		a.mu.Lock()
+		gone := a.child == nil
+		a.mu.Unlock()
+
+		if gone {
+			return false
+		}
+
 		time.Sleep(100 * time.Millisecond)
 	}
 
