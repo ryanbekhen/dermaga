@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import notices from '../generated/notices.json';
-import { fetchLicence } from '../services/ipc';
 
 interface Notice {
   name: string;
@@ -9,30 +8,7 @@ interface Notice {
   licence: string;
   url?: string;
   text: string;
-  /** Read from source when opened, for licences too large to ship. */
-  remote?: string;
 }
-
-// Electron carries these; their licences run to megabytes, so they are read
-// from source when someone actually asks to see one rather than bundled.
-const EMBEDDED: Notice[] = [
-  {
-    name: 'Chromium',
-    version: 'via Electron',
-    licence: 'BSD-3-Clause',
-    url: 'https://chromium.googlesource.com/chromium/src/',
-    text: '',
-    remote: 'chromium',
-  },
-  {
-    name: 'Node.js',
-    version: 'via Electron',
-    licence: 'MIT',
-    url: 'https://github.com/nodejs/node',
-    text: '',
-    remote: 'node',
-  },
-];
 
 /**
  * Every open-source package inside the app, with its licence in full.
@@ -47,23 +23,11 @@ export function LicenceList() {
   const [open, setOpen] = useState<string | null>(null);
 
   const packages = useMemo(
-    () => [...(notices as Notice[]), ...EMBEDDED].sort((a, b) => a.name.localeCompare(b.name)),
+    () => [...(notices as Notice[])].sort((a, b) => a.name.localeCompare(b.name)),
     []
   );
 
-  const [fetched, setFetched] = useState<Record<string, string>>({});
-  const [failed, setFailed] = useState<Record<string, boolean>>({});
-
-  const reveal = (entry: Notice) => {
-    const next = open === entry.name ? null : entry.name;
-    setOpen(next);
-
-    if (!next || !entry.remote || fetched[entry.name]) return;
-
-    void fetchLicence(entry.remote)
-      .then((text) => setFetched((all) => ({ ...all, [entry.name]: text })))
-      .catch(() => setFailed((all) => ({ ...all, [entry.name]: true })));
-  };
+  const reveal = (entry: Notice) => setOpen(open === entry.name ? null : entry.name);
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -92,11 +56,6 @@ export function LicenceList() {
 
       <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
         Every licence is reproduced in full, as those licences require.
-      </p>
-
-      <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
-        Chromium and Node.js are embedded in Electron; their licences are read from source when
-        opened rather than shipped, because between them they run to megabytes.
       </p>
 
       <ul className="divide-y divide-ink-200 border-y border-ink-200 dark:divide-ink-800 dark:border-ink-800">
@@ -136,11 +95,7 @@ export function LicenceList() {
                   )}
 
                   <pre className="selectable mt-1.5 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-ink-50 p-3 font-mono text-tiny leading-relaxed dark:bg-ink-950">
-                    {entry.text ||
-                      fetched[entry.name] ||
-                      (failed[entry.name]
-                        ? 'Could not read this licence from its source. It is published at the address above.'
-                        : 'Reading from source…')}
+                    {entry.text || '(no licence file found in the published package)'}
                   </pre>
                 </div>
               )}

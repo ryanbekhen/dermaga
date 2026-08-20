@@ -28,9 +28,8 @@ function licenceText(dir) {
 function npmPackages() {
   const pkg = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8'));
 
-  // Runtime dependencies, plus Electron: it lives in devDependencies because
-  // electron-builder pulls it in, but it is very much shipped.
-  const names = [...Object.keys(pkg.dependencies ?? {}), 'electron'];
+  // Runtime dependencies: what the window is built from and ships with.
+  const names = Object.keys(pkg.dependencies ?? {});
 
   return names
     .map((name) => {
@@ -122,9 +121,8 @@ const markdown = [
   'Dermaga ships the following open-source software. Each licence is reproduced',
   'in full, as those licences require.',
   '',
-  'Electron is listed below with its own licence. It in turn embeds Chromium and',
-  'Node.js, whose dependencies number in the thousands; their credits are',
-  'published with each Electron release at <https://github.com/electron/electron/releases>.',
+  'The window is drawn by WebKit, which is part of macOS and is not shipped',
+  'here.',
   '',
   ...packages.flatMap(({ name, version, licence, url, text }) => [
     `## ${name} ${version}`,

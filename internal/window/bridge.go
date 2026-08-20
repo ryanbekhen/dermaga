@@ -1,4 +1,4 @@
-package main
+package window
 
 import (
 	"encoding/json"
@@ -20,8 +20,8 @@ import (
 // no network client of its own and no server to point one at. What the agent
 // pushes comes back the other way as one event.
 //
-// This is the whole of what used to be the Electron preload plus its handlers:
-// the same surface, in the process that already speaks to the agent.
+// Everything the window is allowed to ask for is here, in the process that
+// already speaks to the agent.
 type Bridge struct {
 	app *App
 
@@ -259,48 +259,6 @@ func (b *Bridge) PickFile(title, extension string) (string, error) {
 	return dialog.PromptForSingleSelection()
 }
 
-// --- licences -------------------------------------------------------------
-
-// Licences too large to ship are read from source when someone asks to see
-// them. The window has no network of its own, and this is not a general fetch:
-// only these addresses can be asked for, so a compromised window cannot turn
-// it into one.
-var licenceSources = map[string]string{
-	"chromium": "https://raw.githubusercontent.com/chromium/chromium/main/LICENSE",
-	"node":     "https://raw.githubusercontent.com/nodejs/node/main/LICENSE",
-}
-
-// FetchLicence returns a licence by key, never by URL.
-func (b *Bridge) FetchLicence(key string) (string, error) {
-	url, ok := licenceSources[key]
-	if !ok {
-		return "", errors.New("unknown licence")
-	}
-
-	request, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	request.Header.Set("Accept", "text/plain")
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("source answered %d", response.StatusCode)
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", err
-	}
-
-	return string(body), nil
-}
-
 // --- updates --------------------------------------------------------------
 //
 // Releases are ad-hoc signed, and no updater will swap an app whose signature
@@ -485,17 +443,6 @@ func (b *Bridge) InstallUpdate(dmgPath string) error {
 	b.app.quitAfterOpeningInstaller()
 
 	return nil
-}
-
-// DragOut is not supported here.
-//
-// Handing a file to Finder as a native drag needs the drag session to begin
-// inside the mouse gesture that started it, and the copy out of the container
-// cannot finish that quickly. Electron's own version of this had the same
-// problem and had stopped working; the honest answer is to say so rather than
-// to fail silently, and Save to… is the way out of a container in the meantime.
-func (b *Bridge) DragOut(container, path string) error {
-	return errors.New("dragging a file to Finder is not supported yet — use Save to… instead")
 }
 
 // Quit closes the app. The splash offers it when a prerequisite is missing and
