@@ -85,8 +85,15 @@
     @apply bg-ink-400 dark:bg-ink-600;
   }
 
+  /* An outline rather than a ring.
+     Tailwind's ring is a box-shadow, and WebKit will not paint a box-shadow on
+     a natively drawn control: a checkbox or a radio took the ring and showed
+     nothing at all, leaving someone tabbing through a form with no idea where
+     they were. An outline is drawn by the engine around the element instead of
+     by the control's own theme, so every control gets one -- and it follows
+     the border radius, so it looks like the ring it replaces. */
   :focus-visible {
-    @apply outline-hidden ring-2 ring-brand-600/40;
+    @apply outline-2 outline-offset-2 outline-brand-600/60;
   }
 }
 

@@ -61,7 +61,11 @@ export function Modal({
       if (!wrap) return;
 
       event.preventDefault();
-      (wrap === 'first' ? stops[0] : stops[stops.length - 1]).focus();
+      // focusVisible keeps the ring on. The wrap is a Tab like any other, but
+      // moving focus in code loses the "arrived by keyboard" the indicator
+      // depends on -- in WebKit it does, at least -- and a Tab that lands
+      // somewhere invisible is worse than one that does not move at all.
+      (wrap === 'first' ? stops[0] : stops[stops.length - 1]).focus({ focusVisible: true });
     };
 
     window.addEventListener('keydown', onKeyDown);
