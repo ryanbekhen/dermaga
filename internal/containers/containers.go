@@ -3,10 +3,14 @@ package containers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
@@ -183,6 +187,9 @@ type Manager struct {
 	logger  *slog.Logger
 	stats   *StatsSampler
 	changed notify.Notifier
+	// Edits that were begun and not finished, so a failed recreate does not
+	// take the user's changes with it.
+	pending *PendingStore
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
@@ -191,7 +198,13 @@ func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier
 		logger:  logger,
 		stats:   NewStatsSampler(runner, logger),
 		changed: changed,
+		pending: NewPendingStore(logger),
 	}
+}
+
+// Pending exposes the unfinished edits, so the window can offer them back.
+func (cm *Manager) Pending() *PendingStore {
+	return cm.pending
 }
 
 // Stats exposes the sampler so the agent can run it in the background.
@@ -435,6 +448,58 @@ func (cm *Manager) Get(ctx context.Context, id string) (*Container, error) {
 	return nil, fmt.Errorf("container not found: %s", id)
 }
 
+// Long enough for a container that is merely slow, short enough that a wedged
+// one is reported rather than waited on.
+const killTimeout = 15 * time.Second
+
+// killRuntime stops the host process that runs one container.
+//
+// Only that container goes: each has a runtime process of its own, and the
+// others carry on -- which is what makes this usable as a last resort rather
+// than a reset of everything.
+func (cm *Manager) killRuntime(id string) error {
+	out, err := exec.Command("ps", "-axo", "pid=,args=").Output()
+	if err != nil {
+		return err
+	}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "container-runtime-linux") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		// Matched on the argument pair rather than on the text, so a container
+		// whose name is a prefix of another is not taken down by mistake.
+		var uuid string
+		for i, field := range fields {
+			if field == "--uuid" && i+1 < len(fields) {
+				uuid = fields[i+1]
+				break
+			}
+		}
+
+		if uuid != id {
+			continue
+		}
+
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+
+		cm.logger.Warn("Stopping the container's runtime", "id", id, "pid", pid)
+
+		return syscall.Kill(pid, syscall.SIGKILL)
+	}
+
+	return fmt.Errorf("no runtime process found for %s", id)
+}
+
 func (cm *Manager) Start(ctx context.Context, id string) (*Container, error) {
 	if _, err := cm.runner.Run(ctx, "start", id); err != nil {
 		cm.logger.Error("Failed to start container", "id", id, "error", err)
@@ -457,6 +522,48 @@ func (cm *Manager) Stop(ctx context.Context, id string, timeout int) (*Container
 		return nil, err
 	}
 	cm.changed.Changed()
+
+	return cm.Get(ctx, id)
+}
+
+// Kill stops a container the abrupt way, for one that will not stop politely.
+//
+// It is bounded, because the reason for reaching for this is usually that the
+// container has stopped answering -- and `container kill` goes through the same
+// channel as everything else, so on a truly wedged container it hangs too.
+// Waiting forever would trade one stuck thing for another; saying so lets the
+// user act.
+func (cm *Manager) Kill(ctx context.Context, id string) (*Container, error) {
+	bounded, cancel := context.WithTimeout(ctx, killTimeout)
+	defer cancel()
+
+	_, err := cm.runner.Run(bounded, "kill", id)
+
+	if errors.Is(bounded.Err(), context.DeadlineExceeded) {
+		// The polite way goes through the same channel as everything else, so
+		// on a container that has stopped answering it hangs like the rest.
+		// What is left is the process running the container on this side of the
+		// wall, which answers to a signal because it is only a process.
+		cm.logger.Warn("Kill did not answer; stopping the container's runtime", "id", id)
+
+		if err := cm.killRuntime(id); err != nil {
+			return nil, fmt.Errorf(
+				"%s did not answer being killed within %s, and its runtime could not be stopped either: %w",
+				id, killTimeout, err,
+			)
+		}
+
+		cm.changed.Changed()
+
+		return cm.Get(ctx, id)
+	}
+
+	cm.changed.Changed()
+
+	if err != nil {
+		cm.logger.Error("Failed to kill container", "id", id, "error", err)
+		return nil, err
+	}
 
 	return cm.Get(ctx, id)
 }
