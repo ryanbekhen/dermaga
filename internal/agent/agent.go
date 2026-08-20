@@ -394,14 +394,24 @@ func (a *Agent) registerFiles() {
 		// One failure should not hide the ones that worked: a drop of ten
 		// files where one is unreadable still moved nine.
 		var failed []string
+		var reason string
+
 		for _, source := range args.Sources {
 			if err := a.files.CopyIn(ctx, args.Container, source, args.Path); err != nil {
-				failed = append(failed, source)
+				failed = append(failed, filepath.Base(source))
+
+				// Why it failed is the useful half, and a drop that fails
+				// usually fails the same way for every file in it. Naming the
+				// files without saying what went wrong -- which is what this
+				// did -- leaves the user with nothing to act on.
+				if reason == "" {
+					reason = err.Error()
+				}
 			}
 		}
 
 		if len(failed) > 0 {
-			return nil, rpc.Fail(fmt.Sprintf("could not copy %s", strings.Join(failed, ", ")))
+			return nil, rpc.Fail(fmt.Sprintf("could not copy %s: %s", strings.Join(failed, ", "), reason))
 		}
 
 		return map[string]any{"copied": len(args.Sources)}, nil
@@ -677,6 +687,20 @@ func (a *Agent) registerContainers() {
 		return a.containers.Stop(ctx, args.ID, args.Timeout)
 	})
 
+	a.server.Register("containers.kill", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		// Asked for, so it stops quietly -- a kill is still a deliberate stop.
+		a.exits.Expect(args.ID)
+
+		return a.containers.Kill(ctx, args.ID)
+	})
+
 	a.server.Register("containers.remove", func(ctx context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			ID    string `json:"id"`
@@ -691,6 +715,39 @@ func (a *Agent) registerContainers() {
 		if err := a.containers.Remove(ctx, args.ID, args.Force); err != nil {
 			return nil, rpc.Fail(err.Error())
 		}
+
+		return map[string]any{"id": args.ID}, nil
+	})
+
+	// An edit that was begun and never finished. The window asks before it
+	// opens the form, so someone coming back after a failure is offered what
+	// they had typed rather than an empty one.
+	a.server.Register("containers.pendingEdit", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		edit, ok := a.containers.Pending().All()[args.ID]
+		if !ok {
+			return nil, nil
+		}
+
+		return edit, nil
+	})
+
+	// Dropping it is the other answer to being offered it back.
+	a.server.Register("containers.discardEdit", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		a.containers.Pending().Done(args.ID)
 
 		return map[string]any{"id": args.ID}, nil
 	})
