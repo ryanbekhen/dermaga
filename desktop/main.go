@@ -480,12 +480,8 @@ func (a *App) createWindow() *application.WebviewWindow {
 		URL:              "/",
 	}
 
-	if x, y, ok := placeUnderCursor(options.Width, options.Height); ok {
-		options.InitialPosition = application.WindowXY
-		options.X, options.Y = x, y
-	} else {
-		options.InitialPosition = application.WindowCentered
-	}
+	options.InitialPosition = application.WindowCentered
+	options.Screen = a.screenUnderCursor()
 
 	window := a.wails.Window.NewWithOptions(options)
 

@@ -65,20 +65,23 @@
 
   /* Overlay scrollbars, the way a native list scrolls. */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
 
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-full border-3 border-solid border-transparent bg-clip-padding;
-  }
+  /* The thumb is the track, thinned.
+     The usual trick -- a fat track with a transparent border and the
+     background clipped to the padding box -- draws nothing in WebKit: it
+     ignores the border on a scrollbar thumb and fills the whole track, so the
+     bar came out two and a half times too thick and pressed against the
+     content. The track is simply the width we want the bar to be. */
 
   ::-webkit-scrollbar-track {
     background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-ink-300 dark:bg-ink-700;
+    @apply rounded-full bg-ink-300 dark:bg-ink-700;
   }
 
   ::-webkit-scrollbar-thumb:hover {

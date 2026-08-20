@@ -360,12 +360,8 @@ func (a *App) createSplash() {
 
 	// The splash opens where the user is looking, and the window that follows
 	// it a second later opens on the same display.
-	if x, y, ok := placeUnderCursor(options.Width, options.Height); ok {
-		options.InitialPosition = application.WindowXY
-		options.X, options.Y = x, y
-	} else {
-		options.InitialPosition = application.WindowCentered
-	}
+	options.InitialPosition = application.WindowCentered
+	options.Screen = a.screenUnderCursor()
 
 	window := a.wails.Window.NewWithOptions(options)
 
