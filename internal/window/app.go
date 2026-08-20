@@ -524,7 +524,7 @@ func (a *App) createWindow() *application.WebviewWindow {
 
 		// An app with a window belongs in the Dock; an app without one belongs
 		// only in the menu bar, which is where it can be opened again.
-		a.dock.HideAppIcon()
+		a.hideDockIcon()
 	})
 
 	a.mu.Lock()
@@ -543,9 +543,32 @@ func (a *App) ShowWindow() {
 	}
 
 	// The Dock icon comes back the moment there is a window to click it for.
-	a.dock.ShowAppIcon()
+	a.showDockIcon()
 	window.Show()
 	window.Focus()
+}
+
+// showDockIcon and hideDockIcon ask the Dock from somewhere other than the main
+// thread, always.
+//
+// Wails' dock service is a bare dispatch_sync onto the main queue with no check
+// for already being on it, and asking a queue you are already on to wait for
+// you is a deadlock -- which the runtime turns into a trap and the app dies on
+// the spot, with no crash report and no window, leaving its agent running.
+//
+// That is not hypothetical: a notification response arrives on the main thread,
+// so clicking "web stopped" killed Dermaga outright. The menu bar survived it
+// only because its handlers already run on a goroutine.
+//
+// Handing the ask to another goroutine is what makes the dispatch legal. It is
+// asynchronous, which costs nothing: the Dock icon is not something anything
+// waits on.
+func (a *App) showDockIcon() {
+	go a.dock.ShowAppIcon()
+}
+
+func (a *App) hideDockIcon() {
+	go a.dock.HideAppIcon()
 }
 
 // OpenProjectPage opens the repository in the user's browser.

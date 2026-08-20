@@ -43,7 +43,7 @@ func (a *App) startUp() {
 
 	if atLogin {
 		// macOS opened this: no window, no splash, and no Dock icon either.
-		a.dock.HideAppIcon()
+		a.hideDockIcon()
 	} else {
 		a.createSplash()
 	}
