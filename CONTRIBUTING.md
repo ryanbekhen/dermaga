@@ -44,7 +44,6 @@ The [architecture notes](docs/architecture.md) go through this properly. In shor
 
 - [Architecture](docs/architecture.md) — the layers, the packages, streaming, the RPC surface
 - [Vulnerability scanning](docs/scanning.md) — what is scanned, when, and what is cached
-- [Building and releasing](docs/releasing.md) — signing, packaging, cutting a release
 
 ## Conventions
 
@@ -97,14 +96,6 @@ with `make notes VERSION=1.1.0`.
 
 ## Releasing
 
-```bash
-make release VERSION=1.1.0
-```
-
-That one command runs `make check`, bumps `desktop/package.json`, commits, tags `v1.1.0`, pushes,
-builds the DMG with the version and commit stamped into it, and publishes a GitHub release with the
-notes built from those commit prefixes and the DMG attached.
-
-It refuses to start on a dirty working tree, on a failing check, or when the tag already exists, so
-a tag always points at something that actually built. The version the app reports comes from
-`git describe`, so a build can always be traced back to its commit.
+Releases are cut by the maintainer, from a Mac holding the signing identity: the DMG is signed with
+an Apple Developer ID and notarized by Apple, and neither is something a fork can reproduce. There
+is nothing to do on your side -- a merged change ships with the next version.

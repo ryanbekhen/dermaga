@@ -1,5 +1,38 @@
 [
   {
+    "version": "v1.7.0",
+    "date": "2026-08-21",
+    "summary": "",
+    "sections": [
+      {
+        "title": "Changed",
+        "entries": [
+          "**Electron is gone; Dermaga is a real Mac app.** The window used to be a browser shipped alongside the app — a whole Chromium, for a UI that only ever talked to a Go process. It is now drawn by the system's own WebKit from that same Go process, so there is no second runtime to ship, start or keep up to date. The download went from **118 MB to under 10 MB**, and what you install is one binary with the agent inside it. Nothing about how you use it changed: every feature, every shortcut and every page is where it was.",
+          "**Signed with an Apple Developer ID and notarized by Apple.** Earlier releases were ad-hoc signed, which meant Gatekeeper stopped them and you had to go to System Settings and click *Open Anyway* before Dermaga would run at all. That is over — it opens the first time, like any other app.",
+          "**macOS 26 is the requirement, and now it says so.** The app claimed macOS 12 or later, which was never true: Apple's `container` runtime needs virtualisation and networking introduced in macOS 26, so a Mac that could install Dermaga would have found nothing it could talk to."
+        ]
+      },
+      {
+        "title": "Added",
+        "entries": [
+          "**Notifications actually arrive.** A container that stops without being asked to has always been worth telling you about, and the notification has always been sent — macOS was dropping it, silently, because it refuses notifications from apps without a Developer ID signature. Now that there is one, they arrive. Turn them off in Settings if you would rather they did not.",
+          "**A volume opens without a network.** Reading a volume that no container has mounted starts a small helper container, and the runtime fetched its image when it was missing — which quietly put a registry between you and your own data. Dermaga now keeps its own copy on disk and loads that back when the image is gone. Refreshed weekly, and left alone whenever the registry cannot be reached.",
+          "**The menu bar points at the project.** *View on GitHub*, one click from the clock."
+        ]
+      },
+      {
+        "title": "Fixed",
+        "entries": [
+          "**The menu bar opens on one click.** It took a two-finger click to open, and one finger did nothing at all. The menu is handed to the status item now and macOS opens it itself — either button, with the proper highlight, without pulling the app to the front.",
+          "**An edit that fails no longer loses what you typed.** Saving the edit form recreates the container, and when the new one refused to start — an image built locally and since deleted, a port now taken — the previous container came back but your changes went with the failed attempt. What you asked for is written down before anything is taken apart, and offered back with the reason it did not finish.",
+          "**Copying files in and out of a mounted volume.** Dropping a file onto a path that is a mounted volume did nothing at all, and pulling one out could hang until the container had to be killed. Both go through the container itself now, and neither can wedge the runtime.",
+          "**Force stop, for a container the runtime has lost.** When a container cannot be stopped and the runtime will not let go of it, there is now a way to end it rather than restarting the services.",
+          "**Files copied out of a container no longer arrive with `._` twins.** macOS was writing its own metadata into the archive on the way through."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.6.1",
     "date": "2026-08-19",
     "summary": "",
