@@ -33,6 +33,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const containers = useResourceStore((s) => s.containers);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const showStopped = useSettingsStore((s) => s.showStopped);
+  const showBuilder = useSettingsStore((s) => s.showBuilder);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openContainer = useUIStore((s) => s.openContainer);
@@ -54,6 +55,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const needle = searchQuery.trim().toLowerCase();
   const visible = containers.filter((container) => {
     if (!showStopped && container.status !== 'running') return false;
+    // Apple's builder, which `container build` makes and manages. Real enough
+    // to show by default -- it holds memory like anything else -- but not
+    // somebody's container, so it can be turned off.
+    if (!showBuilder && container.image.startsWith('ghcr.io/apple/container-builder-shim/')) {
+      return false;
+    }
     if (!needle) return true;
     return (
       container.name.toLowerCase().includes(needle) ||

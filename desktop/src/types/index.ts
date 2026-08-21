@@ -268,6 +268,7 @@ export interface Settings {
   sidebarCollapsed: boolean;
   /** Where templates are fetched from. Empty means Dermaga's own catalogue. */
   templatesUrl?: string;
+  showBuilder: boolean;
 }
 
 /** How Apple's CLI is installed, and whether it can be updated from here. */

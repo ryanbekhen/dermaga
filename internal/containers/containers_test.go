@@ -240,6 +240,33 @@ func TestSpecOfLeavesDefaultsAlone(t *testing.T) {
 	}
 }
 
+// Apple's builder shares the list with somebody's containers and is not one of
+// them: `container build` makes it, `container builder` manages it, and
+// deleting it only means the next build makes another exactly like it.
+func TestApplesBuilderIsNotSomebodysContainer(t *testing.T) {
+	builder := Container{Name: "buildkit", Image: "ghcr.io/apple/container-builder-shim/builder:0.13.1"}
+	if !IsBuilder(builder) {
+		t.Error("the builder image should be recognised")
+	}
+
+	// Matched on the image, because the name is convention rather than
+	// anything Dermaga is owed.
+	renamed := Container{Name: "something-else", Image: "ghcr.io/apple/container-builder-shim/builder:0.13.1"}
+	if !IsBuilder(renamed) {
+		t.Error("a renamed builder is still the builder")
+	}
+
+	for _, theirs := range []Container{
+		{Name: "buildkit", Image: "docker.io/library/redis:8-alpine"},
+		{Name: "redis", Image: "redis:8.10-alpine"},
+		{Name: "builder", Image: "ghcr.io/someone/builder:1"},
+	} {
+		if IsBuilder(theirs) {
+			t.Errorf("%s (%s) is somebody's container", theirs.Name, theirs.Image)
+		}
+	}
+}
+
 // Once a DNS domain is configured the runtime reports hostnames fully
 // qualified, root dot and all. A list of containers named "whoami.internal."
 // is a list nobody asked for -- and the domain is the same for every row, so

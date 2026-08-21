@@ -646,3 +646,19 @@ func firstLabel(hostname string) string {
 
 	return hostname
 }
+
+// BuilderImage is the image Apple's own build container runs.
+//
+// It is not somebody's container even though it appears in the list beside
+// theirs: `container build` starts it, `container builder` manages it, and
+// deleting it only means the next build makes another one.
+const BuilderImage = "ghcr.io/apple/container-builder-shim/"
+
+// IsBuilder reports whether a container is Apple's builder rather than one
+// somebody made.
+//
+// Matched on the image and not the name, which is only "buildkit" by
+// convention and is not Dermaga's to rely on.
+func IsBuilder(c Container) bool {
+	return strings.HasPrefix(c.Image, BuilderImage)
+}

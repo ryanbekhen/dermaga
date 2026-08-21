@@ -57,7 +57,14 @@ export function ContainerNamesItem() {
   }, [open]);
 
   const behind = state
-    ? containers.filter((container) => (container.dns?.domain ?? '') !== state.domain)
+    ? containers.filter(
+        (container) =>
+          (container.dns?.domain ?? '') !== state.domain &&
+          // Apple's builder is not somebody's container. `container build`
+          // makes it, and recreating it only produces another one exactly like
+          // it -- so naming it here would be asking for work with no result.
+          !container.image.startsWith('ghcr.io/apple/container-builder-shim/')
+      )
     : [];
 
   // Nothing to say while it works and everything answers to a name, or while

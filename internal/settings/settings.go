@@ -28,6 +28,11 @@ type Settings struct {
 	// own images and its own conventions gets its own starting points without
 	// asking anybody.
 	TemplatesURL string `json:"templatesUrl,omitempty"`
+	// Whether Apple's builder container appears in the list. It is not
+	// somebody's container -- `container build` makes it and manages it -- but
+	// it is real, it uses memory, and hiding things by default is how a list
+	// stops being trusted. So it shows, and can be turned off.
+	ShowBuilder bool `json:"showBuilder"`
 }
 
 func Defaults() Settings {
@@ -37,6 +42,7 @@ func Defaults() Settings {
 		LogTail:            200,
 		ConfirmDestructive: true,
 		NotifyOnExit:       true,
+		ShowBuilder:        true,
 	}
 }
 

@@ -90,6 +90,11 @@ export function SettingsPanel() {
 
           <Card title="Behaviour">
             <Toggle
+              checked={settings.showBuilder}
+              onChange={settings.setShowBuilder}
+              label="Show Apple's builder container"
+            />
+            <Toggle
               checked={settings.showStopped}
               onChange={settings.setShowStopped}
               label="Show stopped containers in the list"

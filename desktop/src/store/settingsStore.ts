@@ -12,6 +12,7 @@ interface SettingsState extends Settings {
   setConfirmDestructive: (confirm: boolean) => void;
   setNotifyOnExit: (notify: boolean) => void;
   setTemplatesUrl: (url: string) => void;
+  setShowBuilder: (show: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 }
 
@@ -52,12 +53,14 @@ export const useSettingsStore = create<SettingsState>()(
       notifyOnExit: true,
       sidebarCollapsed: false,
       templatesUrl: '',
+      showBuilder: true,
       setTheme: (theme) => set({ theme }),
       setShowStopped: (showStopped) => set({ showStopped }),
       setLogTail: (logTail) => set({ logTail }),
       setConfirmDestructive: (confirmDestructive) => set({ confirmDestructive }),
       setNotifyOnExit: (notifyOnExit) => set({ notifyOnExit }),
       setTemplatesUrl: (templatesUrl) => set({ templatesUrl }),
+      setShowBuilder: (showBuilder) => set({ showBuilder }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
     }),
     {
@@ -72,6 +75,7 @@ export const useSettingsStore = create<SettingsState>()(
         notifyOnExit: state.notifyOnExit,
         sidebarCollapsed: state.sidebarCollapsed,
         templatesUrl: state.templatesUrl,
+        showBuilder: state.showBuilder,
       }),
     }
   )
