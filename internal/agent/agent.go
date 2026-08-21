@@ -167,6 +167,47 @@ type notifierFunc func()
 
 func (f notifierFunc) Changed() { f() }
 
+// setUpContainerNames makes containers findable by name, once and without
+// asking.
+//
+// Apple's runtime registers every container under a local domain when one is
+// configured, and does nothing when none is. A machine where containers cannot
+// find each other by name is not somebody's preference, it is a machine nobody
+// has set up -- so this sets it up, and leaves any domain already chosen
+// exactly where it is.
+//
+// The services read that setting only as they start. Dermaga starts them itself
+// when they are down, so the ordinary case costs nothing; when they are already
+// up they have to be told again, and the containers running at that moment stop
+// and come back with them. That is the price of the setting meaning anything
+// today rather than after the next reboot, and it is paid once.
+func (a *Agent) setUpContainerNames(ctx context.Context) {
+	written, err := system.EnsureDomain(a.logger)
+	if err != nil {
+		a.logger.Warn("Could not set up container names", "error", err)
+		return
+	}
+	if !written {
+		return
+	}
+
+	status, err := a.system.Status(ctx)
+	if err != nil || status == nil || !status.Running {
+		// Down, and about to be started with the setting already in place.
+		return
+	}
+
+	a.logger.Info("Restarting the container services so container names take effect")
+
+	if err := a.system.Stop(ctx); err != nil {
+		a.logger.Warn("Could not stop the container services", "error", err)
+		return
+	}
+	if err := a.system.Start(ctx, false); err != nil {
+		a.logger.Warn("Could not start the container services again", "error", err)
+	}
+}
+
 // Run starts the background work and serves requests until the client goes
 // away, then tears down anything still streaming.
 func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
@@ -175,9 +216,22 @@ func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
-	go a.autoBoot(ctx)
 	go a.volumes.KeepHelper(ctx)
 	go a.templates.Run(ctx, func() string { return a.settings.Load().TemplatesURL })
+
+	// Not in the goroutine above it, and not before serving either. Setting the
+	// names up can restart the container services, which would take down the
+	// very containers autoBoot is bringing up -- and doing it before the socket
+	// exists would leave the window waiting on an agent that looks dead.
+	named := make(chan struct{})
+	go func() {
+		defer close(named)
+		a.setUpContainerNames(ctx)
+	}()
+	go func() {
+		<-named
+		a.autoBoot(ctx)
+	}()
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -199,9 +253,22 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
-	go a.autoBoot(ctx)
 	go a.volumes.KeepHelper(ctx)
 	go a.templates.Run(ctx, func() string { return a.settings.Load().TemplatesURL })
+
+	// Not in the goroutine above it, and not before serving either. Setting the
+	// names up can restart the container services, which would take down the
+	// very containers autoBoot is bringing up -- and doing it before the socket
+	// exists would leave the window waiting on an agent that looks dead.
+	named := make(chan struct{})
+	go func() {
+		defer close(named)
+		a.setUpContainerNames(ctx)
+	}()
+	go func() {
+		<-named
+		a.autoBoot(ctx)
+	}()
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -281,6 +348,15 @@ func (a *Agent) registerSystem() {
 		}
 
 		return a.system.Status(ctx)
+	})
+
+	// Container names: what the runtime believes, and whether macOS has been
+	// told. Two halves, and only the first one is Dermaga's to write.
+	a.server.Register("system.dns", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return map[string]any{
+			"domain":     system.Domain,
+			"registered": a.system.Registered(ctx),
+		}, nil
 	})
 
 	a.server.Register("system.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {

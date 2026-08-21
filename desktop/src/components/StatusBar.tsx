@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowDownToLine, Loader2, RefreshCw } from 'lucide-react';
 import { useUpdate } from '../hooks/useUpdate';
 import { useUIStore } from '../store/uiStore';
+import { ContainerNamesItem } from './ContainerNamesItem';
 import { KernelStatusItem } from './KernelStatusItem';
 import { ScannerStatusItem } from './ScannerStatusItem';
 import type { ConnectionState } from '../hooks/useEventStream';
@@ -36,6 +37,7 @@ export function StatusBar({ build, system, connection, error }: StatusBarProps) 
       </div>
 
       <div className="flex shrink-0 items-center gap-3 text-ink-500">
+        <ContainerNamesItem />
         <KernelStatusItem />
         <UpdatePill />
         <ScannerStatusItem />

@@ -264,9 +264,15 @@ func toContainer(r cliContainer) Container {
 	}
 	// The CLI uses the container ID as its name; the network hostname is the
 	// closest thing to a user-facing label when they diverge.
+	//
+	// Only the first label of it. Once a DNS domain is configured the runtime
+	// fills this in fully qualified -- "whoami.internal.", root dot and all --
+	// and a list of containers called that is a list nobody asked for. The
+	// domain is the same for every one of them, so it says nothing here that
+	// repeating it forty times does not take away.
 	for _, n := range cfg.Networks {
-		if n.Options.Hostname != "" {
-			name = n.Options.Hostname
+		if label := firstLabel(n.Options.Hostname); label != "" {
+			name = label
 			break
 		}
 	}
@@ -627,4 +633,16 @@ func looksLikeTimestamp(s string) bool {
 		}
 	}
 	return s[4] == '-' && s[7] == '-'
+}
+
+// firstLabel is the part of a hostname before its domain.
+//
+// "whoami.internal." and "whoami" both give "whoami"; a name that is nothing
+// but dots gives nothing, and the caller keeps what it had.
+func firstLabel(hostname string) string {
+	if dot := strings.Index(hostname, "."); dot >= 0 {
+		return hostname[:dot]
+	}
+
+	return hostname
 }

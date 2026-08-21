@@ -26,6 +26,7 @@ interface Bridge {
   onFilesDropped?: (callback: (paths: string[], target: string) => void) => () => void;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
+  registerContainerNames?: () => Promise<void>;
   takePendingOpen?: () => Promise<string | null>;
   serviceStatus?: () => Promise<ServiceStatus>;
   installService?: () => Promise<ServiceStatus>;
@@ -105,6 +106,16 @@ export function syncSettings(settings: { notifyOnExit: boolean }): void {
 /** Opens the macOS pane where notifications are allowed or refused. */
 export function openNotificationSettings(): Promise<void> {
   return bridge().openNotificationSettings?.() ?? Promise.resolve();
+}
+
+/**
+ * Asks macOS to route the container domain to the runtime's DNS service.
+ *
+ * Shows the system's own authorization panel — the password is typed into that
+ * and never passes through Dermaga.
+ */
+export function registerContainerNames(): Promise<void> {
+  return bridge().registerContainerNames?.() ?? Promise.resolve();
 }
 
 /** Fires when a notification about a stopped container is clicked. */

@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/ryanbekhen/dermaga/internal/cli"
+	"github.com/ryanbekhen/dermaga/internal/system"
 )
 
 // The window's only way out.
@@ -98,6 +101,55 @@ func (b *Bridge) notifyOnExit() bool {
 	defer b.mu.Unlock()
 
 	return b.settings.notifyOnExit
+}
+
+// RegisterContainerNames tells macOS to route the container domain to the
+// runtime's DNS service.
+//
+// This is the half that needs an administrator: it writes a resolver file under
+// /etc/resolver, which is root's. The other half -- registering containers under
+// the domain at all -- is a file in the user's own home directory and the agent
+// does it without asking.
+//
+// Asked for here rather than in the agent because the prompt is a window on a
+// screen: macOS shows its own authorization panel, which is also what lets it
+// accept Touch ID. The password is typed into that panel and never passes
+// through Dermaga, which is the point of using it rather than asking for one.
+func (b *Bridge) RegisterContainerNames() error {
+	command := fmt.Sprintf("%s system dns create %s", containerBinary(), system.Domain)
+
+	// osascript rather than sudo: sudo would need a terminal and a password on
+	// a pipe. This is the panel every Mac app uses to ask.
+	script := fmt.Sprintf("do shell script %q with administrator privileges", command)
+
+	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil {
+		message := strings.TrimSpace(string(out))
+
+		// Cancelling is an answer, not a failure, and should read like one.
+		if strings.Contains(message, "-128") || strings.Contains(message, "User canceled") {
+			return errors.New("cancelled")
+		}
+		if message == "" {
+			message = err.Error()
+		}
+
+		return fmt.Errorf("could not set up container names: %s", message)
+	}
+
+	return nil
+}
+
+// containerBinary is where Apple's CLI is, spelled out in full.
+//
+// The privileged shell runs with root's PATH rather than the user's, and
+// Homebrew is not on it. A bare "container" there is a command not found, after
+// the password has already been typed.
+func containerBinary() string {
+	if path, err := exec.LookPath(cli.Binary); err == nil {
+		return path
+	}
+
+	return "/opt/homebrew/bin/" + cli.Binary
 }
 
 // OpenNotificationSettings offers the door rather than pretending it can open

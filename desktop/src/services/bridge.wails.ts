@@ -125,6 +125,8 @@ window.dermaga = {
 
   openNotificationSettings: () => call('OpenNotificationSettings'),
 
+  registerContainerNames: () => call('RegisterContainerNames'),
+
   takePendingOpen: async () => orNull(await call<string>('TakePendingOpen')),
   onOpenContainer: (callback) => on<string>('dermaga:open-container', callback),
 

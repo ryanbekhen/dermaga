@@ -141,6 +141,11 @@ export const api = {
     return invoke('templates.refresh');
   },
 
+  /** Whether containers can find each other by name, and under which domain. */
+  async getContainerNames(): Promise<{ domain: string; registered: boolean }> {
+    return invoke('system.dns');
+  },
+
   /** Queues a scan; the result arrives as a pushed status, not a return value. */
   async scanImage(reference: string): Promise<void> {
     await invoke('scanner.scan', { reference });

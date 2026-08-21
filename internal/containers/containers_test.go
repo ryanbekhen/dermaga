@@ -239,3 +239,24 @@ func TestSpecOfLeavesDefaultsAlone(t *testing.T) {
 		}
 	}
 }
+
+// Once a DNS domain is configured the runtime reports hostnames fully
+// qualified, root dot and all. A list of containers named "whoami.internal."
+// is a list nobody asked for -- and the domain is the same for every row, so
+// repeating it forty times only takes space from the part that differs.
+func TestAContainerIsNamedWithoutItsDomain(t *testing.T) {
+	cases := map[string]string{
+		"whoami.internal.": "whoami",
+		"whoami.internal":  "whoami",
+		"whoami":           "whoami",
+		"":                 "",
+		".":                "",
+		"redis.test.":      "redis",
+	}
+
+	for hostname, want := range cases {
+		if got := firstLabel(hostname); got != want {
+			t.Errorf("firstLabel(%q) = %q, want %q", hostname, got, want)
+		}
+	}
+}
