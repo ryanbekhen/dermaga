@@ -167,3 +167,52 @@
     @apply selectable truncate text-right font-normal text-ink-800 dark:text-ink-100;
   }
 }
+
+/* The sixteen terminal colours, for log output that arrives with colour in it.
+
+   Named rather than fixed at parse time because the same code has to be read on
+   white and on near-black: ANSI black and blue are all but invisible on one, and
+   the bright half washes out on the other. These are the standard colours pulled
+   towards whichever background they are being read against, with the greys taken
+   from the app's own scale so a coloured line sits beside an uncoloured one. */
+.ansi {
+  --ansi-fg: #26262c;
+  --ansi-bg: #ffffff;
+  --ansi-0: #484852;
+  --ansi-1: #b91c1c;
+  --ansi-2: #15803d;
+  --ansi-3: #a16207;
+  --ansi-4: #1d4ed8;
+  --ansi-5: #a21caf;
+  --ansi-6: #0e7490;
+  --ansi-7: #81818b;
+  --ansi-8: #a8a8b0;
+  --ansi-9: #dc2626;
+  --ansi-10: #16a34a;
+  --ansi-11: #ca8a04;
+  --ansi-12: #2563eb;
+  --ansi-13: #c026d3;
+  --ansi-14: #0891b2;
+  --ansi-15: #1a1a1f;
+}
+
+.dark .ansi {
+  --ansi-fg: #f3f3f4;
+  --ansi-bg: #131317;
+  --ansi-0: #5f5f69;
+  --ansi-1: #f87171;
+  --ansi-2: #4ade80;
+  --ansi-3: #fbbf24;
+  --ansi-4: #60a5fa;
+  --ansi-5: #e879f9;
+  --ansi-6: #22d3ee;
+  --ansi-7: #d5d5da;
+  --ansi-8: #81818b;
+  --ansi-9: #fca5a5;
+  --ansi-10: #86efac;
+  --ansi-11: #fde047;
+  --ansi-12: #93c5fd;
+  --ansi-13: #f0abfc;
+  --ansi-14: #67e8f9;
+  --ansi-15: #fafafa;
+}
