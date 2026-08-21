@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/ryanbekhen/dermaga/releases/latest"><img alt="download" src="https://img.shields.io/github/v/release/ryanbekhen/dermaga?label=download&color=CE1126"></a>
+  <a href="https://github.com/ryanbekhen/dermaga/actions/workflows/check.yml"><img alt="check" src="https://github.com/ryanbekhen/dermaga/actions/workflows/check.yml/badge.svg"></a>
   <img alt="platform" src="https://img.shields.io/badge/macOS%2026-Apple%20Silicon-CE1126">
   <img alt="signed" src="https://img.shields.io/badge/signed-%26%20notarized-CE1126">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-CE1126">
@@ -213,8 +214,13 @@ without being asked to. Turn them off in Settings and it never asks again.
 
 ## Support
 
-Something broken, or missing? [Open an issue](https://github.com/ryanbekhen/dermaga/issues) — the
-version from **Settings → About** and what you were doing is usually enough to go on.
+Something broken, or missing? [Open an issue](https://github.com/ryanbekhen/dermaga/issues/new/choose)
+— the version from **Settings → About** and what you were doing is usually enough to go on.
+
+Found a security problem? Please report it
+[privately](https://github.com/ryanbekhen/dermaga/security/advisories/new) rather than in an issue,
+so it can be fixed and released before it is described in public.
+[SECURITY.md](SECURITY.md) says what is worth reporting and what Dermaga already does about it.
 
 ## For developers
 
@@ -224,6 +230,8 @@ Dermaga is a Go app: a small agent wraps Apple's CLI, and the window is drawn by
 | | |
 | --- | --- |
 | [Contributing](CONTRIBUTING.md) | setting up, running it locally, and the conventions |
+| [Security](SECURITY.md) | reporting a vulnerability, and the boundaries worth testing |
+| [Code of conduct](CODE_OF_CONDUCT.md) | what is expected of everyone here |
 | [Architecture](docs/architecture.md) | the three layers, the packages, streaming, and the full RPC surface |
 | [Vulnerability scanning](docs/scanning.md) | when images are scanned, what is cached, and why |
 

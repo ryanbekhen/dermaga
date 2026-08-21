@@ -1,0 +1,50 @@
+# What CONTRIBUTING.md asks of a pull request, enforced rather than requested.
+#
+# macOS, and not for convenience: the window is Cocoa and WebKit through cgo,
+# so it does not build anywhere else. A Linux runner would be cheaper and would
+# not compile a single line of what this project actually is.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A push to a branch with an open pull request would otherwise run this twice,
+# and a second push while the first is still going wastes a runner on an answer
+# nobody is waiting for any more.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # From go.mod rather than written here, so the two cannot drift.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      # ci rather than install: the lockfile is the point of running this at
+      # all, and `npm install` is free to quietly disagree with it.
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: desktop
+
+      # go vet, go test, tsc, eslint -- the same one line a contributor runs.
+      - name: Check
+        run: make check

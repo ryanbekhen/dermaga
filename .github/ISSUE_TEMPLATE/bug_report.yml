@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in Dermaga does not do what it says
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a security problem instead? Please report it privately through
+        [security advisories](https://github.com/ryanbekhen/dermaga/security/advisories/new)
+        rather than here.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I clicked … and expected …, but …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Dermaga version
+      description: Settings → About, or the bottom right of the window.
+      placeholder: "1.8.1"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "26.1"
+    validations:
+      required: true
+
+  - type: input
+    id: cli
+    attributes:
+      label: Container CLI version
+      description: The System page shows it, or run `container --version`.
+      placeholder: "1.2.2"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything the app or the CLI printed
+      description: |
+        The System page has the service logs. If the same thing goes wrong in a
+        terminal — `container ls`, `container run …` — that output is worth
+        more than anything else here, because Dermaga is only ever asking that
+        CLI to do things.
+      render: text

@@ -1,0 +1,48 @@
+# Dependency updates, grouped so they arrive as something a person can read.
+#
+# Ungrouped, this opens one pull request per package and a quiet week produces
+# a dozen. Grouped, it produces one per ecosystem, which is a thing you can
+# look at, run, and merge -- or not.
+version: 2
+
+updates:
+  # The window's dependencies. React, Vite, Tailwind, xterm.
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      frontend:
+        patterns: ["*"]
+        # Kept apart because a major is a thing to read release notes for,
+        # while the rest is usually a version bump and a green check.
+        exclude-patterns: []
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore"
+
+  # Go. The only direct dependency is Wails, which is beta and moves.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      go:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore"
+
+  # The actions the check workflow runs on. These go stale silently -- nothing
+  # fails, they simply stop being maintained.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore"

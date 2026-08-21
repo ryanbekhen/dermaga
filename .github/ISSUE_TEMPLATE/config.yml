@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ryanbekhen/dermaga/security/advisories/new
+    about: Report it privately so it can be fixed before it is described in public.
