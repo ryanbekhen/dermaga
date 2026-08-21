@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
+import { LayoutGrid,
   Boxes,
   CircleHelp,
   CloudUpload,
@@ -84,6 +84,16 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         section: 'Create',
         icon: Plus,
         run: () => navigateWith({ name: 'containers' }, 'container.create'),
+      },
+      // The gallery rather than the templates in it: what somebody reaching for
+      // the palette wants is the way in, and the gallery is already the place
+      // to search among them.
+      {
+        id: 'new:template',
+        label: 'Create container from a template',
+        section: 'Create',
+        icon: LayoutGrid,
+        run: () => navigateWith({ name: 'containers' }, 'container.template'),
       },
       {
         id: 'new:pull',

@@ -65,6 +65,29 @@ export function SettingsPanel() {
             <BackgroundService />
           </Card>
 
+          <Card
+            title="Templates"
+            hint="Where the starting points in the create form come from."
+          >
+            <label className="block">
+              <span className="mb-1 block text-tiny text-ink-600 dark:text-ink-400">
+                Catalogue address
+              </span>
+              <input
+                value={settings.templatesUrl ?? ''}
+                onChange={(event) => settings.setTemplatesUrl(event.target.value)}
+                placeholder="https://ryanbekhen.github.io/dermaga-templates/index.json"
+                spellCheck={false}
+                aria-label="Catalogue address"
+                className="input w-full font-mono text-tiny"
+              />
+            </label>
+            <p className="break-words text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
+              Leave it empty for Dermaga&rsquo;s own. A catalogue is a static JSON file, so a team
+              with its own images can publish one and point at it here.
+            </p>
+          </Card>
+
           <Card title="Behaviour">
             <Toggle
               checked={settings.showStopped}

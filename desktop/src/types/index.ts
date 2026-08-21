@@ -210,6 +210,19 @@ export interface PendingEdit {
   at: string;
 }
 
+/** A starting point for the create form, from the catalogue the agent fetches. */
+export interface Template {
+  id: string;
+  name: string;
+  summary: string;
+  /** What the template cannot do for you, said before it is discovered. */
+  caveat?: string;
+  homepage?: string;
+  /** A data URI, or absent — in which case the window draws a monogram. */
+  logo?: string;
+  spec: ContainerSpec;
+}
+
 export interface ContainerSpec {
   name: string;
   image: string;
@@ -253,6 +266,8 @@ export interface Settings {
   confirmDestructive: boolean;
   notifyOnExit: boolean;
   sidebarCollapsed: boolean;
+  /** Where templates are fetched from. Empty means Dermaga's own catalogue. */
+  templatesUrl?: string;
 }
 
 /** How Apple's CLI is installed, and whether it can be updated from here. */

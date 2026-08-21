@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	neturl "net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -20,6 +22,12 @@ type Settings struct {
 	// Whether to raise a macOS notification when a container stops on its own.
 	NotifyOnExit     bool `json:"notifyOnExit"`
 	SidebarCollapsed bool `json:"sidebarCollapsed"`
+	// Where the container templates are fetched from. Empty means Dermaga's
+	// own, which is what almost everybody wants -- but a catalogue is a static
+	// file, so anyone can publish their own and point at it. A team with its
+	// own images and its own conventions gets its own starting points without
+	// asking anybody.
+	TemplatesURL string `json:"templatesUrl,omitempty"`
 }
 
 func Defaults() Settings {
@@ -46,6 +54,18 @@ func (s Settings) normalize() Settings {
 	}
 	if s.LogTail > 5000 {
 		s.LogTail = 5000
+	}
+
+	// Only http and https, and only something that parses. A catalogue is
+	// fetched by the agent, so a URL that is not one -- or a file:// path
+	// pointing somewhere on the machine -- is not a preference to honour.
+	if url := strings.TrimSpace(s.TemplatesURL); url == "" {
+		s.TemplatesURL = ""
+	} else if parsed, err := neturl.Parse(url); err != nil ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		s.TemplatesURL = ""
+	} else {
+		s.TemplatesURL = url
 	}
 
 	return s

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ChevronRight, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { ChevronRight, LayoutGrid, Play, Plus, Square, Trash2 } from 'lucide-react';
 import { ContainerForm } from '../components/ContainerForm';
+import { TemplateGallery } from '../components/TemplateGallery';
 import { TaskRows } from '../components/TaskRows';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -13,7 +14,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
-import type { Container } from '../types';
+import type { ContainerSpec, Container } from '../types';
 import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../utils/format';
 
 // Mirrors `container ls` -- name, image, platform, address, CPUs, memory,
@@ -36,6 +37,14 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openContainer = useUIStore((s) => s.openContainer);
   const creating = useDialog('container.create');
+  // Picked before the form opens rather than applied to it afterwards: the form
+  // takes its values at mount, and filling one in from the outside would mean
+  // setting a dozen pieces of state and hoping.
+  // Opened from the button here, or from the palette, which navigates to this
+  // page carrying the intent.
+  const browsingIntent = useDialog('container.template');
+  const [browsing, setBrowsing] = useState(false);
+  const [fromTemplate, setFromTemplate] = useState<Partial<ContainerSpec> | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   // Holds the verb of the running bulk action, so its button can spin.
@@ -63,7 +72,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
     : runtimeMissing
       ? 'The Apple Container CLI was not found on this Mac.'
       : containers.length === 0
-        ? 'No containers yet. Use “New container” to run one.'
+        ? 'No containers yet. Start from a template, or use “New container”.'
         : needle
           ? 'No containers match your search.'
           : 'No running containers. Enable “Show stopped containers” in Settings.';
@@ -149,10 +158,22 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => creating.show()} className="btn-primary">
-              <Plus size={13} aria-hidden />
-              New container
-            </button>
+            <>
+              <button onClick={() => setBrowsing(true)} className="btn">
+                <LayoutGrid size={13} aria-hidden />
+                From a template
+              </button>
+              <button
+                onClick={() => {
+                  setFromTemplate(null);
+                  creating.show();
+                }}
+                className="btn-primary"
+              >
+                <Plus size={13} aria-hidden />
+                New container
+              </button>
+            </>
           )
         }
       />
@@ -210,10 +231,28 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
 
       {/* Creating does not navigate: the new container appears in this list,
           and being thrown into its detail page interrupts what you were doing. */}
+      {(browsing || browsingIntent.open) && (
+        <TemplateGallery
+          onPick={(spec) => {
+            setFromTemplate(spec);
+            setBrowsing(false);
+            browsingIntent.close();
+            creating.show();
+          }}
+          onClose={() => {
+            setBrowsing(false);
+            browsingIntent.close();
+          }}
+        />
+      )}
+
       {creating.open && (
         <ContainerForm
-          initial={creating.target ? { image: creating.target } : undefined}
-          onClose={() => creating.close()}
+          initial={creating.target ? { image: creating.target } : (fromTemplate ?? undefined)}
+          onClose={() => {
+            creating.close();
+            setFromTemplate(null);
+          }}
         />
       )}
 

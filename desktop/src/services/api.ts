@@ -10,6 +10,7 @@ import type {
   FileEntry,
   Image,
   ImageDetail,
+  Template,
   Machine,
   MachineSettings,
   MachineSpec,
@@ -122,6 +123,22 @@ export const api = {
 
   async getScannerStatus(): Promise<ScannerStatus> {
     return invoke('scanner.status');
+  },
+
+  /**
+   * Starting points for the create form.
+   *
+   * Fetched by the agent rather than here: the window is served under
+   * `connect-src 'self'` and has no network of its own. Logos arrive as data
+   * URIs for the same reason.
+   */
+  async listTemplates(): Promise<Template[]> {
+    return invoke('templates.list');
+  },
+
+  /** Asks for the catalogue now, rather than when it next goes stale. */
+  async refreshTemplates(): Promise<Template[]> {
+    return invoke('templates.refresh');
   },
 
   /** Queues a scan; the result arrives as a pushed status, not a return value. */

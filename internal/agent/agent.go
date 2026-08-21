@@ -25,6 +25,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/scanner"
 	"github.com/ryanbekhen/dermaga/internal/settings"
 	"github.com/ryanbekhen/dermaga/internal/system"
+	"github.com/ryanbekhen/dermaga/internal/templates"
 	"github.com/ryanbekhen/dermaga/internal/terminal"
 	"github.com/ryanbekhen/dermaga/internal/toolchain"
 	"github.com/ryanbekhen/dermaga/internal/volumes"
@@ -57,6 +58,7 @@ type Agent struct {
 	system     *system.Manager
 	registry   *registry.Manager
 	scanner    *scanner.Manager
+	templates  *templates.Manager
 	toolchain  *toolchain.Manager
 	settings   *settings.Store
 	watcher    *watcher.Watcher
@@ -99,6 +101,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.toolchain = toolchain.NewManager(runner, logger)
 	agent.registry = registry.NewManager(runner, logger)
 	agent.scanner = scanner.NewManager(runner, logger)
+	agent.templates = templates.NewManager(logger)
 
 	// The scanner works on its own goroutine and reports where it has got to;
 	// the window shows that in the status bar without ever having asked.
@@ -174,6 +177,7 @@ func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 	go a.watcher.Run(ctx)
 	go a.autoBoot(ctx)
 	go a.volumes.KeepHelper(ctx)
+	go a.templates.Run(ctx, func() string { return a.settings.Load().TemplatesURL })
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -197,6 +201,7 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 	go a.watcher.Run(ctx)
 	go a.autoBoot(ctx)
 	go a.volumes.KeepHelper(ctx)
+	go a.templates.Run(ctx, func() string { return a.settings.Load().TemplatesURL })
 	a.scanner.Start(ctx)
 
 	a.register()
@@ -552,6 +557,25 @@ func (a *Agent) registerScanner() {
 		}
 
 		return map[string]any{"queued": true}, nil
+	})
+
+	// --- templates ----------------------------------------------------------
+	//
+	// Starting points for the create form. The window cannot fetch them itself
+	// -- it is served under `connect-src 'self'` and has no network of its own
+	// -- so they come through here like everything else.
+	a.server.Register("templates.list", func(_ context.Context, _ json.RawMessage) (any, error) {
+		return a.templates.List(), nil
+	})
+
+	// Asked for when somebody changes where the catalogue comes from. The
+	// answer to "did that work?" should not be "wait a week".
+	a.server.Register("templates.refresh", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if err := a.templates.FetchNow(ctx, a.settings.Load().TemplatesURL); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return a.templates.List(), nil
 	})
 
 	a.server.Register("scanner.reports", func(_ context.Context, _ json.RawMessage) (any, error) {

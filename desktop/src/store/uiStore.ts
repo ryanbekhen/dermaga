@@ -8,6 +8,7 @@ import type { ContainerTab, MachineTab, Route } from '../types';
  */
 export type Intent =
   | 'container.create'
+  | 'container.template'
   | 'image.pull'
   | 'image.build'
   | 'volume.create'
