@@ -18,7 +18,6 @@ import {
 import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
 import { LiveChart, type Trace } from '../components/LiveChart';
-import { Meter } from '../components/Meter';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -319,15 +318,15 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
 
 // Declared once rather than rebuilt on every render: the chart memoises on the
 // traces it is handed, and a fresh array each time defeats that.
-const CPU: Trace[] = [{ value: (point) => point.cpuPercent }];
-const MEMORY: Trace[] = [{ value: (point) => point.memoryBytes }];
+const CPU: Trace[] = [{ name: 'CPU', value: (point) => point.cpuPercent }];
+const MEMORY: Trace[] = [{ name: 'Memory', value: (point) => point.memoryBytes }];
 const NETWORK: Trace[] = [
-  { name: 'in', value: (point) => point.networkRxPerSec },
-  { name: 'out', value: (point) => point.networkTxPerSec },
+  { name: 'Data received', value: (point) => point.networkRxPerSec },
+  { name: 'Data sent', value: (point) => point.networkTxPerSec },
 ];
 const DISK: Trace[] = [
-  { name: 'read', value: (point) => point.blockReadPerSec },
-  { name: 'written', value: (point) => point.blockWritePerSec },
+  { name: 'Data read', value: (point) => point.blockReadPerSec },
+  { name: 'Data written', value: (point) => point.blockWritePerSec },
 ];
 
 const asPercent = (value: number) => `${value.toFixed(1)}%`;
@@ -388,35 +387,41 @@ function UsageTab({ container }: { container: Container }) {
         <span>kept while Dermaga runs, so closing this and coming back continues it</span>
       </p>
 
+      {/* The reading is spelled out beside the name, the way a dashboard says
+          it: a chart nobody can read a number off is a picture, not an
+          instrument. */}
       <Section title="CPU" plain>
         <LiveChart
           points={points}
           traces={CPU}
-          ceiling={100}
           format={asPercent}
-          footnote={`${container.processes ?? 0} process${container.processes === 1 ? '' : 'es'}`}
+          heading="CPU usage"
+          reading={`${(container.cpuUsage ?? 0).toFixed(2)}% of ${cores} core${cores > 1 ? 's' : ''}`}
+          floor={10}
         />
-        <Meter value={container.cpuUsage ?? 0} label={`of ${cores} core${cores > 1 ? 's' : ''}`} />
       </Section>
 
       <Section title="Memory" plain>
-        <LiveChart points={points} traces={MEMORY} format={asBytes} />
-        <Meter
-          value={container.memoryUsagePercent ?? 0}
-          label={`of ${formatMemory(container.memoryAllocation)}`}
+        <LiveChart
+          points={points}
+          traces={MEMORY}
+          format={asBytes}
+          heading="Memory usage"
+          reading={`${formatBytes(container.memoryUsageBytes)} / ${formatMemory(container.memoryAllocation)}`}
         />
       </Section>
 
-      {/* In and out on one scale, and their totals underneath: the rate says
-          what is happening, the total says what has happened, and a container
-          quiet now that has pulled a gigabyte is a different container from one
-          that has pulled nothing. */}
+      {/* Rates on the chart, totals in the reading: the line says what is
+          happening, the figure says what has happened, and a container quiet
+          now that has pulled a gigabyte is a different container from one that
+          has pulled nothing. */}
       <Section title="Network" plain>
         <LiveChart
           points={points}
           traces={NETWORK}
           format={asRate}
-          footnote={`${total(container.networkRxBytes)} in · ${total(container.networkTxBytes)} out`}
+          heading="Network I/O"
+          reading={`${total(container.networkRxBytes)} / ${total(container.networkTxBytes)}`}
         />
       </Section>
 
@@ -425,8 +430,15 @@ function UsageTab({ container }: { container: Container }) {
           points={points}
           traces={DISK}
           format={asRate}
-          footnote={`${total(container.blockReadBytes)} read · ${total(container.blockWriteBytes)} written`}
+          heading="Disk read/write"
+          reading={`${total(container.blockReadBytes)} / ${total(container.blockWriteBytes)}`}
         />
+      </Section>
+
+      <Section title="Processes" plain>
+        <p className="text-xs text-ink-600 dark:text-ink-400">
+          {container.processes ?? 0} running inside this container.
+        </p>
       </Section>
     </DetailGrid>
   );
