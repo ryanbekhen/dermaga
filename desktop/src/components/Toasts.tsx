@@ -25,7 +25,14 @@ export function Toasts() {
             }`}
           >
             <Icon size={16} className="mt-0.5 shrink-0" aria-hidden />
-            <span>{toast.message}</span>
+            {/*
+              min-w-0 and break-words together: what goes wrong here is often
+              named by an image reference, and a registry path with a digest for
+              a tag is one unbroken run far wider than this box. Without the
+              first it refuses to be narrowed; without the second it refuses to
+              be split -- either way it is drawn out past the rounded corner.
+            */}
+            <span className="min-w-0 break-words">{toast.message}</span>
           </button>
         );
       })}

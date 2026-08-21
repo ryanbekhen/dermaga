@@ -185,9 +185,16 @@ export function ImagesPage() {
               <span className="truncate text-sm font-semibold">{group.names.join(', ')}</span>
               {users.length > 0 && <Badge tone="brand">in use</Badge>}
             </NameCell>,
-            <div key="tags" className="flex flex-wrap items-center gap-1">
+            // A tag is as long as whoever built the image decided -- a commit
+            // SHA, a branch name, a date and a build number. Left to its own
+            // width it was drawn straight across the vulnerability count
+            // beside it, so the column keeps what it can and hands the rest to
+            // the tooltip.
+            <div key="tags" className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden">
               {group.tags.map(({ tag }) => (
-                <Badge key={tag}>{tag}</Badge>
+                <Badge key={tag} fit title={tag}>
+                  {tag}
+                </Badge>
               ))}
             </div>,
             <VulnerabilityCell key="vulnerabilities" group={group} />,

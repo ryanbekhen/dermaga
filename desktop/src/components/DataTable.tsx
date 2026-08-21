@@ -209,13 +209,25 @@ export function Muted({ children, mono = false }: { children: ReactNode; mono?: 
 export function Badge({
   children,
   tone = 'neutral',
+  fit = false,
+  title,
 }: {
   children: ReactNode;
   tone?: 'neutral' | 'brand';
+  // Badges hold short words and do not shrink, which is what keeps one beside
+  // a truncating name instead of being squeezed by it. A badge holding
+  // something arbitrary -- an image tag, which is as long as whoever built the
+  // image decided -- has to give way instead, or it is drawn straight over the
+  // column beside it.
+  fit?: boolean;
+  title?: string;
 }) {
   return (
     <span
-      className={`shrink-0 rounded px-1.5 py-0.5 text-tiny font-semibold ${
+      title={title}
+      className={`rounded px-1.5 py-0.5 text-tiny font-semibold ${
+        fit ? 'min-w-0 truncate' : 'shrink-0'
+      } ${
         tone === 'brand'
           ? 'bg-brand-600/10 text-brand-700 dark:text-brand-400'
           : 'bg-ink-100 text-ink-600 dark:bg-ink-800 dark:text-ink-400'

@@ -251,7 +251,7 @@ function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
         </span>
       </div>
 
-      {error && <p className="text-xs text-orange-700 dark:text-orange-500">{error}</p>}
+      {error && <p className="break-words text-xs text-orange-700 dark:text-orange-500">{error}</p>}
 
       <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
         {state?.lostFound
@@ -462,7 +462,7 @@ function VolumeFiles({
           container. Dermaga starts a small one — {HELPER_IMAGE}, mounted at {MOUNT} — and removes
           it again when you leave this tab.
         </p>
-        {error && <p className="text-xs text-orange-700 dark:text-orange-500">{error}</p>}
+        {error && <p className="break-words text-xs text-orange-700 dark:text-orange-500">{error}</p>}
       </div>
 
       <button onClick={() => void open()} className="btn-primary" disabled={state === 'starting'}>

@@ -166,11 +166,11 @@ export function ImageDetailPage({ reference }: { reference: string }) {
       ) : tab === 'vulnerabilities' ? (
         <VulnerabilityPane reference={reference} />
       ) : error && !detail ? (
-        <p className="flex flex-1 items-center justify-center text-sm text-ink-600 dark:text-ink-400">
+        <p className="flex flex-1 items-center justify-center break-words text-sm text-ink-600 dark:text-ink-400">
           {error}
         </p>
       ) : !detail || !variant ? (
-        <p className="flex flex-1 items-center justify-center text-sm text-ink-600 dark:text-ink-400">
+        <p className="flex flex-1 items-center justify-center break-words text-sm text-ink-600 dark:text-ink-400">
           Inspecting image…
         </p>
       ) : (

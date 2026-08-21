@@ -262,7 +262,7 @@ function Empty({ title, body }: { title: string; body: string }) {
     // Stretches so the pane stays one continuous target even with nothing in it.
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center">
       <p className="text-sm font-semibold">{title}</p>
-      <p className="max-w-sm text-xs leading-relaxed text-ink-600 dark:text-ink-400">{body}</p>
+      <p className="max-w-sm break-words text-xs leading-relaxed text-ink-600 dark:text-ink-400">{body}</p>
     </div>
   );
 }

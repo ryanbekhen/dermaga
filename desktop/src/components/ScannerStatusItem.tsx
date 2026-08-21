@@ -87,7 +87,7 @@ function Detail({ status, scanned }: { status: ScannerStatus; scanned: number })
       // window on a narrow one.
       className="absolute bottom-6 right-0 z-40 w-80 rounded-lg border border-ink-200 bg-white p-3 text-left shadow-panel dark:border-ink-700 dark:bg-ink-900"
     >
-      <p className="text-xs font-semibold">{summarise(status, scanned)}</p>
+      <p className="break-words text-xs font-semibold">{summarise(status, scanned)}</p>
 
       {status.state === 'scanning' && status.total && status.total > 1 && (
         <p className="mt-0.5 text-tiny text-ink-600 dark:text-ink-400">
@@ -105,7 +105,11 @@ function Detail({ status, scanned }: { status: ScannerStatus; scanned: number })
       )}
 
       {status.error && (
-        <p className="mt-2 text-tiny leading-relaxed text-amber-700 dark:text-amber-500">
+        // break-words because what goes wrong here is spelled out in image
+        // references and temporary paths -- single unbroken runs far longer
+        // than this panel, which without it are drawn straight through the
+        // border and out the other side.
+        <p className="mt-2 break-words text-tiny leading-relaxed text-amber-700 dark:text-amber-500">
           {status.error}
         </p>
       )}
