@@ -65,10 +65,7 @@ export function SettingsPanel() {
             <BackgroundService />
           </Card>
 
-          <Card
-            title="Templates"
-            hint="Where the starting points in the create form come from."
-          >
+          <Card title="Templates" hint="Where the starting points in the create form come from.">
             <label className="block">
               <span className="mb-1 block text-tiny text-ink-600 dark:text-ink-400">
                 Catalogue address
@@ -89,16 +86,6 @@ export function SettingsPanel() {
           </Card>
 
           <Card title="Behaviour">
-            <Toggle
-              checked={settings.showBuilder}
-              onChange={settings.setShowBuilder}
-              label="Show Apple's builder container"
-            />
-            <Toggle
-              checked={settings.showStopped}
-              onChange={settings.setShowStopped}
-              label="Show stopped containers in the list"
-            />
             <Toggle
               checked={settings.confirmDestructive}
               onChange={settings.setConfirmDestructive}

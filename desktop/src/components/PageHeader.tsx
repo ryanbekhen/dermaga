@@ -12,6 +12,12 @@ interface PageHeaderProps {
     onChange: (value: string) => void;
     placeholder: string;
   };
+  /**
+   * What the list is narrowed by, beside the box that searches it. Kept apart
+   * from actions because these stay put: a filter that disappears the moment
+   * rows are selected is a filter somebody has to undo a selection to reach.
+   */
+  filters?: ReactNode;
   actions?: ReactNode;
 }
 
@@ -23,7 +29,15 @@ export const PAGE_SEARCH_ID = 'dermaga-page-search';
  * toolbar: a bar spanning only the content column read as an extension of the
  * sidebar, and search belongs to the list it filters anyway.
  */
-export function PageHeader({ onBack, title, badges, subtitle, search, actions }: PageHeaderProps) {
+export function PageHeader({
+  onBack,
+  title,
+  badges,
+  subtitle,
+  search,
+  filters,
+  actions,
+}: PageHeaderProps) {
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,7 +82,8 @@ export function PageHeader({ onBack, title, badges, subtitle, search, actions }:
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {filters}
         {search && (
           <div className="relative">
             <Search

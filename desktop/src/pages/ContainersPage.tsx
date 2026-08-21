@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, LayoutGrid, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { ChevronRight, Hammer, LayoutGrid, Play, Plus, Square, Trash2 } from 'lucide-react';
 import { ContainerForm } from '../components/ContainerForm';
 import { TemplateGallery } from '../components/TemplateGallery';
 import { TaskRows } from '../components/TaskRows';
@@ -13,6 +13,7 @@ import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { isBuilder } from '../utils/builder';
 import { PageHeader } from '../components/PageHeader';
+import { FilterToggle } from '../components/FilterToggle';
 import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { ContainerSpec, Container } from '../types';
@@ -34,7 +35,9 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const containers = useResourceStore((s) => s.containers);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const showStopped = useSettingsStore((s) => s.showStopped);
+  const setShowStopped = useSettingsStore((s) => s.setShowStopped);
   const showBuilder = useSettingsStore((s) => s.showBuilder);
+  const setShowBuilder = useSettingsStore((s) => s.setShowBuilder);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openContainer = useUIStore((s) => s.openContainer);
@@ -54,9 +57,16 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const pushToast = useToastStore((s) => s.push);
 
   const needle = searchQuery.trim().toLowerCase();
-  const visible = containers.filter((container) => {
+
+  // What this page is about. Apple's builder is infrastructure rather than
+  // somebody's container, so switching it off takes it out of the counting as
+  // well as out of the list -- a summary that keeps totalling something it is
+  // not showing has numbers nobody can reconcile with what is on screen. It is
+  // 2 CPUs and a gigabyte and a half; the difference is not subtle.
+  const mine = showBuilder ? containers : containers.filter((c) => !isBuilder(c));
+
+  const visible = mine.filter((container) => {
     if (!showStopped && container.status !== 'running') return false;
-    if (!showBuilder && isBuilder(container)) return false;
     if (!needle) return true;
     return (
       container.name.toLowerCase().includes(needle) ||
@@ -65,20 +75,23 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
     );
   });
 
-  const running = containers.filter((c) => c.status === 'running');
+  // Counted against everything in scope, listed or not -- the stopped filter
+  // hides rows without changing what exists, and "3 of 4 running" is the one
+  // line that says something is out of sight.
+  const running = mine.filter((c) => c.status === 'running');
   const allocatedCpus = running.reduce((sum, c) => sum + (c.cpuAllocation ?? 1), 0);
   const allocatedMib = running.reduce((sum, c) => sum + parseMebibytes(c.memoryAllocation), 0);
   const usedMib = running.reduce((sum, c) => sum + parseMebibytes(c.memoryUsage), 0);
 
   const emptyMessage = runtimeMissing
     ? 'The Apple Container CLI was not found on this Mac.'
-    : containers.length === 0
+    : mine.length === 0
       ? 'No containers yet. Start from a template, or use “New container”.'
       : needle
         ? 'No containers match your search.'
-        : 'No running containers. Enable “Show stopped containers” in Settings.';
+        : 'No running containers. Turn on the “Stopped” filter to see the rest.';
 
-  const chosen = containers.filter((c) => selected.has(c.id));
+  const chosen = mine.filter((c) => selected.has(c.id));
   const startable = chosen.filter((c) => c.status !== 'running');
   const stoppable = chosen.filter((c) => c.status === 'running');
 
@@ -114,7 +127,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
     <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
       <PageHeader
         title="Containers"
-        subtitle={`${running.length} of ${containers.length} running · ${allocatedCpus} CPU · ${formatMemory(
+        subtitle={`${running.length} of ${mine.length} running · ${allocatedCpus} CPU · ${formatMemory(
           `${Math.round(usedMib)}m`
         )} of ${formatMemory(`${allocatedMib}m`)} memory`}
         search={{
@@ -122,6 +135,24 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
           onChange: setSearchQuery,
           placeholder: 'Search containers…',
         }}
+        filters={
+          <>
+            <FilterToggle
+              checked={showStopped}
+              onChange={setShowStopped}
+              label="Stopped"
+              icon={Square}
+              title="Show containers that are not running"
+            />
+            <FilterToggle
+              checked={showBuilder}
+              onChange={setShowBuilder}
+              label="Builder"
+              icon={Hammer}
+              title="Show Apple's builder container, which `container build` makes and manages"
+            />
+          </>
+        }
         actions={
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
