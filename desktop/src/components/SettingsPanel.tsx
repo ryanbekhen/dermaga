@@ -132,6 +132,12 @@ function Card({
  * System Settings is reflected here instead of contradicted. Opened that way,
  * Dermaga starts in the menu bar with no window: nobody logging in asked for
  * one.
+ *
+ * This is the setting that matters to most people. Opening at login starts the
+ * agent as part of starting the app, so the containers marked to start come up
+ * and notifications work -- which is why the background service below has to
+ * say plainly that it is only for quitting Dermaga and keeping the agent. Two
+ * toggles that sound alike are two toggles everybody switches on to be safe.
  */
 function OpenAtLogin() {
   const [enabled, setEnabled] = useState(false);
@@ -158,7 +164,8 @@ function OpenAtLogin() {
       />
       {enabled && (
         <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
-          It starts in the menu bar with no window, and says when a container stops on its own.
+          It starts in the menu bar with no window, brings up the containers you marked to start
+          with Dermaga, and says when one stops on its own.
         </p>
       )}
     </>
@@ -205,7 +212,7 @@ function BackgroundService() {
       <Toggle
         checked={installed}
         onChange={(value) => void change(value)}
-        label="Keep watching while Dermaga is closed"
+        label="Keep the agent running when Dermaga is quit"
         disabled={!status || busy}
       />
 
@@ -218,9 +225,15 @@ function BackgroundService() {
           <p className="text-tiny leading-relaxed text-ink-700 dark:text-ink-300">
             {status.missing
               ? 'The service points at a copy of Dermaga that is no longer there, so it cannot start:'
-              : 'The service belongs to a different copy of Dermaga, so it is not the agent this window is talking to:'}{' '}
-            <span className="font-mono">{status.binary}</span>
+              : 'The service belongs to a different copy of Dermaga, so it is not the agent this window is talking to:'}
           </p>
+          {/* On its own line and scrolling rather than wrapping. This path is
+              here to be read and compared against another one, and a path
+              broken across two lines -- at the hyphen in "dermaga-agent", of
+              all places -- is a path that can be misread. */}
+          <code className="block w-full overflow-x-auto whitespace-nowrap rounded bg-ink-500/10 px-1.5 py-1 font-mono text-tiny">
+            {status.binary}
+          </code>
           <Button busy={busy} busyLabel="Pointing…" onClick={() => void change(true)}>
             Point it at this copy
           </Button>
@@ -229,8 +242,8 @@ function BackgroundService() {
 
       <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
         {installed
-          ? 'The agent runs as a background service, started at login. Containers are watched, and the ones marked to start with Dermaga are brought up, whether or not a window is open. Removing it puts the agent back inside the app.'
-          : 'The agent lives inside Dermaga: close the window and nothing is watching your containers. Turn this on to keep one small process running instead.'}
+          ? 'A small background process, started at login by macOS. It watches your containers and brings up the ones you marked, with no Dermaga running at all. Turning it off puts the agent back inside the app.'
+          : 'Only matters if you quit Dermaga. Opening at login already brings your containers up and keeps watching them — this is for wanting that without the app.'}
       </p>
     </>
   );
