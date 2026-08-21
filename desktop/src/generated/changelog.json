@@ -1,5 +1,38 @@
 [
   {
+    "version": "v1.9.0",
+    "date": "2026-08-21",
+    "summary": "",
+    "sections": [
+      {
+        "title": "Added",
+        "entries": [
+          "**Containers can find each other by name.** One container reaching another meant knowing its address, and the address changes every time it is recreated. Apple's runtime can register every container under a local domain instead, and Dermaga now sets that up: the part nobody should be asked about — writing the domain into the runtime's own configuration — happens on its own, and the part that belongs to root asks. macOS shows its own authorization panel for that, which is also what lets it take a fingerprint, and **the password goes to macOS, never through Dermaga**. The domain is `internal`, which ICANN reserves for private networks; `local` is the obvious guess and the one to avoid, because it belongs to Bonjour. Containers created before this keep the DNS they were made with — restarting one does not change it — so they are named in the warning rather than quietly recreated, which would lose their filesystem.",
+          "**Start from a template.** A gallery of ready specifications — Postgres, MySQL, MariaDB, Redis, RabbitMQ — each filling the create form in and then getting out of the way: every field stays editable and nothing is created until you press the button. They come from a kept for when you are offline, and the catalogue can be pointed elsewhere in Settings. Arrows move, Enter takes — the whole thing works without the mouse.",
+          "**Live usage that shows what a container is actually doing.** `container stats` was already reporting network, disk and process count on every call, and Dermaga was reading two of the nine fields. All of it is carried now, as rates rather than counters, on charts you can read a number off: numbers up the side, time along the bottom, the reading spelled out beside the name, and the totals since the container started. The window is kept from the moment the agent starts, so opening the tab shows a chart that is already drawn and carries on rather than filling itself while you wait.",
+          "**Log output keeps its colour.** Programs write colour by printing escape sequences, and a page draws none of it — so a systemd boot log arrived as a stray `[0;32m` in front of every line it was meant to colour. The sequences are read now: colour, bright colour, 256 and 24-bit, bold, underline. Everything that is not about colour is dropped rather than printed, a carriage return is treated the way a terminal treats it, and searching matches the line as it reads.",
+          "**An update is downloaded before you want it.** The wait used to sit between pressing the button and being updated, which is the worst place for it. Now a release is fetched as soon as it is found — quietly, because nobody asked for it — verified, and only then does the corner offer **Restart to update**, which is also in the menu bar for when the window is closed. Dermaga checks again every six hours rather than only at launch: it lives in the menu bar for days, and a check that happens once means whoever never quits it hears about anything last."
+        ]
+      },
+      {
+        "title": "Changed",
+        "entries": [
+          "**Filters live with the list they filter.** *Show stopped containers* and *Show Apple's builder* were in Settings, a page away from the thing they change, which made them read as preferences — something decided once and forgotten. They are two switches beside the search box now, and the summary above the list counts what the list is showing: switching the builder off used to leave it out of the rows and in the totals, which on a typical Mac is two CPUs and a gigabyte and a half belonging to something not on screen.",
+          "**Dermaga is an app, not a browser in a window.** Right-click offered *Reload*, the menu bar carried a *View* menu of reload, force reload and the web inspector, and a *Help* menu whose only entry opened the website of the framework it is built with. Reload is the one that mattered: it throws away the window's state and reconnects, and whoever presses it is looking for a refresh button this app deliberately does not have, because nothing here is ever stale. All of it is gone; Cmd-R does nothing. Control-R still works, because in the terminal tab it is history search.",
+          "**Apple's builder stays out of the way.** `buildkit` is made and managed by `container build`, and deleting it only means the next build makes another. It is left out of the container-names warning, and it can be switched out of the list — from the list, and out of everywhere at once: hidden from one place and offered by the command palette is not hidden."
+        ]
+      },
+      {
+        "title": "Fixed",
+        "entries": [
+          "**Lists no longer claim to be empty before they know.** Registries decided there were none before the answer arrived and said so — on a Mac that was signed in — then replaced itself with the rows a moment later. Every table draws the shape of its answer while it waits now: same columns, same row height, and the rows land where the bars were.",
+          "**A container's name is its name.** Once a DNS domain exists the runtime reports hostnames fully qualified, root dot and all, and the list was showing `whoami.internal.` where `whoami` belongs.",
+          "**Settings that read badly.** *Keep watching while Dermaga is closed* described what it did rather than what it is for, and sat apart from the setting it depends on."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.8.1",
     "date": "2026-08-21",
     "summary": "",
