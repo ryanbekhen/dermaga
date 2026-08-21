@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatMemory, parseMebibytes, shortImage, splitEnv } from './format';
+import {
+  formatDuration,
+  formatMemory,
+  formatRate,
+  parseMebibytes,
+  shortImage,
+  splitEnv,
+} from './format';
 
 describe('parseMebibytes', () => {
   it('reads the API memory format', () => {
@@ -56,5 +63,19 @@ describe('splitEnv', () => {
     expect(splitEnv('PATH=/usr/bin:/bin')).toEqual(['PATH', '/usr/bin:/bin']);
     expect(splitEnv('DSN=postgres://u:p@h/db?x=1')).toEqual(['DSN', 'postgres://u:p@h/db?x=1']);
     expect(splitEnv('FLAG')).toEqual(['FLAG', '']);
+  });
+});
+
+describe('formatRate', () => {
+  it('reads as a speed', () => {
+    expect(formatRate(1024)).toBe('1.0 KB/s');
+    expect(formatRate(5 * 1024 * 1024)).toBe('5.0 MB/s');
+    expect(formatRate(512)).toBe('512 B/s');
+  });
+
+  // A chart at rest still has an axis, and "—/s" on it tells nobody anything.
+  it('says nothing is moving rather than nothing is known', () => {
+    expect(formatRate(0)).toBe('0 B/s');
+    expect(formatRate(undefined)).toBe('0 B/s');
   });
 });

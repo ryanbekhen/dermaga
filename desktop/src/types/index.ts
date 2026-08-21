@@ -68,8 +68,22 @@ export interface Container {
   cpuUsage?: number;
   /** Human-readable resident memory, e.g. "252m". */
   memoryUsage?: string;
+  /** The same figure exactly, for the chart: "252m" steps in whole mebibytes. */
+  memoryUsageBytes?: number;
   /** Percentage of the container's memory allocation, 0-100. */
   memoryUsagePercent?: number;
+  /** Bytes per second, from the difference between the last two samples. */
+  networkRxPerSec?: number;
+  networkTxPerSec?: number;
+  blockReadPerSec?: number;
+  blockWritePerSec?: number;
+  /** Totals since the container started, which the rates are derived from. */
+  networkRxBytes?: number;
+  networkTxBytes?: number;
+  blockReadBytes?: number;
+  blockWriteBytes?: number;
+  /** How many processes are running inside it. */
+  processes?: number;
 }
 
 export interface LogEntry {
@@ -335,11 +349,16 @@ export interface BuildSpec {
   noCache?: boolean;
 }
 
-/** One sample of a container's usage, for the charts. */
+/** One live reading of a container's usage. Never stored: see useLiveUsage. */
 export interface UsagePoint {
   at: number;
   cpuPercent: number;
   memoryBytes: number;
+  /** Bytes per second: what a shape can show, unlike a total that only climbs. */
+  networkRxPerSec: number;
+  networkTxPerSec: number;
+  blockReadPerSec: number;
+  blockWritePerSec: number;
 }
 
 /** One entry in a container's filesystem. */

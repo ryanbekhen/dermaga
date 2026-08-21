@@ -19,10 +19,10 @@ import type {
   Settings,
   SystemStatus,
   ToolchainStatus,
+  UsagePoint,
   RegistryLogin,
   ScannerStatus,
   Volume,
-  UsagePoint,
   VolumeSpec,
   VolumeState,
   VulnerabilityReport,
@@ -192,7 +192,7 @@ export const api = {
     return invoke('containers.get', { id });
   },
 
-  /** Half an hour of samples, oldest first; empty for a container just started. */
+  /** The minutes the agent has already watched, oldest first. */
   async getContainerHistory(id: string): Promise<UsagePoint[]> {
     return (await invoke<UsagePoint[]>('containers.history', { id })) ?? [];
   },

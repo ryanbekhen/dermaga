@@ -59,7 +59,20 @@ type Container struct {
 	// first sample lands for a running container.
 	CPUUsage           float64 `json:"cpuUsage"`
 	MemoryUsage        string  `json:"memoryUsage,omitempty"`
+	MemoryUsageBytes   int64   `json:"memoryUsageBytes"`
 	MemoryUsagePercent float64 `json:"memoryUsagePercent"`
+
+	// Network and disk, each as a rate and as a total since the container
+	// started, plus the number of processes inside it.
+	NetworkRxBytes   int64   `json:"networkRxBytes"`
+	NetworkTxBytes   int64   `json:"networkTxBytes"`
+	NetworkRxPerSec  float64 `json:"networkRxPerSec"`
+	NetworkTxPerSec  float64 `json:"networkTxPerSec"`
+	BlockReadBytes   int64   `json:"blockReadBytes"`
+	BlockWriteBytes  int64   `json:"blockWriteBytes"`
+	BlockReadPerSec  float64 `json:"blockReadPerSec"`
+	BlockWritePerSec float64 `json:"blockWritePerSec"`
+	Processes        int     `json:"processes"`
 }
 
 // NetworkInterface is one attachment of a container to a network, as reported

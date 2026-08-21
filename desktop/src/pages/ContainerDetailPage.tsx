@@ -17,8 +17,8 @@ import {
 } from 'lucide-react';
 import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
-import { Gauge } from '../components/Gauge';
-import { UsageChart, asBytes, asPercent } from '../components/UsageChart';
+import { LiveChart, type Trace } from '../components/LiveChart';
+import { Meter } from '../components/Meter';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -28,18 +28,19 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Facts, Flags, Row, Section } from '../components/DetailRow';
 import { ContainerForm } from '../components/ContainerForm';
 import { api } from '../services/api';
+import { useLiveUsage } from '../hooks/useLiveUsage';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type {
-  PendingEdit,
-  Container,
-  ContainerSpec,
-  ContainerTab,
-  Port,
-  UsagePoint,
-} from '../types';
-import { formatDuration, formatMemory, shortImage, splitEnv } from '../utils/format';
+import type { PendingEdit, Container, ContainerSpec, ContainerTab, Port } from '../types';
+import {
+  formatBytes,
+  formatDuration,
+  formatMemory,
+  formatRate,
+  shortImage,
+  splitEnv,
+} from '../utils/format';
 
 // xterm is a large dependency and only the Terminal tab needs it, so it stays
 // out of the initial bundle.
@@ -316,71 +317,116 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   );
 }
 
+// Declared once rather than rebuilt on every render: the chart memoises on the
+// traces it is handed, and a fresh array each time defeats that.
+const CPU: Trace[] = [{ value: (point) => point.cpuPercent }];
+const MEMORY: Trace[] = [{ value: (point) => point.memoryBytes }];
+const NETWORK: Trace[] = [
+  { name: 'in', value: (point) => point.networkRxPerSec },
+  { name: 'out', value: (point) => point.networkTxPerSec },
+];
+const DISK: Trace[] = [
+  { name: 'read', value: (point) => point.blockReadPerSec },
+  { name: 'written', value: (point) => point.blockWritePerSec },
+];
+
+const asPercent = (value: number) => `${value.toFixed(1)}%`;
+const asBytes = (value: number) => formatBytes(value);
+const asRate = (value: number) => formatRate(value);
+
 /**
- * What the container is using, now and over the last half hour.
+ * A counter since the container started. Zero is a reading, not a blank -- but
+ * only while the container is running: nothing is sampled once it stops, and
+ * "0 B" would say it moved nothing rather than that nobody is looking.
+ */
+function total(bytes?: number): string {
+  return bytes && bytes > 0 ? formatBytes(bytes) : '0 B';
+}
+
+/**
+ * What the container is doing, as it does it.
  *
- * The two belong together: a meter answers "is it busy?" and the chart behind
- * it answers "has it been?". Split across the overview they were two unrelated
- * boxes competing with the facts around them.
+ * The agent takes a reading every five seconds and has been keeping the last
+ * few minutes of them since it started, so this opens full and carries on
+ * rather than filling itself while somebody waits. Apple's runtime keeps no
+ * history of its own; this window is Dermaga's, it lives in memory, and it goes
+ * when the app does.
  */
 function UsageTab({ container }: { container: Container }) {
   const running = container.status === 'running';
   const cores = container.cpuAllocation ?? 1;
-  const history = useUsageHistory(container.id, container.cpuUsage, running);
+  const points = useLiveUsage(container, running);
+
+  if (!running) {
+    return (
+      <DetailGrid>
+        <Section title="Live" plain span>
+          <p className="text-xs text-ink-600 dark:text-ink-400">
+            Nothing is measured while the container is stopped. Start it and the readings begin
+            arriving within a few seconds.
+          </p>
+        </Section>
+      </DetailGrid>
+    );
+  }
 
   return (
     <DetailGrid>
-      <Section title="Now" plain>
-        <div className="grid grid-cols-2 gap-4 pt-1">
-          <Gauge
-            value={running ? (container.cpuUsage ?? 0) : 0}
-            label="CPU"
-            reading={running ? `${(container.cpuUsage ?? 0).toFixed(1)}%` : 'idle'}
-            caption={`of ${cores} core${cores > 1 ? 's' : ''}`}
-            idle={!running}
+      {/* Said once, at the top, rather than on all four charts: what the window
+          is, how often it moves, and that closing the tab ends it. */}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-ink-500 lg:col-span-2">
+        <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-500">
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-current motion-safe:animate-pulse"
+            aria-hidden
           />
-          <Gauge
-            value={running ? (container.memoryUsagePercent ?? 0) : 0}
-            label="Memory"
-            reading={
-              running && container.memoryUsage ? formatMemory(container.memoryUsage) : 'idle'
-            }
-            caption={`of ${formatMemory(container.memoryAllocation)}`}
-            idle={!running}
-          />
-        </div>
+          Live
+        </span>
+        <span aria-hidden>·</span>
+        <span>the runtime is asked every 5 seconds; the last 2 minutes are drawn</span>
+        <span aria-hidden>·</span>
+        <span>kept while Dermaga runs, so closing this and coming back continues it</span>
+      </p>
+
+      <Section title="CPU" plain>
+        <LiveChart
+          points={points}
+          traces={CPU}
+          ceiling={100}
+          format={asPercent}
+          footnote={`${container.processes ?? 0} process${container.processes === 1 ? '' : 'es'}`}
+        />
+        <Meter value={container.cpuUsage ?? 0} label={`of ${cores} core${cores > 1 ? 's' : ''}`} />
       </Section>
 
-      <Section title="Last 30 minutes" plain>
-        {/* Apple's CLI reports a container's usage now and nothing else, so the
-            history is ours: the agent samples every five seconds and keeps half
-            an hour of it in memory. */}
-        <p className="pb-1 text-tiny text-ink-600 dark:text-ink-400">
-          Dermaga records this itself — the CLI keeps no history. Samples are taken every five
-          seconds while Dermaga runs, and are forgotten when it quits.
-        </p>
+      <Section title="Memory" plain>
+        <LiveChart points={points} traces={MEMORY} format={asBytes} />
+        <Meter
+          value={container.memoryUsagePercent ?? 0}
+          label={`of ${formatMemory(container.memoryAllocation)}`}
+        />
+      </Section>
 
-        {running ? (
-          <>
-            <UsageChart
-              points={history}
-              label="CPU"
-              value={(point) => point.cpuPercent}
-              ceiling={100}
-              format={asPercent}
-            />
-            <UsageChart
-              points={history}
-              label="Memory"
-              value={(point) => point.memoryBytes}
-              format={asBytes}
-            />
-          </>
-        ) : (
-          <p className="text-xs text-ink-600 dark:text-ink-400">
-            Nothing is sampled while the container is stopped.
-          </p>
-        )}
+      {/* In and out on one scale, and their totals underneath: the rate says
+          what is happening, the total says what has happened, and a container
+          quiet now that has pulled a gigabyte is a different container from one
+          that has pulled nothing. */}
+      <Section title="Network" plain>
+        <LiveChart
+          points={points}
+          traces={NETWORK}
+          format={asRate}
+          footnote={`${total(container.networkRxBytes)} in · ${total(container.networkTxBytes)} out`}
+        />
+      </Section>
+
+      <Section title="Disk" plain>
+        <LiveChart
+          points={points}
+          traces={DISK}
+          format={asRate}
+          footnote={`${total(container.blockReadBytes)} read · ${total(container.blockWriteBytes)} written`}
+        />
       </Section>
     </DetailGrid>
   );
@@ -392,39 +438,6 @@ function TabPlaceholder({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
-}
-
-/**
- * The last half hour of samples for one container.
- *
- * Refetched whenever a new sample lands rather than on a timer: the container
- * in props is replaced by the pushed snapshot, so its usage changing is exactly
- * the signal that there is one more point to draw.
- */
-function useUsageHistory(id: string, tick: number | undefined, enabled: boolean) {
-  // Keyed by container so a half-finished fetch from the one just navigated
-  // away from can never draw itself under the new name.
-  const [state, setState] = useState<{ id: string; points: UsagePoint[] }>({ id, points: [] });
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    let live = true;
-    api
-      .getContainerHistory(id)
-      .then((points) => {
-        if (live) setState({ id, points });
-      })
-      .catch(() => {
-        // A container that went away mid-request has no history to show.
-      });
-
-    return () => {
-      live = false;
-    };
-  }, [id, tick, enabled]);
-
-  return enabled && state.id === id ? state.points : [];
 }
 
 function OverviewTab({ container }: { container: Container }) {

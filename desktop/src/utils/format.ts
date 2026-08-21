@@ -79,3 +79,12 @@ export function formatBytes(bytes?: number): string {
   }
   return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
+
+/** A rate, for the counters that only mean something as a speed. */
+export function formatRate(bytesPerSecond?: number): string {
+  // Not formatBytes' em dash: nothing moving is a reading in its own right,
+  // and a chart whose axis reads "—/s" at rest tells nobody anything.
+  if (!bytesPerSecond || bytesPerSecond <= 0) return '0 B/s';
+
+  return `${formatBytes(bytesPerSecond)}/s`;
+}

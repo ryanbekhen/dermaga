@@ -114,12 +114,14 @@ export function HelpView({ version }: { version: string }) {
             </p>
           </Card>
 
-          <Card icon={Activity} title="What usage looked like">
+          <Card icon={Activity} title="What a container is doing">
             <p>
-              A container&rsquo;s overview keeps the last half hour of CPU and memory. The shape is
-              what a live number cannot show: memory that climbs and never falls is a leak, and CPU
-              pinned against the allocation is a container being starved. Samples are taken every
-              five seconds while the app runs, and are not kept between launches.
+              A container&rsquo;s <strong>Usage</strong> tab draws CPU, memory, network and disk as
+              they happen — a reading every five seconds, over the last two minutes. The shape is
+              what a live number cannot show: memory that climbs and never falls is a leak, a burst
+              of traffic every thirty seconds is a health check rather than a user. Dermaga keeps
+              that window in memory while it runs, so the tab opens on a chart that is already drawn
+              — and forgets it when it quits.
             </p>
           </Card>
 

@@ -739,9 +739,9 @@ func (a *Agent) registerContainers() {
 		return a.containers.Get(ctx, args.ID)
 	})
 
-	// The shape over time, which a single live number cannot show: memory that
-	// climbs and never falls is a leak, CPU pinned at the allocation is a
-	// container being starved.
+	// The minutes already watched, so a chart opens full rather than empty. The
+	// window keeps itself from the moment the agent starts; this only hands over
+	// what is there.
 	a.server.Register("containers.history", func(_ context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			ID string `json:"id"`
