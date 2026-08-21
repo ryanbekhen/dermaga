@@ -16,6 +16,10 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-CE1126">
 </p>
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="Dermaga showing the containers running on this Mac" width="900">
+</p>
+
 ---
 
 **[Install](#install)** · **[First launch](#first-launch)** · **[Features](#features)** ·
