@@ -150,7 +150,7 @@ window.dermaga = {
     ),
 
   checkUpdate: () => call('CheckUpdate'),
-  downloadUpdate: (assetUrl, version) => call('DownloadUpdate', assetUrl, version),
+  stageUpdate: (assetUrl, version) => call('StageUpdate', assetUrl, version),
   installUpdate: (dmgPath) => call('InstallUpdate', dmgPath),
   onUpdateProgress: (callback) => on('dermaga:update-progress', callback),
 };

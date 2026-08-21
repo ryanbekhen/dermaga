@@ -444,9 +444,105 @@ func updateFromRelease(release githubRelease, current string) UpdateCheck {
 	}
 }
 
+// StagedUpdate is a download that has landed, and what can be done with it.
+type StagedUpdate struct {
+	Path    string `json:"path"`
+	Version string `json:"version"`
+	// True when a restart is all it would take. False means the old road:
+	// open the image and let somebody drag the app across.
+	Restartable bool `json:"restartable"`
+	// Why not, in the words the log would use. Never shown as an error --
+	// there is nothing wrong, only a longer way round.
+	Reason string `json:"reason,omitempty"`
+}
+
+// updatesDir is where a download waits until somebody restarts.
+//
+// Not Downloads: this one was never asked for. An update that arrives on its
+// own has no business leaving a file in the folder somebody keeps their own
+// downloads in -- and if it turns out a drag is needed after all, it is moved
+// there then, where they would look for it.
+func updatesDir() string {
+	return filepath.Join(homeDir(), ".dermaga", "updates")
+}
+
+// StageUpdate downloads a release and says whether a restart could install it.
+//
+// The download is kept, so quitting without restarting does not throw it away:
+// the next launch finds it already there and offers the restart immediately.
+func (b *Bridge) StageUpdate(assetURL, version string) (StagedUpdate, error) {
+	path, err := b.DownloadUpdate(assetURL, version)
+	if err != nil {
+		return StagedUpdate{}, err
+	}
+
+	staged := StagedUpdate{Path: path, Version: version, Restartable: true}
+	if err := installable(path); err != nil {
+		staged.Restartable = false
+		staged.Reason = err.Error()
+		log.Println("[dermaga] update needs the long road:", err)
+	}
+
+	b.app.stage(staged)
+
+	return staged, nil
+}
+
+// forgetOldUpdates removes downloads for versions this app has caught up with.
+//
+// Run at launch, because that is when the answer changes: either the restart
+// happened and this is the new version, or somebody installed it another way.
+// Either way the image is 9 MB of nothing, and nobody would think to look for
+// it.
+func forgetOldUpdates(current string) {
+	entries, err := os.ReadDir(updatesDir())
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		version := strings.TrimSuffix(strings.TrimPrefix(entry.Name(), "Dermaga-"), "-arm64.dmg")
+		if version != entry.Name() && isNewer(version, current) {
+			continue
+		}
+
+		_ = os.Remove(filepath.Join(updatesDir(), entry.Name()))
+	}
+}
+
+// tidyUpdates removes every download except the one still worth keeping.
+func tidyUpdates(keep string) {
+	entries, err := os.ReadDir(updatesDir())
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		path := filepath.Join(updatesDir(), entry.Name())
+		if path == keep {
+			continue
+		}
+
+		_ = os.Remove(path)
+	}
+}
+
 // DownloadUpdate fetches the DMG, reporting progress as it goes, and returns
-// where it landed.
+// where it landed. A download already sitting there is taken as it is.
 func (b *Bridge) DownloadUpdate(assetURL, version string) (string, error) {
+	if err := os.MkdirAll(updatesDir(), 0o755); err != nil {
+		return "", err
+	}
+
+	target := filepath.Join(updatesDir(), fmt.Sprintf("Dermaga-%s-arm64.dmg", version))
+	tidyUpdates(target)
+
+	// Already here, from a check before this app was even started. Nothing is
+	// gained by fetching it twice, and the version is in the name.
+	if info, err := os.Stat(target); err == nil && info.Size() > 0 {
+		return target, nil
+	}
+
 	response, err := http.Get(assetURL)
 	if err != nil {
 		return "", err
@@ -458,10 +554,6 @@ func (b *Bridge) DownloadUpdate(assetURL, version string) (string, error) {
 	}
 
 	total := response.ContentLength
-
-	// Downloads, not a temp directory: if anything goes wrong the user still
-	// has the installer where they would expect to find it.
-	target := filepath.Join(homeDir(), "Downloads", fmt.Sprintf("Dermaga-%s-arm64.dmg", version))
 
 	file, err := os.Create(target)
 	if err != nil {
@@ -525,6 +617,15 @@ func (b *Bridge) InstallUpdate(dmgPath string) error {
 		return nil
 	} else {
 		log.Println("[dermaga] not replacing in place:", err)
+	}
+
+	// The long road, which ends with somebody dragging the app across. The
+	// image was staged out of the way because nobody asked for it; now that
+	// they have to handle it themselves, it belongs where downloads live.
+	if moved := filepath.Join(homeDir(), "Downloads", filepath.Base(dmgPath)); moved != dmgPath {
+		if err := os.Rename(dmgPath, moved); err == nil {
+			dmgPath = moved
+		}
 	}
 
 	if err := exec.Command("open", dmgPath).Run(); err != nil {

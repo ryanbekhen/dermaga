@@ -45,6 +45,31 @@ type App struct {
 
 	// Streams the startup sequence is listening to, keyed by stream id.
 	streams map[string]func(method string, params json.RawMessage)
+
+	// The update waiting for a restart, once one has been downloaded and found
+	// installable. The menu bar offers it too: the window is often closed, and
+	// somebody watching from the clock would otherwise never be told.
+	staged StagedUpdate
+}
+
+// stage records a downloaded update and offers it from the menu bar.
+func (a *App) stage(update StagedUpdate) {
+	a.mu.Lock()
+	a.staged = update
+	tray := a.tray
+	a.mu.Unlock()
+
+	if tray != nil && update.Restartable {
+		tray.Offer(update.Version)
+	}
+}
+
+// stagedUpdate is what is waiting, if anything is.
+func (a *App) stagedUpdate() StagedUpdate {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	return a.staged
 }
 
 // Run draws the window and does not return until it closes.
@@ -101,6 +126,10 @@ func Run(version string) error {
 	// Replaces the browser's menu with the app's -- no Reload, no inspector, no
 	// link to wails.io. Set before Run, which is when macOS reads it.
 	app.wails.Menu.Set(menuBar())
+
+	// An update downloaded before the last restart has either been installed by
+	// it or overtaken; either way it is not worth keeping.
+	go forgetOldUpdates(version)
 
 	// A container that died while nobody was looking is exactly what a window
 	// cannot report, so a click on the notice has to be able to open one.
@@ -401,7 +430,19 @@ func (a *App) startTray() {
 			}()
 		},
 		OnOpenProject: a.OpenProjectPage,
-		OnQuit:        func() { a.wails.Quit() },
+		OnRestartUpdate: func() {
+			staged := a.stagedUpdate()
+			if staged.Path == "" {
+				return
+			}
+
+			go func() {
+				if err := a.bridge.InstallUpdate(staged.Path); err != nil {
+					log.Println("[dermaga] the update could not be installed:", err)
+				}
+			}()
+		},
+		OnQuit: func() { a.wails.Quit() },
 	})
 
 	if agent := a.Agent(); agent != nil {

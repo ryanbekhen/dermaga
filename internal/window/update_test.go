@@ -1,6 +1,10 @@
 package window
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // Whether anybody is ever offered an update comes down to this comparison, and
 // it had none of its own tests: a release that goes out with this wrong is a
@@ -85,5 +89,46 @@ func TestRunningTheLatestIsNotAnUpdate(t *testing.T) {
 	}
 	if got.Current != "1.6.1" {
 		t.Errorf("the answer should still say what is running: got %q", got.Current)
+	}
+}
+
+// A download is kept only while it is still ahead of the app. After the
+// restart that installed it, it is 9 MB in a folder nobody looks in.
+func TestOldDownloadsAreForgotten(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := filepath.Join(home, ".dermaga", "updates")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{
+		"Dermaga-1.7.0-arm64.dmg", // older than what is running
+		"Dermaga-1.8.1-arm64.dmg", // the version running now
+		"Dermaga-1.9.0-arm64.dmg", // still ahead: keep
+		"something-else.txt",      // not ours to name, and not ours to delete
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	forgetOldUpdates("1.8.1")
+
+	left := map[string]bool{}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		left[entry.Name()] = true
+	}
+
+	if left["Dermaga-1.7.0-arm64.dmg"] || left["Dermaga-1.8.1-arm64.dmg"] {
+		t.Errorf("a download this app has caught up with was kept: %v", left)
+	}
+	if !left["Dermaga-1.9.0-arm64.dmg"] {
+		t.Error("the update still ahead of this app was deleted")
 	}
 }

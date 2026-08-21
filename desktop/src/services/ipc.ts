@@ -35,7 +35,7 @@ interface Bridge {
   setOpenAtLogin?: (value: boolean) => Promise<boolean>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
   checkUpdate?: () => Promise<UpdateCheck>;
-  downloadUpdate?: (assetUrl: string, version: string) => Promise<string>;
+  stageUpdate?: (assetUrl: string, version: string) => Promise<StagedUpdate>;
   installUpdate?: (dmgPath: string) => Promise<void>;
   onUpdateProgress?: (callback: (value: { received: number; total: number }) => void) => () => void;
 }
@@ -48,6 +48,18 @@ export interface UpdateCheck {
   url?: string;
   assetUrl?: string;
   size?: number;
+}
+
+/** A release that has landed, and what it would take to install it. */
+export interface StagedUpdate {
+  path: string;
+  version: string;
+  /**
+   * True when a restart is all it would take. False means the old road: the
+   * image opens and somebody drags the app across.
+   */
+  restartable: boolean;
+  reason?: string;
 }
 
 declare global {
@@ -201,10 +213,15 @@ export const updates = {
   check: (): Promise<UpdateCheck> =>
     bridge().checkUpdate?.() ?? Promise.resolve({ available: false, current: '' }),
 
-  download: (assetUrl: string, version: string): Promise<string> => {
-    const download = bridge().downloadUpdate;
-    if (!download) return Promise.reject(new Error('Updates need the desktop app'));
-    return download(assetUrl, version);
+  /**
+   * Fetches the release and reports whether a restart could install it. A
+   * download already on disk is taken as it is, so quitting without restarting
+   * costs nothing the next time.
+   */
+  stage: (assetUrl: string, version: string): Promise<StagedUpdate> => {
+    const stage = bridge().stageUpdate;
+    if (!stage) return Promise.reject(new Error('Updates need the desktop app'));
+    return stage(assetUrl, version);
   },
 
   /** Opens the installer; Dermaga closes itself a moment later. */

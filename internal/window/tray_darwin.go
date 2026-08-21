@@ -118,6 +118,8 @@ func (t *Tray) run(action, id string) {
 		t.call(t.handlers.OnStartServices)
 	case "project":
 		t.call(t.handlers.OnOpenProject)
+	case "restart-update":
+		t.call(t.handlers.OnRestartUpdate)
 	case "quit":
 		t.call(t.handlers.OnQuit)
 	}

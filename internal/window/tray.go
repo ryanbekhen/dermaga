@@ -27,6 +27,10 @@ type TrayContainer struct {
 type TrayState struct {
 	Running    *bool
 	Containers []TrayContainer
+	// Set once an update has been downloaded and found installable. The menu
+	// bar is the only part of Dermaga always on screen, so it is where an app
+	// with no window open can say a newer one is ready.
+	UpdateVersion string
 }
 
 // TrayHandlers are supplied by the caller; the menu names actions rather than
@@ -37,6 +41,7 @@ type TrayHandlers struct {
 	OnOpenContainer func(id string)
 	OnStartServices func()
 	OnOpenProject   func()
+	OnRestartUpdate func()
 	OnQuit          func()
 }
 
@@ -85,6 +90,15 @@ func (t *Tray) Update(running *bool, containers []TrayContainer) {
 	if containers != nil {
 		t.state.Containers = containers
 	}
+	t.mu.Unlock()
+
+	t.apply()
+}
+
+// Offer puts a downloaded update in the menu.
+func (t *Tray) Offer(version string) {
+	t.mu.Lock()
+	t.state.UpdateVersion = version
 	t.mu.Unlock()
 
 	t.apply()
@@ -149,6 +163,15 @@ func trayMenuItems(state TrayState) []trayItem {
 	// away from the clock.
 	if state.Running != nil && !*state.Running {
 		items = append(items, trayItem{Label: "Start services", Action: "start-services"})
+	}
+
+	// Above the rest, because it is the only row here that expires: a version
+	// already downloaded, needing nothing but the app to close and open again.
+	if state.UpdateVersion != "" {
+		items = append(items, trayItem{
+			Label:  fmt.Sprintf("Restart to update to %s", state.UpdateVersion),
+			Action: "restart-update",
+		})
 	}
 
 	// Where the app came from, one click from the clock. Dermaga is somebody's

@@ -3,6 +3,7 @@ package window
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -153,5 +154,39 @@ func TestTrayKeepsQuitLast(t *testing.T) {
 
 	if last.Action != "quit" {
 		t.Errorf("the last row should be the way out, got %q", last.Label)
+	}
+}
+
+// An update that has already been downloaded is the one row in this menu with
+// a deadline on it: nothing is left to do but close the app and open it again.
+func TestTheMenuOffersAnUpdateOnceItIsDownloaded(t *testing.T) {
+	running := true
+
+	quiet := trayMenuItems(TrayState{Running: &running})
+	for _, item := range quiet {
+		if item.Action == "restart-update" {
+			t.Fatal("the menu offered a restart with nothing downloaded")
+		}
+	}
+
+	offered := trayMenuItems(TrayState{Running: &running, UpdateVersion: "1.9.0"})
+
+	var found trayItem
+	for _, item := range offered {
+		if item.Action == "restart-update" {
+			found = item
+		}
+	}
+
+	if found.Action == "" {
+		t.Fatal("a downloaded update was not offered")
+	}
+	// The version is in the row: "an update is ready" says nothing about
+	// whether it is the one somebody has been waiting for.
+	if !strings.Contains(found.Label, "1.9.0") {
+		t.Errorf("the row reads %q, and does not say which version", found.Label)
+	}
+	if found.Disabled {
+		t.Error("the row cannot be pressed")
 	}
 }

@@ -156,34 +156,59 @@ func appInside(mount string) (string, error) {
 	return "", fmt.Errorf("there is no app in the disk image")
 }
 
-// replaceWith swaps this app for the one in the downloaded image, and returns
-// only when the handover has been armed -- the caller quits, and the swap
-// happens in the gap.
-func (a *App) replaceWith(dmg string) error {
-	current := bundlePath()
+// examine opens a downloaded image and answers whether the app inside it can
+// take this one's place. The image is left mounted; the caller detaches it.
+//
+// Split out of replaceWith so an update can be checked the moment it lands
+// rather than at the moment somebody presses the button. A restart that
+// discovers only then that the download cannot be installed has already closed
+// the window.
+func examine(dmg string) (mount, candidate, current string, err error) {
+	current = bundlePath()
 	if current == "" {
-		return fmt.Errorf("Dermaga is not running from an app bundle")
+		return "", "", "", fmt.Errorf("Dermaga is not running from an app bundle")
 	}
 
 	// Writing the replacement next to the original, so the move at the end is
 	// a rename within one filesystem: instant, and either done or not done.
 	// Across filesystems it would be a copy, which can fail halfway.
 	if err := writable(filepath.Dir(current)); err != nil {
-		return err
+		return "", "", "", err
 	}
 
-	mount, err := mountImage(dmg)
+	mount, err = mountImage(dmg)
 	if err != nil {
-		return err
+		return "", "", "", err
 	}
-	defer exec.Command("hdiutil", "detach", mount, "-quiet").Run()
 
-	candidate, err := appInside(mount)
+	candidate, err = appInside(mount)
 	if err != nil {
-		return err
+		return mount, "", current, err
 	}
 
-	if err := trustworthy(candidate, current); err != nil {
+	return mount, candidate, current, trustworthy(candidate, current)
+}
+
+// installable reports whether a downloaded image could replace this app right
+// now, without replacing anything.
+func installable(dmg string) error {
+	mount, _, _, err := examine(dmg)
+	if mount != "" {
+		defer exec.Command("hdiutil", "detach", mount, "-quiet").Run()
+	}
+
+	return err
+}
+
+// replaceWith swaps this app for the one in the downloaded image, and returns
+// only when the handover has been armed -- the caller quits, and the swap
+// happens in the gap.
+func (a *App) replaceWith(dmg string) error {
+	mount, candidate, current, err := examine(dmg)
+	if mount != "" {
+		defer exec.Command("hdiutil", "detach", mount, "-quiet").Run()
+	}
+	if err != nil {
 		return err
 	}
 

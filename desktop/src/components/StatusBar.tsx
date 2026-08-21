@@ -63,22 +63,23 @@ export function StatusBar({ build, system, connection, error }: StatusBarProps) 
 }
 
 /**
- * Sits quiet until GitHub has something newer. One click downloads it, opens
- * the installer and closes Dermaga -- so the whole update is that click plus a
- * drag in Finder.
+ * Sits quiet until an update is not only found but downloaded and checked.
+ *
+ * Nothing is shown while it is being fetched. Nobody asked for it, and an app
+ * that announces work it decided to do on its own is asking for attention it
+ * has not earned -- the only moment worth interrupting for is the one where
+ * there is something to press.
  */
 function UpdatePill() {
-  const { update, stage, percent, error, run } = useUpdate();
+  const { update, staged, stage, error, run } = useUpdate();
 
-  if (stage === 'idle' || !update?.version) return null;
+  if (stage === 'idle' || stage === 'fetching') return null;
 
-  if (stage === 'downloading' || stage === 'opening') {
+  if (stage === 'installing') {
     return (
       <span className="flex items-center gap-1.5 text-brand-600 dark:text-brand-400">
         <Loader2 size={11} className="animate-spin" aria-hidden />
-        {stage === 'opening'
-          ? 'Opening the installer…'
-          : `Downloading v${update.version}… ${percent}%`}
+        Restarting…
       </span>
     );
   }
@@ -96,13 +97,32 @@ function UpdatePill() {
     );
   }
 
+  const version = staged?.version ?? update?.version;
+  if (!version) return null;
+
+  // Downloaded, but this build cannot be swapped underneath itself -- an
+  // ad-hoc signature, or an app somewhere only an administrator can write.
+  // The image opens and somebody drags it across, as it always did.
+  if (stage === 'manual') {
+    return (
+      <button
+        onClick={() => void run()}
+        title={`Dermaga ${version} is downloaded. Opening the installer closes Dermaga; the new version has to be dragged across.`}
+        className="flex items-center gap-1.5 font-semibold text-brand-600 hover:underline dark:text-brand-400"
+      >
+        <ArrowDownToLine size={11} aria-hidden />v{version} ready to install
+      </button>
+    );
+  }
+
   return (
     <button
       onClick={() => void run()}
-      title={`Download Dermaga ${update.version} and open the installer. Dermaga will close.`}
+      title={`Dermaga ${version} is downloaded and verified. Restarting takes a moment and installs it — containers keep running.`}
       className="flex items-center gap-1.5 font-semibold text-brand-600 hover:underline dark:text-brand-400"
     >
-      <ArrowDownToLine size={11} aria-hidden />v{update.version} available
+      <RefreshCw size={11} aria-hidden />
+      Restart to update
     </button>
   );
 }
