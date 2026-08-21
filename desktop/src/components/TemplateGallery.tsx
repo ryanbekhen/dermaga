@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Search, WifiOff } from 'lucide-react';
 import { Modal } from './form';
 import { Button } from './Button';
@@ -17,6 +17,10 @@ import type { ContainerSpec, Template } from '../types';
  *
  * The catalogue lives online and the agent keeps a copy, so this works offline
  * once it has been reached once -- and says so plainly when it has not.
+ *
+ * It is reachable without the mouse, the same way the command palette is: type
+ * to narrow, arrows to move, Enter to take one. Anybody who opened this from the
+ * palette got here by keyboard and should not have to leave it now.
  */
 
 /** A tinted tile with an initial, for a template whose project has no icon. */
@@ -50,6 +54,8 @@ export function TemplateGallery({
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [needle, setNeedle] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   const pushToast = useToastStore((s) => s.push);
 
   useEffect(() => {
@@ -74,6 +80,13 @@ export function TemplateGallery({
     );
   }, [templates, needle]);
 
+  // A stale index would fill the form in from whatever happens to sit there now.
+  const index = Math.min(active, Math.max(shown.length - 1, 0));
+
+  useEffect(() => {
+    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [index, shown.length]);
+
   const refresh = async () => {
     setRefreshing(true);
     try {
@@ -85,6 +98,24 @@ export function TemplateGallery({
     }
   };
 
+  // Handled where the caret is. Typing narrows the list and the arrows move
+  // through what is left, so neither ever asks for the mouse. Escape belongs to
+  // the modal itself and is left alone here.
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (shown.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActive(index + 1 >= shown.length ? 0 : index + 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive(index - 1 < 0 ? shown.length - 1 : index - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      onPick(shown[index].spec);
+    }
+  };
+
   return (
     <Modal
       title="Start from a template"
@@ -92,6 +123,16 @@ export function TemplateGallery({
       onClose={onClose}
       footer={
         <>
+          {shown.length > 0 && (
+            <span className="mr-auto flex items-center gap-3 text-tiny text-ink-500">
+              <span>
+                <span className="font-mono">↑↓</span> to move
+              </span>
+              <span>
+                <span className="font-mono">↵</span> to use
+              </span>
+            </span>
+          )}
           <Button icon={RefreshCw} busy={refreshing} busyLabel="Fetching…" onClick={refresh}>
             Refresh
           </Button>
@@ -108,7 +149,11 @@ export function TemplateGallery({
         <input
           autoFocus
           value={needle}
-          onChange={(event) => setNeedle(event.target.value)}
+          onChange={(event) => {
+            setNeedle(event.target.value);
+            setActive(0);
+          }}
+          onKeyDown={onKeyDown}
           placeholder="Search templates…"
           aria-label="Search templates"
           className="input w-full pl-9"
@@ -139,12 +184,21 @@ export function TemplateGallery({
           Nothing matches “{needle}”.
         </p>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          {shown.map((template) => (
+        <div ref={listRef} className="flex flex-col gap-1.5">
+          {shown.map((template, position) => (
             <button
               key={template.id}
+              data-active={position === index}
               onClick={() => onPick(template.spec)}
-              className="flex items-start gap-2.5 rounded-lg border border-ink-200 p-2.5 text-left transition hover:border-brand-600 hover:bg-brand-600/5 dark:border-ink-700"
+              // The mouse moves the same selection the arrows do, rather than
+              // lighting up a second one: two highlights at once and Enter
+              // becomes a guess.
+              onMouseMove={() => setActive(position)}
+              className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition ${
+                position === index
+                  ? 'border-brand-600 bg-brand-600/5'
+                  : 'border-ink-200 dark:border-ink-700'
+              }`}
             >
               {template.logo ? (
                 <img src={template.logo} alt="" aria-hidden className="h-7 w-7 shrink-0" />
