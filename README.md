@@ -200,17 +200,17 @@ from Apple's `.pkg` is left alone — upgrading that means an installer asking f
 
 ## Privacy
 
-Dermaga needs no macOS permissions of its own: no network access, no disk access prompts, no
-accessibility, no administrator password. It runs Apple's CLI as your user and talks to its agent
-over a socket in your own home directory.
+Dermaga opens no ports. It runs Apple's CLI as you, and the window talks to its agent over a socket
+in your own home directory. Nothing about your containers, images or scan results leaves this Mac —
+what it fetches is its own updates, the CLI and scanner it installs through Homebrew, and the
+template catalogue.
 
-Three things it does ask about, and asks in the app: installing the `container` CLI through
-Homebrew, installing a Linux kernel if the services need one, and installing the background service
-— a per-user launchd job in `~/Library/LaunchAgents`, which needs no administrator either and is
-removed from the same switch.
+Things it asks about, and asks in the app rather than behind your back:
 
-Notifications are the one system permission it will ask for, the first time a container stops
-without being asked to. Turn them off in Settings and it never asks again.
+- installing the `container` CLI through Homebrew
+- installing a Linux kernel, if the container services need one
+- installing the background service, a per-user launchd job in `~/Library/LaunchAgents`
+- notifications, the first time a container stops without being asked to
 
 ## Support
 
