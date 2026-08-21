@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Search, WifiOff } from 'lucide-react';
 import { Modal } from './form';
+import { PLACEHOLDER_WIDTHS, SkeletonBar } from './Skeleton';
 import { Button } from './Button';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
@@ -161,7 +162,23 @@ export function TemplateGallery({
       </label>
 
       {templates === null ? (
-        <p className="py-6 text-center text-xs text-ink-600 dark:text-ink-400">Reading…</p>
+        // The shape of the list, not a word about waiting: the rows land where
+        // the bars are and nothing moves.
+        <div className="flex flex-col gap-1.5">
+          {Array.from({ length: 4 }, (_, at) => (
+            <div
+              key={at}
+              aria-hidden
+              className="flex items-start gap-2.5 rounded-lg border border-ink-200 p-2.5 dark:border-ink-700"
+            >
+              <SkeletonBar width="28px" height="h-7" at={at} className="shrink-0 rounded-md" />
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-0.5">
+                <SkeletonBar width="38%" at={at} />
+                <SkeletonBar width={PLACEHOLDER_WIDTHS[at % PLACEHOLDER_WIDTHS.length]} at={at} />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : templates.length === 0 ? (
         // Not an error, and worth saying exactly: the catalogue is online, and
         // this machine has not reached it yet. Everything else about creating a

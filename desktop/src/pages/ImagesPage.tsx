@@ -96,6 +96,7 @@ const COLUMNS: Column[] = [
 
 export function ImagesPage() {
   const images = useResourceStore((s) => s.images);
+  const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const containers = useResourceStore((s) => s.containers);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
@@ -177,6 +178,7 @@ export function ImagesPage() {
             ? 'No images yet. Pull one to get started.'
             : 'No images match your search.'
         }
+        loading={!hasLoaded}
         cells={(group) => {
           const users = usersOf(group);
 

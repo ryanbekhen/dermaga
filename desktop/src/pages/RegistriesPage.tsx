@@ -26,7 +26,7 @@ const COLUMNS: Column[] = [
  * between the app working and not, which is not a Settings detail.
  */
 export function RegistriesPage() {
-  const [logins, setLogins] = useState<RegistryLogin[]>([]);
+  const [logins, setLogins] = useState<RegistryLogin[] | null>(null);
   const adding = useDialog('registry.add');
   const [removing, setRemoving] = useState<RegistryLogin | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -34,6 +34,8 @@ export function RegistriesPage() {
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const pushToast = useToastStore((s) => s.push);
 
+  // Null until the first answer: "not asked yet" and "asked, and there are
+  // none" are different things, and only one of them is worth telling somebody.
   const load = useCallback(() => {
     void api
       .getRegistries()
@@ -59,7 +61,7 @@ export function RegistriesPage() {
   };
 
   const needle = searchQuery.trim().toLowerCase();
-  const visible = logins.filter(
+  const visible = (logins ?? []).filter(
     (login) =>
       !needle ||
       login.server.toLowerCase().includes(needle) ||
@@ -84,8 +86,9 @@ export function RegistriesPage() {
         columns={COLUMNS}
         rows={visible}
         rowKey={(login) => login.server}
+        loading={logins === null}
         empty={
-          logins.length === 0
+          logins?.length === 0
             ? 'Not signed in anywhere. Public images work without this; a private one needs it.'
             : 'No registry matches your search.'
         }

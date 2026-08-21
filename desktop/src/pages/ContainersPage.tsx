@@ -74,15 +74,13 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const allocatedMib = running.reduce((sum, c) => sum + parseMebibytes(c.memoryAllocation), 0);
   const usedMib = running.reduce((sum, c) => sum + parseMebibytes(c.memoryUsage), 0);
 
-  const emptyMessage = !hasLoaded
-    ? 'Connecting to the Dermaga server…'
-    : runtimeMissing
-      ? 'The Apple Container CLI was not found on this Mac.'
-      : containers.length === 0
-        ? 'No containers yet. Start from a template, or use “New container”.'
-        : needle
-          ? 'No containers match your search.'
-          : 'No running containers. Enable “Show stopped containers” in Settings.';
+  const emptyMessage = runtimeMissing
+    ? 'The Apple Container CLI was not found on this Mac.'
+    : containers.length === 0
+      ? 'No containers yet. Start from a template, or use “New container”.'
+      : needle
+        ? 'No containers match your search.'
+        : 'No running containers. Enable “Show stopped containers” in Settings.';
 
   const chosen = containers.filter((c) => selected.has(c.id));
   const startable = chosen.filter((c) => c.status !== 'running');
@@ -194,6 +192,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
         onOpen={(container) => openContainer(container.id)}
         selection={{ selected, onChange: setSelected }}
         empty={emptyMessage}
+        loading={!hasLoaded}
         cells={(container) => {
           const isRunning = container.status === 'running';
           const address = container.interfaces?.[0]?.ipv4Address;

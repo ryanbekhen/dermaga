@@ -5,6 +5,7 @@ import { onFilesDropped, pathForFile, pickDirectory } from '../services/ipc';
 import { useToastStore } from '../store/toastStore';
 import { formatBytes } from '../utils/format';
 import type { FileEntry } from '../types';
+import { PLACEHOLDER_ROWS, PLACEHOLDER_WIDTHS, SkeletonBar } from './Skeleton';
 
 /**
  * The container's filesystem, and a way to move things in and out of it.
@@ -192,7 +193,14 @@ export function FileBrowser({
       {error ? (
         <Empty title="Cannot browse this container" body={error} />
       ) : loading && entries.length === 0 ? (
-        <Empty title="Reading…" body={`Listing ${path}`} />
+        <ul className="min-h-0 flex-1 divide-y divide-ink-200 overflow-y-auto dark:divide-ink-800">
+          {Array.from({ length: PLACEHOLDER_ROWS }, (_, at) => (
+            <li key={at} aria-hidden className="flex items-center gap-3 px-2 py-1.5">
+              <SkeletonBar width="14px" height="h-3.5" at={at} className="shrink-0 rounded-sm" />
+              <SkeletonBar width={PLACEHOLDER_WIDTHS[at % PLACEHOLDER_WIDTHS.length]} at={at} />
+            </li>
+          ))}
+        </ul>
       ) : entries.length === 0 ? (
         <Empty
           title="Nothing here"
@@ -262,7 +270,9 @@ function Empty({ title, body }: { title: string; body: string }) {
     // Stretches so the pane stays one continuous target even with nothing in it.
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center">
       <p className="text-sm font-semibold">{title}</p>
-      <p className="max-w-sm break-words text-xs leading-relaxed text-ink-600 dark:text-ink-400">{body}</p>
+      <p className="max-w-sm break-words text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+        {body}
+      </p>
     </div>
   );
 }

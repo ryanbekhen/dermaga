@@ -79,13 +79,11 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
     (machine) => !needle || machine.id.toLowerCase().includes(needle)
   );
 
-  const emptyMessage = !hasLoaded
-    ? 'Connecting to the Dermaga server…'
-    : runtimeMissing
-      ? 'The Apple Container CLI was not found on this Mac.'
-      : machines.length === 0
-        ? 'No container machines yet. Use “New machine” to create one.'
-        : 'No machines match your search.';
+  const emptyMessage = runtimeMissing
+    ? 'The Apple Container CLI was not found on this Mac.'
+    : machines.length === 0
+      ? 'No container machines yet. Use “New machine” to create one.'
+      : 'No machines match your search.';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
@@ -147,6 +145,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
         onOpen={(machine) => openMachine(machine.id)}
         selection={{ selected, onChange: setSelected }}
         empty={emptyMessage}
+        loading={!hasLoaded}
         cells={(machine) => [
           <NameCell key="name">
             <StatusDot status={machine.status} />

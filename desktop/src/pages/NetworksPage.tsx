@@ -31,6 +31,7 @@ const COLUMNS: Column[] = [
 
 export function NetworksPage() {
   const networks = useResourceStore((s) => s.networks);
+  const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openNetwork = useUIStore((s) => s.openNetwork);
@@ -94,6 +95,7 @@ export function NetworksPage() {
         selection={{ selected, onChange: setSelected }}
         onOpen={(network) => openNetwork(network.name)}
         empty={networks.length === 0 ? 'No networks yet.' : 'No networks match your search.'}
+        loading={!hasLoaded}
         cells={(network) => [
           <NameCell key="name">
             <span className="truncate text-sm font-semibold">{network.name}</span>

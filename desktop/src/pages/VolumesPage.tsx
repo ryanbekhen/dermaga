@@ -32,6 +32,7 @@ const COLUMNS: Column[] = [
 
 export function VolumesPage() {
   const volumes = useResourceStore((s) => s.volumes);
+  const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const searchQuery = useUIStore((s) => s.searchQuery);
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openVolume = useUIStore((s) => s.openVolume);
@@ -95,6 +96,7 @@ export function VolumesPage() {
         selection={{ selected, onChange: setSelected }}
         onOpen={(volume) => openVolume(volume.name)}
         empty={volumes.length === 0 ? 'No volumes yet.' : 'No volumes match your search.'}
+        loading={!hasLoaded}
         cells={(volume) => [
           <NameCell key="name">
             <span className="truncate text-sm font-semibold">{volume.name}</span>

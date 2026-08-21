@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { PLACEHOLDER_ROWS, PLACEHOLDER_WIDTHS, SkeletonBar } from './Skeleton';
 
 export interface Column {
   key: string;
@@ -25,6 +26,14 @@ interface DataTableProps<T> {
   /** Enables the leading checkbox column and select-all. */
   selection?: Selection;
   empty: string;
+  /**
+   * True while the first answer is still on its way. Without it a page that has
+   * not been told anything yet is indistinguishable from a page that has been
+   * told there is nothing -- so every list opened by announcing it was empty,
+   * then replaced itself a moment later with the rows that were there all
+   * along. Nothing about that reads as live.
+   */
+  loading?: boolean;
 }
 
 /**
@@ -40,6 +49,7 @@ export function DataTable<T>({
   actions,
   selection,
   empty,
+  loading = false,
 }: DataTableProps<T>) {
   const keys = rows.map(rowKey);
   const selectedHere = keys.filter((key) => selection?.selected.has(key));
@@ -61,7 +71,7 @@ export function DataTable<T>({
     selection.onChange(next);
   };
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && !loading) {
     return (
       <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-ink-300 text-sm text-ink-600 dark:border-ink-700 dark:text-ink-400">
         {empty}
@@ -102,7 +112,36 @@ export function DataTable<T>({
           <span />
         </div>
 
-        <ul className="col-span-full grid grid-cols-subgrid divide-y divide-ink-200 dark:divide-ink-700">
+        <ul
+          aria-busy={loading || undefined}
+          className="col-span-full grid grid-cols-subgrid divide-y divide-ink-200 dark:divide-ink-700"
+        >
+          {rows.length === 0 &&
+            // The shape of the answer while it is still coming: the columns it
+            // will arrive in, at the height it will occupy, so the page does not
+            // jump when it does.
+            Array.from({ length: PLACEHOLDER_ROWS }, (_, at) => (
+              <li
+                key={`waiting-${at}`}
+                aria-hidden
+                className="col-span-full grid grid-cols-subgrid items-center px-3"
+              >
+                {selection && <span className="h-3.5 w-3.5 rounded bg-ink-200 dark:bg-ink-800" />}
+                {columns.map((column, index) => (
+                  <div
+                    key={column.key}
+                    className={`min-w-0 py-2 ${column.align === 'right' ? 'flex justify-end' : ''}`}
+                  >
+                    <SkeletonBar
+                      width={PLACEHOLDER_WIDTHS[index % PLACEHOLDER_WIDTHS.length]}
+                      at={at}
+                    />
+                  </div>
+                ))}
+                <span />
+              </li>
+            ))}
+
           {rows.map((row) => {
             const key = rowKey(row);
             const isSelected = selection?.selected.has(key) ?? false;
