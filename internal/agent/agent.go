@@ -122,7 +122,11 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 
 		refs := make([]scanner.ImageRef, 0, len(found))
 		for _, image := range found {
-			refs = append(refs, scanner.ImageRef{Reference: image.Reference, Digest: image.Digest})
+			refs = append(refs, scanner.ImageRef{
+				Reference: image.Reference,
+				Digest:    image.Digest,
+				Platforms: image.Platforms,
+			})
 		}
 
 		return refs, nil
@@ -558,6 +562,12 @@ func (a *Agent) registerScanner() {
 	// only means scanning them again. What goes is what no longer has an image.
 	a.server.Register("scanner.clear", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		return map[string]any{"removed": a.scanner.ForgetMissing(ctx)}, nil
+	})
+
+	a.server.Register("scanner.dismiss", func(_ context.Context, _ json.RawMessage) (any, error) {
+		a.scanner.Dismiss()
+
+		return a.scanner.Status(), nil
 	})
 
 	a.server.Register("scanner.report", func(_ context.Context, params json.RawMessage) (any, error) {

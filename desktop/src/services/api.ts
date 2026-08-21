@@ -145,6 +145,11 @@ export const api = {
     return invoke('scanner.clear');
   },
 
+  /** Puts a scan failure away, for the ones nothing here can fix. */
+  async dismissScanFailure(): Promise<ScannerStatus> {
+    return invoke('scanner.dismiss');
+  },
+
   // --- settings -----------------------------------------------------------
 
   async getSettings(): Promise<{ settings: Settings; path: string }> {

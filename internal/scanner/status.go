@@ -161,6 +161,22 @@ func (m *Manager) setState(state, detail string, percent int) {
 	m.announce()
 }
 
+// Dismiss puts a failure away.
+//
+// A scan can fail for a reason nothing here can fix -- a registry that is gone,
+// an image the runtime cannot export -- and the warning would otherwise sit in
+// the status bar until something else happens to replace it. Being able to say
+// "yes, I know" is the difference between a report and a nag.
+//
+// Only a failure is dismissed: work in progress is not something to wave away.
+func (m *Manager) Dismiss() {
+	if m.Status().State != StateFailed {
+		return
+	}
+
+	m.setState(StateIdle, "", 0)
+}
+
 func (m *Manager) fail(detail string, err error) {
 	m.logger.Error(detail, "error", err)
 

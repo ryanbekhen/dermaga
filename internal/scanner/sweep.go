@@ -26,10 +26,23 @@ func (m *Manager) runSweep(ctx context.Context) {
 	// in the UI, so every pass clears them out.
 	m.forgetMissing(refs)
 
+	// And so is a warning about an image that is no longer here. A failure
+	// stays on screen until something else replaces it, which meant deleting
+	// the offending image left its complaint sitting in the status bar with
+	// nothing left to explain it.
+	m.forgetStaleFailure(refs)
+
 	// Only what actually needs doing, so the count the user sees counts down
 	// to zero rather than sitting at "1 of 12" while eleven are skipped.
 	pending := make([]ImageRef, 0, len(refs))
 	for _, ref := range refs {
+		// An image with no arm64 in it cannot be read here at all. Left in the
+		// list it is attempted on every pass, fails on every pass, and leaves a
+		// warning that no amount of waiting clears.
+		if !ref.scannable() {
+			continue
+		}
+
 		if !m.hasFreshReport(ref) {
 			pending = append(pending, ref)
 		}
@@ -209,4 +222,28 @@ func (m *Manager) outdatedResult(report Report) bool {
 	}
 
 	return time.Since(scannedAt) > maxReportAge
+}
+
+// forgetStaleFailure clears a failure about an image that is no longer here.
+//
+// Failures are sticky on purpose: a scan that went wrong should stay on screen
+// rather than blink past. But the reason to keep it disappears with the image
+// it was about, and deleting that image is the most likely thing a person does
+// about the warning in the first place.
+func (m *Manager) forgetStaleFailure(refs []ImageRef) {
+	m.mu.Lock()
+	failed, about := m.status.State == StateFailed, m.status.Target
+	m.mu.Unlock()
+
+	if !failed || about == "" {
+		return
+	}
+
+	for _, ref := range refs {
+		if ref.Reference == about {
+			return
+		}
+	}
+
+	m.setState(StateIdle, "", 0)
 }

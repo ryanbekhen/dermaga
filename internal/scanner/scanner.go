@@ -152,6 +152,39 @@ type Manager struct {
 type ImageRef struct {
 	Reference string
 	Digest    string
+	// What the image actually holds, as "linux/arm64" and friends. An image
+	// built for another architecture cannot be exported here at all, and so
+	// cannot be scanned here -- which is worth knowing before trying rather
+	// than after failing.
+	Platforms []string
+}
+
+// The architecture these Macs run, and the only one an image has to carry to
+// be scannable on one.
+const platform = "linux/arm64"
+
+// scannable reports whether there is anything here to scan.
+//
+// An image with no arm64 in it is not a failure to report, it is a fact about
+// the image: `container image save --platform linux/arm64` answers "no content
+// for platform", every time, for as long as the image exists. Treated as an
+// error it parks a warning in the status bar that no amount of retrying will
+// clear, which is exactly what it did.
+//
+// An image that lists nothing is scanned rather than skipped: an empty list
+// means the runtime did not say, not that the image is empty.
+func (r ImageRef) scannable() bool {
+	if len(r.Platforms) == 0 {
+		return true
+	}
+
+	for _, p := range r.Platforms {
+		if p == platform || strings.HasPrefix(p, platform+"/") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger) *Manager {
@@ -213,6 +246,15 @@ func (m *Manager) Report(reference string) (Report, bool) {
 // Scan queues an image. It returns immediately: the result arrives as a status
 // change followed by a report the UI can fetch.
 func (m *Manager) Scan(reference string) error {
+	// Asked for by hand rather than found by the sweep, and the sweep is the
+	// only place that used to check. Pressing Scan on an image built for
+	// another architecture therefore went all the way to a failed export and
+	// left a warning behind, every time, for something that can never work.
+	if !m.canScan(reference) {
+		return fmt.Errorf(
+			"%s has no %s build in it, so there is nothing here to scan", reference, platform)
+	}
+
 	select {
 	case m.queue <- reference:
 		return nil
@@ -224,6 +266,35 @@ func (m *Manager) Scan(reference string) error {
 // Start brings the scanner up and keeps it current, without ever blocking the
 // caller. Installing Trivy and downloading the database happen here, on first
 // run, while the user gets on with something else.
+// canScan answers from the image list what the image itself will not say until
+// the export has already failed.
+//
+// Anything it cannot establish -- no source, a list that will not answer, a
+// reference that is not in it -- is allowed through. Refusing a scan because
+// the question could not be asked would be worse than attempting one that
+// turns out to be impossible.
+func (m *Manager) canScan(reference string) bool {
+	if m.source == nil {
+		return true
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	refs, err := m.source(ctx)
+	if err != nil {
+		return true
+	}
+
+	for _, ref := range refs {
+		if ref.Reference == reference {
+			return ref.scannable()
+		}
+	}
+
+	return true
+}
+
 func (m *Manager) Start(ctx context.Context) {
 	m.once.Do(func() {
 		// Read the cheap facts before returning: the window asks for status as

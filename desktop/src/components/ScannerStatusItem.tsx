@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { api } from '../services/api';
 import { useScannerStore } from '../store/scannerStore';
 import { formatDuration } from '../utils/format';
 import type { ScannerStatus } from '../types';
@@ -107,6 +108,18 @@ function Detail({ status, scanned }: { status: ScannerStatus; scanned: number })
         <p className="mt-2 text-tiny leading-relaxed text-amber-700 dark:text-amber-500">
           {status.error}
         </p>
+      )}
+
+      {status.state === 'failed' && (
+        // A scan can fail for a reason nothing here can fix. Saying "yes, I
+        // know" is what turns a report back into a report rather than a nag.
+        <button
+          type="button"
+          onClick={() => void api.dismissScanFailure()}
+          className="mt-2 rounded-md px-2 py-1 text-tiny text-ink-600 hover:bg-ink-100 dark:text-ink-400 dark:hover:bg-ink-800"
+        >
+          Dismiss
+        </button>
       )}
 
       {busy && (
