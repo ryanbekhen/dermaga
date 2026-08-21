@@ -5,7 +5,7 @@
 <h1 align="center">Dermaga</h1>
 
 <p align="center">
-  A native macOS app for Apple's <a href="https://github.com/apple/container"><code>container</code></a> runtime.<br>
+  A macOS app for Apple's <a href="https://github.com/apple/container"><code>container</code></a> runtime.<br>
   Manage containers, images, volumes, networks and machines without leaving the keyboard.
 </p>
 
@@ -29,10 +29,10 @@
 
 ---
 
-Dermaga is a lightweight alternative to Docker Desktop for Apple Silicon. It is a real Mac app — a
-ten-megabyte download, with no browser engine inside it — and it drives Apple's own `container` CLI
-rather than replacing it. Everything you do here is immediately visible to `container ls`, and everything
-you do in a terminal shows up here within seconds.
+Dermaga is a lightweight alternative to Docker Desktop for Apple Silicon: a ten-megabyte download
+that draws its window with the Mac's own WebKit instead of shipping a browser engine, and drives
+Apple's own `container` CLI rather than replacing it. Everything you do here is immediately visible
+to `container ls`, and everything you do in a terminal shows up here within seconds.
 
 It opens no ports. The app and its agent talk over a socket in your own home directory, and nothing
 about your containers or images is sent anywhere.
