@@ -98,6 +98,10 @@ func Run(version string) error {
 		},
 	})
 
+	// Replaces the browser's menu with the app's -- no Reload, no inspector, no
+	// link to wails.io. Set before Run, which is when macOS reads it.
+	app.wails.Menu.Set(menuBar())
+
 	// A container that died while nobody was looking is exactly what a window
 	// cannot report, so a click on the notice has to be able to open one.
 	app.notify.OnNotificationResponse(func(result notifications.NotificationResult) {
