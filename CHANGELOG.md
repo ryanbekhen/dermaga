@@ -7,6 +7,21 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.8.1] — 2026-08-21
+
+### Fixed
+
+- **An image that cannot be scanned on this Mac no longer says something went wrong.** An image
+  built only for Intel cannot be read on Apple Silicon, and the scanner kept reporting that as a
+  failure and trying again on every sweep — so the status bar carried a warning that no amount of
+  waiting would clear. Such an image is passed over now, and asking for it by hand answers with the
+  reason instead of failing. A warning about an image you have since deleted goes with the image,
+  and one you cannot do anything about can be dismissed.
+- **Text that ran out of its box.** An image reference is one unbroken run of ninety characters with
+  nowhere to break, and it was being drawn straight through the edge of whatever was reporting it —
+  a toast, the scanner's panel, the tags column over the vulnerability count beside it. Seven places
+  now wrap or truncate instead.
+
 ## [v1.8.0] — 2026-08-21
 
 ### Added
@@ -283,6 +298,7 @@ change means to someone using Dermaga, not for how much code moved.
 First release: containers, images, volumes, networks and machines from one window, a terminal and
 logs for each, and a Go agent wrapping Apple's `container` CLI with no daemon and no polling.
 
+[v1.8.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.8.1
 [v1.8.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.8.0
 [v1.7.1]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.7.1
 [v1.7.0]: https://github.com/ryanbekhen/dermaga/releases/tag/v1.7.0
