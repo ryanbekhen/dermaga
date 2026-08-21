@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { registerContainerNames } from '../services/ipc';
 import { useToastStore } from '../store/toastStore';
+import { isBuilder } from '../utils/builder';
 
 /**
  * A warning in the status bar while containers cannot find each other by name.
@@ -63,7 +64,7 @@ export function ContainerNamesItem() {
           // Apple's builder is not somebody's container. `container build`
           // makes it, and recreating it only produces another one exactly like
           // it -- so naming it here would be asking for work with no result.
-          !container.image.startsWith('ghcr.io/apple/container-builder-shim/')
+          !isBuilder(container)
       )
     : [];
 
@@ -95,9 +96,7 @@ export function ContainerNamesItem() {
         className="flex items-center gap-1.5 text-amber-700 hover:underline dark:text-amber-500"
       >
         <TriangleAlert size={12} aria-hidden />
-        {state.registered
-          ? `${behind.length} without a name`
-          : 'Container names are off'}
+        {state.registered ? `${behind.length} without a name` : 'Container names are off'}
       </button>
 
       {open && (

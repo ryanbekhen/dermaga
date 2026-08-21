@@ -11,6 +11,7 @@ import { useToastStore } from '../store/toastStore';
 import { StatusDot } from '../components/StatusBadge';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { isBuilder } from '../utils/builder';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
@@ -55,12 +56,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const needle = searchQuery.trim().toLowerCase();
   const visible = containers.filter((container) => {
     if (!showStopped && container.status !== 'running') return false;
-    // Apple's builder, which `container build` makes and manages. Real enough
-    // to show by default -- it holds memory like anything else -- but not
-    // somebody's container, so it can be turned off.
-    if (!showBuilder && container.image.startsWith('ghcr.io/apple/container-builder-shim/')) {
-      return false;
-    }
+    if (!showBuilder && isBuilder(container)) return false;
     if (!needle) return true;
     return (
       container.name.toLowerCase().includes(needle) ||

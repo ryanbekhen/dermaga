@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutGrid,
+import {
+  LayoutGrid,
   Boxes,
   CircleHelp,
   CloudUpload,
@@ -25,6 +26,8 @@ import { LayoutGrid,
 import { loadImage } from './ImageArchive';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { withoutHidden } from '../utils/builder';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
 import { shortImage } from '../utils/format';
@@ -48,7 +51,13 @@ interface Command {
  * and mostly produces results nobody asked for.
  */
 export function CommandPalette({ onClose }: { onClose: () => void }) {
-  const containers = useResourceStore((s) => s.containers);
+  const showBuilder = useSettingsStore((s) => s.showBuilder);
+  // Hidden means hidden: a container left out of the list only to be handed
+  // back by a search is not hidden, it is lying in wait.
+  const containers = withoutHidden(
+    useResourceStore((s) => s.containers),
+    showBuilder
+  );
   const images = useResourceStore((s) => s.images);
   const machines = useResourceStore((s) => s.machines);
   const networks = useResourceStore((s) => s.networks);
