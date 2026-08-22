@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Download,
-  FileUp,
-  FolderOpen,
-  Hammer,
-  Play,
-  ScanSearch,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { Download, FileUp, FolderOpen, Hammer, Play, ScanSearch, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -91,7 +82,7 @@ const COLUMNS: Column[] = [
   { key: 'tags', label: 'Tags', width: 'minmax(120px,1fr)' },
   // Wide enough for all five segments of the strip, which is the same bar the
   // image's own Packages tab is headed by.
-  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '148px' },
+  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '168px' },
   { key: 'digest', label: 'Digest', width: '116px' },
   { key: 'platform', label: 'Platform', width: '124px' },
   { key: 'size', label: 'Size', width: '84px', align: 'right' },
@@ -323,20 +314,12 @@ function VulnerabilityCell({ group }: { group: ImageGroup }) {
     return <Muted>{scanning ? 'scanning…' : '—'}</Muted>;
   }
 
-  const total = Object.values(report.summary ?? {}).reduce((sum, count) => sum + count, 0);
-
-  // Clean is worth saying in words. A strip of five zeros is the same fact,
-  // but it makes the reader add up five numbers to reach the one answer they
-  // were hoping for -- and in a list of images, most rows are this one.
-  if (total === 0) {
-    return (
-      <span className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-500">
-        <ShieldCheck size={12} aria-hidden />
-        clean
-      </span>
-    );
-  }
-
+  // Every scanned image gets the same five segments, clean ones included. A
+  // green tick said "clean" more directly, but it made that row a different
+  // shape from the row above it -- and a column of bars is read by running an
+  // eye down it, which only works if every row is the same bar. All five at
+  // zero is its own unmistakable shape.
+  //
   // A reading, not a control: the row is what is pressed here, and the image's
   // own page is where a severity can be filtered to.
   return <SeverityStrip counts={report.summary ?? {}} />;

@@ -35,38 +35,47 @@ export type Severity = (typeof ORDER)[number];
 // sort, and "worst first" is the one thing this list is for -- so the glyph
 // carries the order too. The word is still in the tooltip and for a screen
 // reader.
-const TONE: Record<Severity, { text: string; strip: string; icon: LucideIcon }> & {
-  /** What a segment with nothing in it looks like: present, and plainly empty. */
-  EMPTY: string;
-} = {
+// Each severity carries three paints: the text colour it is named in, the
+// solid segment it fills when it has something in it, and the wash that
+// segment wears when it has nothing.
+//
+// The wash is the same hue, not white. White was a hole: on a list where every
+// row sits on a tint, an empty segment disappeared into the row and the bar
+// read as a coloured fragment with its ends torn off. Kept in its own colour,
+// five segments are always five segments -- which is the only reason a bar
+// beats a row of numbers, since it is the shape of one row against the next
+// that is being read.
+const TONE: Record<Severity, { text: string; strip: string; faint: string; icon: LucideIcon }> = {
   CRITICAL: {
     text: 'text-brand-700 dark:text-brand-400',
     strip: 'bg-brand-800 text-white',
+    faint: 'bg-brand-800/15 text-brand-800/60 dark:bg-brand-400/20 dark:text-brand-200/60',
     icon: ShieldX,
   },
   HIGH: {
     text: 'text-brand-600 dark:text-brand-400',
     strip: 'bg-brand-600 text-white',
+    faint: 'bg-brand-600/12 text-brand-700/55 dark:bg-brand-400/15 dark:text-brand-200/55',
     icon: ShieldAlert,
   },
   MEDIUM: {
     text: 'text-amber-700 dark:text-amber-500',
     strip: 'bg-amber-500 text-ink-900',
+    faint: 'bg-amber-500/15 text-amber-700/60 dark:bg-amber-500/20 dark:text-amber-500/70',
     icon: ShieldHalf,
   },
   LOW: {
     text: 'text-ink-600 dark:text-ink-400',
     strip: 'bg-ink-300 text-ink-800 dark:bg-ink-600 dark:text-ink-100',
+    faint: 'bg-ink-300/40 text-ink-500 dark:bg-ink-600/30 dark:text-ink-400',
     icon: Shield,
   },
   UNKNOWN: {
     text: 'text-ink-500',
     strip: 'bg-ink-200 text-ink-700 dark:bg-ink-700 dark:text-ink-200',
+    faint: 'bg-ink-200/60 text-ink-400 dark:bg-ink-700/40 dark:text-ink-500',
     icon: ShieldQuestionMark,
   },
-  // Solid rather than transparent: the strip is one object, and a hole in it
-  // reads as a gap rather than as a zero.
-  EMPTY: 'bg-white text-ink-400 dark:bg-ink-900 dark:text-ink-500',
 };
 
 // One row per package, because a package is what an image is made of. The
@@ -75,7 +84,7 @@ const TONE: Record<Severity, { text: string; strip: string; icon: LucideIcon }> 
 // splitting it into two tabs made the reader join them back up by hand.
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(160px,2.4fr)' },
-  { key: 'vulns', label: 'Vulnerabilities', width: '148px' },
+  { key: 'vulns', label: 'Vulnerabilities', width: '168px' },
   { key: 'version', label: 'Version', width: '116px' },
   { key: 'size', label: 'Size', width: '84px', align: 'right' },
   { key: 'type', label: 'Type', width: '96px' },
@@ -504,8 +513,10 @@ export function SeverityStrip({
         const on = active === severity;
         const tone = TONE[severity];
         const named = severity.toLowerCase();
-        const paint = `flex h-6 w-7 shrink-0 items-center justify-center border-r border-white/25 text-tiny font-semibold tabular-nums last:border-r-0 dark:border-black/25 ${
-          count === 0 ? TONE.EMPTY : tone.strip
+        // w-8, not w-7: a single severity can pass a hundred on a big image,
+        // and a segment sized to two digits clips the third.
+        const paint = `flex h-6 w-8 shrink-0 items-center justify-center border-r border-white/25 text-tiny font-semibold tabular-nums last:border-r-0 dark:border-black/25 ${
+          count === 0 ? tone.faint : tone.strip
         }`;
 
         if (!onPick) {
