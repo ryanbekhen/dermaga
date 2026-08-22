@@ -592,11 +592,21 @@ func (a *App) OpenFindingWindow(reference, id string) {
 func (a *App) createWindow() *application.WebviewWindow {
 	options := application.WebviewWindowOptions{
 		Title: "Dermaga",
-		// Wide enough for the images table to fit without scrolling sideways:
-		// the widest table needs 1030 for its columns, and the sidebar and the
-		// page padding take 248 between them.
-		Width:  1280,
-		Height: 800,
+		// Sized by the widest thing in the app, which is no longer the images
+		// table: an image's Packages tab puts a six-column table beside the
+		// 320px rail, with the 232px sidebar left of both. Those columns need
+		// 732 at their floors, so 1284 is where the table stops scrolling
+		// sideways -- four pixels more than this window used to open at, which
+		// is why the licence column kept falling off the end of a fresh
+		// install.
+		//
+		// 1400 is that floor plus room for the name and licence columns to be
+		// worth reading rather than merely present. Taller by the same logic:
+		// a package opened onto its CVEs wants more than four of them visible
+		// to be worth opening. macOS clamps both to the display, so a smaller
+		// screen simply gets what it has.
+		Width:  1400,
+		Height: 860,
 		// The floor is set by the widest thing the layout has to hold at once:
 		// the sidebar (232), a detail page's rail (320), and enough content
 		// column between them for a table to be read rather than guessed at
