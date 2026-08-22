@@ -7,6 +7,26 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.10.1] — 2026-08-23
+
+### Fixed
+
+- **Updating from inside the app left you with no app.** It offered "Restart to update", quit, and
+  did not come back. Replacing the bundle in place was checked against the wrong directory — the
+  parent, `/Applications`, which is writable, and never the bundle itself, which macOS has refused to
+  let one app modify without App Management permission since Ventura. So the update looked
+  installable, promised a restart, and failed after the window had already closed, with nothing left
+  to fall back to.
+
+  The question is now asked about the bundle, while the answer is still worth having: the update
+  offers itself as a download to drag across, which is the path that works. Nothing here was new in
+  1.10.0 — the updater is byte for byte what 1.9.0 shipped, so in-place replacement has most likely
+  never worked on Ventura or later.
+
+### Changed
+
+- Built with Go 1.27.
+
 ## [v1.10.0] — 2026-08-23
 
 ### Changed
