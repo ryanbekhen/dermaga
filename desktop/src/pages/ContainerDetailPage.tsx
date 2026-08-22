@@ -117,7 +117,6 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   useEffect(() => {
     if (!running) return;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void api
       .hasShell(container.id)
       .then(setHasShell)

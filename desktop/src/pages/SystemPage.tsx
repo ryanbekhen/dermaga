@@ -73,7 +73,6 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
 
   useEffect(() => {
     // The agent reports where it actually wrote the file.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void api.getSettings().then(({ path }) => path && setConfigPath(path));
   }, []);
 

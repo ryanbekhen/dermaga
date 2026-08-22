@@ -161,9 +161,9 @@ export function TerminalPane({
       term.dispose();
     };
     // The target object is rebuilt on every render; its fields are what
-    // actually identify the session.
+    // actually identify the session -- and the user is one of them, so
+    // changing it opens a new session rather than reusing this one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    // The user is part of the session: changing it opens a new one.
   }, [target.kind, target.id, target.user, disabled, attempt, isDark]);
 
   if (disabled) {
