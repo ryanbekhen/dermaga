@@ -11,13 +11,12 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ryanbekhen/dermaga/internal/containers"
+	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
 // Where the templates come from, and why not from the window.
@@ -94,28 +93,49 @@ const (
 // Manager keeps the catalogue, and keeps it current.
 type Manager struct {
 	logger *slog.Logger
-	path   string
+	// Nil until the agent hands one over; without it the catalogue is fetched
+	// fresh every launch and never kept, which is what a machine that has
+	// never been online has anyway.
+	db     *store.Store
 	client *http.Client
 
 	mu     sync.RWMutex
 	loaded []Template
 }
 
+// catalogueRecord is the copy, and when it was taken.
+//
+// The timestamp is stored rather than read off the file, which is where it used
+// to come from: a modification time is a property of a file, and there is no
+// file any more. Keeping it in the record also means it says what it means --
+// when the catalogue was fetched -- rather than when something last happened to
+// write it down.
+type catalogueRecord struct {
+	FetchedAt time.Time       `json:"fetchedAt"`
+	Raw       json.RawMessage `json:"raw"`
+}
+
+// The one key in the templates bucket. A catalogue is fetched whole or not at
+// all, so it is one record rather than one per template.
+const catalogueKey = "catalogue"
+
 func NewManager(logger *slog.Logger) *Manager {
-	m := &Manager{
+	return &Manager{
 		logger: logger,
 		client: &http.Client{Timeout: fetchTimeout},
 	}
+}
 
-	if home, err := os.UserHomeDir(); err == nil {
-		m.path = filepath.Join(home, ".dermaga", "templates.json")
-	} else {
-		logger.Warn("Could not resolve home directory; templates will not be kept between runs", "error", err)
-	}
+// UseStore hands over where the catalogue is kept, and reads what is already
+// there. Called once, before anything asks for a list.
+func (m *Manager) UseStore(db *store.Store) {
+	m.db = db
 
-	m.loaded = m.read()
+	loaded := m.read()
 
-	return m
+	m.mu.Lock()
+	m.loaded = loaded
+	m.mu.Unlock()
 }
 
 // List is what the window asks for.
@@ -134,20 +154,21 @@ func (m *Manager) List() []Template {
 // Nothing is not a failure: it is what a machine that has never been online
 // has, and it fills the moment anything gets through.
 func (m *Manager) read() []Template {
-	if m.path == "" {
+	if m.db == nil {
 		return nil
 	}
 
-	raw, err := os.ReadFile(m.path)
-	if err != nil {
+	var record catalogueRecord
+	found, err := m.db.Get(store.BucketTemplates, catalogueKey, &record)
+	if err != nil || !found {
 		return nil
 	}
 
-	templates, err := parse(raw)
+	templates, err := parse(record.Raw)
 	if err != nil {
 		// A copy that will not parse would be read again on every start, so it
 		// is worth saying rather than swallowing.
-		m.logger.Warn("The saved templates could not be read", "path", m.path, "error", err)
+		m.logger.Warn("The saved templates could not be read", "error", err)
 		return nil
 	}
 
@@ -187,7 +208,7 @@ func parse(raw []byte) ([]Template, error) {
 // disk is left exactly as it was, timestamp included, so the next pass tries
 // again rather than recording a refresh that never happened.
 func (m *Manager) Refresh(ctx context.Context, url string) {
-	if m.path == "" || !m.stale() {
+	if m.db == nil || !m.stale() {
 		return
 	}
 
@@ -333,25 +354,13 @@ func (m *Manager) readLogo(ctx context.Context, url string) (string, error) {
 // store writes the copy, and never fails anything: not being able to keep it is
 // a slower tomorrow, not a broken today.
 func (m *Manager) store(raw []byte) {
-	if m.path == "" {
+	if m.db == nil {
 		return
 	}
 
-	if err := os.MkdirAll(filepath.Dir(m.path), 0o755); err != nil {
-		m.logger.Warn("Could not create the directory for the templates", "error", err)
-		return
-	}
+	record := catalogueRecord{FetchedAt: time.Now(), Raw: raw}
 
-	// Written beside and renamed over, so a crash in the middle cannot leave
-	// half a catalogue where a whole one used to be.
-	temp := m.path + ".tmp"
-	defer os.Remove(temp)
-
-	if err := os.WriteFile(temp, raw, 0o644); err != nil {
-		m.logger.Warn("Could not write the templates", "error", err)
-		return
-	}
-	if err := os.Rename(temp, m.path); err != nil {
+	if err := m.db.Put(store.BucketTemplates, catalogueKey, record); err != nil {
 		m.logger.Warn("Could not save the templates", "error", err)
 	}
 }
@@ -359,19 +368,24 @@ func (m *Manager) store(raw []byte) {
 // stale reports whether the copy is old enough to fetch again. None at all is
 // stale by definition.
 func (m *Manager) stale() bool {
-	info, err := os.Stat(m.path)
-	if err != nil {
+	if m.db == nil {
 		return true
 	}
 
-	return time.Since(info.ModTime()) >= maxAge
+	var record catalogueRecord
+	found, err := m.db.Get(store.BucketTemplates, catalogueKey, &record)
+	if err != nil || !found {
+		return true
+	}
+
+	return time.Since(record.FetchedAt) >= maxAge
 }
 
 // Run keeps the catalogue current for as long as the agent does. The URL is
 // read each time round rather than held, so changing it in Settings is picked
 // up without a restart.
 func (m *Manager) Run(ctx context.Context, url func() string) {
-	if m.path == "" {
+	if m.db == nil {
 		return
 	}
 

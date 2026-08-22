@@ -24,6 +24,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/rpc"
 	"github.com/ryanbekhen/dermaga/internal/scanner"
 	"github.com/ryanbekhen/dermaga/internal/settings"
+	"github.com/ryanbekhen/dermaga/internal/store"
 	"github.com/ryanbekhen/dermaga/internal/system"
 	"github.com/ryanbekhen/dermaga/internal/templates"
 	"github.com/ryanbekhen/dermaga/internal/terminal"
@@ -48,6 +49,12 @@ type Agent struct {
 	// Set when serving a socket: how to let go of it, so another agent -- the
 	// background service -- can take over without anyone guessing at pids.
 	standDown context.CancelFunc
+
+	// Everything Dermaga has worked out for itself, in one file. Nil if it
+	// could not be opened -- another copy of Dermaga holding the lock, a
+	// read-only home directory -- and the managers all work without it, just
+	// without remembering anything between launches.
+	store *store.Store
 
 	containers *containers.Manager
 	files      *files.Manager
@@ -102,6 +109,23 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.registry = registry.NewManager(runner, logger)
 	agent.scanner = scanner.NewManager(runner, logger)
 	agent.templates = templates.NewManager(logger)
+
+	// Opened before anything reads from it, and forgiving if it cannot be:
+	// none of what it holds is authored by anybody, so the fallback is doing
+	// the work again rather than losing something.
+	if opened, err := store.Open(); err != nil {
+		logger.Warn("Running without a store; nothing will be remembered", "error", err)
+	} else {
+		agent.store = opened
+
+		// NOTE: TEMPORARY — remove this call with internal/store/migrate.go in
+		// 1.15.0. See the note at the top of that file.
+		store.Migrate(opened, logger)
+
+		agent.scanner.UseStore(opened)
+		agent.templates.UseStore(opened)
+		agent.containers.UsePendingStore(opened)
+	}
 
 	// The scanner works on its own goroutine and reports where it has got to;
 	// the window shows that in the status bar without ever having asked.

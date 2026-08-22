@@ -2,7 +2,10 @@ module github.com/ryanbekhen/dermaga
 
 go 1.26
 
-require github.com/creack/pty v1.1.24
+require (
+	github.com/creack/pty v1.1.24
+	go.etcd.io/bbolt v1.5.0
+)
 
 require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect

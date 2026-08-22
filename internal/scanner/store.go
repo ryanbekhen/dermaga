@@ -2,89 +2,82 @@ package scanner
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
+
+	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
-// Scans are kept beside the settings, in ~/.dermaga, so a result survives
-// closing the app: rescanning every image on every launch would mean exporting
-// gigabytes and waiting minutes for something that has not changed.
-const storeFile = "scans.json"
+// Scan results are kept so a result survives closing the app: rescanning every
+// image on every launch would mean exporting gigabytes and waiting minutes for
+// something that has not changed.
+//
+// One record per image, rather than one document holding all of them. The
+// whole map used to be re-encoded and rewritten on every completed scan, so a
+// sweep of twenty images wrote the entire store twenty times -- and the store
+// grows with the images on the machine, so the cost of finishing one scan grew
+// with how many others there were. Now finishing a scan writes that scan.
 
-type stored struct {
-	// Keyed by image reference.
-	Reports map[string]Report `json:"reports"`
+// UseStore hands the manager the database to keep its results in. Without one
+// it works exactly as before minus the remembering: every launch rescans.
+func (m *Manager) UseStore(s *store.Store) {
+	m.store = s
 }
 
-func storePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-
-	return filepath.Join(home, ".dermaga", storeFile)
-}
-
-// load reads previous results. A missing or damaged file is not an error worth
-// reporting: the worst case is that images are scanned again.
+// load reads previous results. A missing or damaged record is not an error
+// worth reporting: the worst case is that an image is scanned again.
 func (m *Manager) load() {
-	path := storePath()
-	if path == "" {
+	if m.store == nil {
 		return
 	}
 
-	raw, err := os.ReadFile(path)
+	loaded := map[string]Report{}
+
+	err := m.store.All(store.BucketScans, func(reference string, raw []byte) error {
+		var report Report
+		if err := json.Unmarshal(raw, &report); err != nil {
+			// One unreadable record, not a corrupt store: skip it and let the
+			// sweep produce a new one.
+			m.logger.Warn("Ignoring an unreadable scan result", "image", reference, "error", err)
+			return nil
+		}
+
+		loaded[reference] = report
+
+		return nil
+	})
 	if err != nil {
-		return
-	}
-
-	var data stored
-	if err := json.Unmarshal(raw, &data); err != nil {
-		m.logger.Warn("Ignoring unreadable scan results", "path", path, "error", err)
+		m.logger.Warn("Could not read stored scan results", "error", err)
 		return
 	}
 
 	m.mu.Lock()
-	for reference, report := range data.Reports {
+	for reference, report := range loaded {
 		m.reports[reference] = report
 	}
 	m.mu.Unlock()
 }
 
-func (m *Manager) save() {
-	path := storePath()
-	if path == "" {
+// saveReport writes one result. Called where a scan finishes, so the cost of
+// storing an answer is the size of that answer.
+func (m *Manager) saveReport(reference string, report Report) {
+	if m.store == nil {
 		return
 	}
 
-	m.mu.RLock()
-	data := stored{Reports: make(map[string]Report, len(m.reports))}
-	for reference, report := range m.reports {
-		data.Reports[reference] = report
+	if err := m.store.Put(store.BucketScans, reference, report); err != nil {
+		m.logger.Error("Could not store a scan result", "image", reference, "error", err)
 	}
-	m.mu.RUnlock()
+}
 
-	raw, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		m.logger.Error("Could not encode scan results", "error", err)
+// forget removes the results for images that are no longer on the machine.
+func (m *Manager) forget(references []string) {
+	if m.store == nil {
 		return
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		m.logger.Error("Could not create the Dermaga directory", "error", err)
-		return
-	}
-
-	// Written whole and renamed, so a crash mid-write cannot leave a truncated
-	// file that the next launch refuses to read.
-	temp := path + ".tmp"
-	if err := os.WriteFile(temp, raw, 0o644); err != nil {
-		m.logger.Error("Could not write scan results", "error", err)
-		return
-	}
-
-	if err := os.Rename(temp, path); err != nil {
-		m.logger.Error("Could not replace scan results", "error", err)
+	for _, reference := range references {
+		if err := m.store.Delete(store.BucketScans, reference); err != nil {
+			m.logger.Error("Could not remove a scan result", "image", reference, "error", err)
+		}
 	}
 }
 

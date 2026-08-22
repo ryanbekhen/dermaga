@@ -2,12 +2,11 @@ package containers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
 // Edits that were begun and never finished.
@@ -43,79 +42,73 @@ type PendingEdit struct {
 // PendingStore keeps unfinished edits in ~/.dermaga/pending-edits.json.
 type PendingStore struct {
 	logger *slog.Logger
-	path   string
-	mu     sync.RWMutex
+	// Nil until the agent hands one over. Without it an edit still works; it
+	// just does not survive the app closing mid-recreate, which is exactly
+	// what it was before any of this existed.
+	db *store.Store
+	mu sync.RWMutex
 }
 
-// NewPendingStore resolves the file. If the home directory cannot be found the
-// store still works, it just never persists -- an edit is no worse off than it
-// was before this existed.
+// NewPendingStore makes the store. It works without a database, it just never
+// persists -- an edit is no worse off than it was before this existed.
 func NewPendingStore(logger *slog.Logger) *PendingStore {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		logger.Warn("Could not resolve home directory; unfinished edits will not be kept", "error", err)
-		return &PendingStore{logger: logger}
-	}
+	return &PendingStore{logger: logger}
+}
 
-	return &PendingStore{
-		logger: logger,
-		path:   filepath.Join(home, ".dermaga", "pending-edits.json"),
-	}
+// UseStore hands over where unfinished edits are kept.
+func (p *PendingStore) UseStore(db *store.Store) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.db = db
 }
 
 func (p *PendingStore) load() map[string]PendingEdit {
-	if p.path == "" {
-		return map[string]PendingEdit{}
-	}
-
-	raw, err := os.ReadFile(p.path)
-	if err != nil {
-		// A missing file is the normal case: nothing was left unfinished.
-		if !os.IsNotExist(err) {
-			p.logger.Warn("Could not read unfinished edits", "path", p.path, "error", err)
-		}
-		return map[string]PendingEdit{}
-	}
-
 	edits := map[string]PendingEdit{}
-	if err := json.Unmarshal(raw, &edits); err != nil {
-		p.logger.Warn("Unfinished edits file is not valid JSON; starting over", "path", p.path, "error", err)
-		return map[string]PendingEdit{}
+
+	if p.db == nil {
+		return edits
+	}
+
+	err := p.db.All(store.BucketPending, func(id string, raw []byte) error {
+		var edit PendingEdit
+		if err := json.Unmarshal(raw, &edit); err != nil {
+			// One unreadable record is one edit that cannot be resumed, not a
+			// reason to abandon the others.
+			p.logger.Warn("Ignoring an unreadable unfinished edit", "container", id, "error", err)
+			return nil
+		}
+
+		edits[id] = edit
+
+		return nil
+	})
+	if err != nil {
+		p.logger.Warn("Could not read unfinished edits", "error", err)
 	}
 
 	return edits
 }
 
+// write replaces the set of unfinished edits.
+//
+// The whole set rather than the one that changed, because that is what the
+// callers above know: they hand back the map they have just adjusted. It is
+// never more than a handful of records and it is one transaction, so there is
+// nothing to gain from being cleverer about it.
 func (p *PendingStore) write(edits map[string]PendingEdit) error {
-	if p.path == "" {
+	if p.db == nil {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(p.path), 0o755); err != nil {
-		return fmt.Errorf("could not create %s: %w", filepath.Dir(p.path), err)
+	values := make(map[string]any, len(edits))
+	for id, edit := range edits {
+		values[id] = edit
 	}
 
-	encoded, err := json.MarshalIndent(edits, "", "  ")
-	if err != nil {
-		return err
-	}
-	encoded = append(encoded, '\n')
-
-	// Write-then-rename, so a crash in the middle cannot leave half a file --
-	// which would lose the very thing this is here to protect.
-	temp := p.path + ".tmp"
-	if err := os.WriteFile(temp, encoded, 0o644); err != nil {
-		return fmt.Errorf("could not write %s: %w", temp, err)
-	}
-	if err := os.Rename(temp, p.path); err != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("could not save %s: %w", p.path, err)
-	}
-
-	return nil
+	return p.db.Replace(store.BucketPending, values)
 }
 
-// Begin records an edit before anything is taken apart.
 func (p *PendingStore) Begin(id string, spec, previous ContainerSpec) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

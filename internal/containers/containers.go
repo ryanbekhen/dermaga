@@ -14,6 +14,7 @@ import (
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
+	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
 // Container is the flat, API-facing representation of a container. The Apple
@@ -223,6 +224,11 @@ func (cm *Manager) Pending() *PendingStore {
 // Stats exposes the sampler so the agent can run it in the background.
 func (cm *Manager) Stats() *StatsSampler {
 	return cm.stats
+}
+
+// UsePendingStore hands the unfinished-edit store somewhere to keep them.
+func (cm *Manager) UsePendingStore(db *store.Store) {
+	cm.pending.UseStore(db)
 }
 
 func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {

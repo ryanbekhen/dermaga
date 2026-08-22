@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
+	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
 // Formula is Trivy's Homebrew name.
@@ -136,6 +137,10 @@ type Manager struct {
 	mu      sync.RWMutex
 	status  Status
 	reports map[string]Report
+	// Where results are kept between launches. Nil until the agent hands one
+	// over, and everything still works without it -- every launch just starts
+	// with nothing and scans from scratch.
+	store *store.Store
 	// References already given a second chance, so an image that really is
 	// empty is not scanned twice for ever.
 	retried map[string]bool
@@ -487,7 +492,7 @@ func (m *Manager) scan(ctx context.Context, reference string) {
 	m.reports[reference] = report
 	m.mu.Unlock()
 
-	m.save()
+	m.saveReport(reference, report)
 	m.announceReport(report)
 	m.setState(StateIdle, "", 0)
 }

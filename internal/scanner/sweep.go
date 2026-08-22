@@ -97,7 +97,7 @@ func (m *Manager) hasFreshReport(ref ImageRef) bool {
 				m.reports[ref.Reference] = twin
 				m.mu.Unlock()
 
-				m.save()
+				m.saveReport(ref.Reference, twin)
 				// The list is showing this reference too, and it now has an
 				// answer without a scan ever running for it.
 				m.announceReport(twin)
@@ -162,21 +162,21 @@ func (m *Manager) forgetMissing(refs []ImageRef) int {
 	}
 
 	m.mu.Lock()
-	removed := 0
+	gone := make([]string, 0)
 	for reference := range m.reports {
 		if _, ok := live[reference]; !ok {
 			delete(m.reports, reference)
-			removed++
+			gone = append(gone, reference)
 		}
 	}
 	m.mu.Unlock()
 
-	if removed > 0 {
-		m.save()
+	if len(gone) > 0 {
+		m.forget(gone)
 		m.announce()
 	}
 
-	return removed
+	return len(gone)
 }
 
 // ForgetMissing is the manual form: the same clean-up the sweep does, for a
