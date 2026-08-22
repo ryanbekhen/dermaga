@@ -47,6 +47,12 @@ const SECTIONS: Section[] = [
         keywords: 'broken stuck services machine vm not working',
       },
       {
+        question: 'Where work in progress is shown',
+        answer:
+          'A spinning icon appears in the title bar while anything is building, pulling or being created, and goes when there is nothing left. Press it for the list: what each one is, which step it is on, how far through, and a Cancel beside it. A failure stays there until you dismiss it, with its output one press away — so a build that failed while you were on another page is still waiting to be read rather than gone.',
+        keywords: 'progress build pull task spinner cancel background running',
+      },
+      {
         question: 'Everything is live',
         answer:
           'There is no refresh button and no polling. The agent holds a stream open and pushes new state the instant anything changes, including changes you make in a terminal. Logs and pull progress arrive the same way.',
@@ -125,8 +131,8 @@ const SECTIONS: Section[] = [
       {
         question: 'Building an image',
         answer:
-          'Build on the Images page takes a context folder, a tag and the usual build arguments. Progress appears as a row in the list rather than a log window, and the builder container is started for you the first time.',
-        keywords: 'dockerfile build context buildkit',
+          'Build on the Images page works two ways. From a folder takes a context directory, a tag and the usual build arguments. From a Dockerfile takes one you paste in: it is written to a directory of its own, built from there, and that directory is removed when the build ends. A pasted Dockerfile has no folder beside it, so COPY and ADD ask for one — otherwise the tag is all it needs. The builder container is started for you the first time.',
+        keywords: 'dockerfile build context buildkit paste clipboard tag',
       },
       {
         question: 'Moving an image without a registry',
@@ -185,6 +191,12 @@ const SECTIONS: Section[] = [
         answer:
           'System shows the installed version and offers an update when Homebrew has a newer one. The check reads Homebrew’s local index rather than running brew update, so it costs nothing and never changes your Homebrew state on its own. A CLI installed from Apple’s .pkg is left alone.',
         keywords: 'homebrew brew cli apple container update',
+      },
+      {
+        question: 'Why the disk figures are so large',
+        answer:
+          'Apple’s runtime gives every image its own Linux filesystem to run from, rather than sharing layers between images the way Docker does on Linux. Image snapshots measures those unpacked copies, and each one costs roughly a gigabyte however small the image was — so ten images can hold fifty gigabytes between them. It is not the download: the Images page adds up compressed layers, which are far smaller. Snapshots for images nothing is running come back on their own the next time the image is used, so freeing them costs time and nothing else. Volume data does not come back.',
+        keywords: 'disk space system df snapshots storage large reclaim free gigabytes',
       },
       {
         question: 'Where settings are kept',

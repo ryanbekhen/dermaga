@@ -42,28 +42,28 @@ memory, the whole network and mount configuration, and half an hour of readings 
 shell in any running container, backed by a pty. Browse its filesystem and drag files in and out of
 Finder. Mark one to come up when Dermaga does.
 
-**Images** — build from a Dockerfile with live progress, pull, and inspect the layers, history and
-config a container inherits. Save one out as an OCI archive or load one back in. Sign in to a
-registry and push.
+**Images** — build from a project folder, or from a Dockerfile you paste straight in. Pull, and
+inspect the layers, history and config a container inherits. Save one out as an OCI archive or load
+one back in. Sign in to a registry and push. Anything building or pulling shows in the title bar,
+with a cancel beside it.
 
 **Vulnerabilities** — every image is scanned in the background as it appears, so the answer is
 usually waiting by the time you open one. The Packages tab lists what is inside the image with a
 severity bar against each package; opening one shows the CVEs in it, and opening a CVE gives it a
 window of its own. Runs entirely on your Mac.
 
-<p align="center">
-  <img src="assets/screenshot-packages.png" alt="The Packages tab of an image, with one package opened to show the CVEs in it" width="900">
-</p>
 
 **Volumes and networks** — see which containers mount a volume and where it lands inside each, and
 look inside one even when nothing has it mounted. Open a network and see it drawn: every container
 attached, with the address it holds there.
 
-<p align="center">
-  <img src="assets/screenshot-network.png" alt="A network drawn as a graph, with every container attached to it" width="900">
-</p>
 
-**Machines** — create, boot, stop, resize and delete the Linux VMs containers run inside.
+**Machines** — create, boot, stop, resize and delete the Linux VMs containers run inside, each with
+a shell of its own.
+
+**Disk** — System reports what images, containers and volumes actually cost, and each is cleaned up
+on its own. Apple's runtime unpacks every image into a filesystem of its own, so the figure there is
+much larger than the download — and almost all of it is usually reclaimable.
 
 **Live by default** — no refresh button anywhere. Changes made in a terminal appear within two
 seconds; changes made here appear immediately. A container that stops without being asked to says

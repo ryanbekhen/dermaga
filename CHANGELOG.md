@@ -7,6 +7,94 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.10.0] — 2026-08-23
+
+### Changed
+
+- **The interface, rebuilt.** Every page has been redrawn: a warm palette whose dark end stops short
+  of the chrome's black, so in dark mode the sidebar and the page beside it no longer run into each
+  other, and a type scale where each step is named for what it is for rather than how big it is.
+  Actions are icons with their words as the tooltip — a row of four labelled buttons made all four
+  look equally likely, and bare, the one thing a page exists for keeps the colour while the rest step
+  back. Colour carries what the word carried: green starts, amber stops, red forces, orange destroys.
+- **Packages and Vulnerabilities are one tab.** They were two, and they are not two things — every
+  finding is a fact about a package that is already listed. So it is one list of packages, each with
+  a bar showing how many findings of each severity it carries, worst first, with the rest of the
+  inventory alphabetically underneath. Open a package to see the CVEs in it, and open a CVE for a
+  window of its own.
+- **`⌘K` searches from the title bar.** The command palette is gone, and the field at the top of the
+  window replaced it: the results are a page rather than a panel over the one you were reading. It
+  still does things as well as find them — start, stop or restart a container **or a machine**, run a
+  container from an image, attach and detach a network, build from a folder or from a paste.
+- **Work in progress moved to the title bar.** It was a stack of rows above each list, visible only
+  from the page it belonged to — and a build takes minutes, long enough to have gone somewhere else.
+  An icon appears while anything is running; press it for what each one is, which step, how far
+  through, a Cancel, and for a failure its output.
+- **Disk is cleaned one kind at a time.** One button used to free images, volumes and containers
+  together and call it Reclaim. Two of those come back and two do not — an image can be pulled again,
+  and a volume holds the only copy of whatever was written to it. Worse, they compounded: pruning
+  stopped containers freed their volumes, which the volume prune in the next line then deleted. Each
+  figure now carries its own cleanup, and each says what it is about to do in its own words.
+- **Results are kept in a database rather than a folder of JSON.** Scans, templates and unfinished
+  container edits were three files rewritten whole on every change. They now live in
+  `~/.dermaga/dermaga.db`, written one record at a time.
+
+  **Your existing files are moved into it on first launch and then removed**, so nobody is left with
+  both. The move never overwrites a record already there, keeps any file it could not read, and
+  leaves `config.json` alone — preferences are still plain JSON you can edit by hand.
+
+### Added
+
+- **A keyboard that reaches the whole app.** Any list is walked with the arrows, opened with Return
+  and ticked with Space — all of it while the caret is still in the filter field, so a few letters,
+  an arrow and Return is the whole gesture. `⌘1`–`⌘9` switch tabs on a detail page. Inside a dialog,
+  Return in a list of ports or volumes adds another row and puts the caret in it, and `⌘↩` does what
+  the main button does.
+- **Build an image from a Dockerfile you paste.** Build wanted a project on disk; plenty of what
+  people build has no project. Paste one in, give it a tag, and it is written to a directory of its
+  own and built from there — removed when the build ends. A paste containing COPY or ADD asks for a
+  folder, since there is nothing beside it to resolve them against.
+- **Everything Trivy knows about a finding, not five fields of it.** Opening a CVE gives it a window
+  of its own: the description, what upstream intends to do about it, when it was published and last
+  revised, the weaknesses, every vendor's score where they disagree, and all of its references. The
+  CVSS vector is read out in words as well as printed — a flaw reachable over the network with no
+  privileges is a different morning's work from one needing a local account.
+- **What is actually inside an image, and what it costs.** The package list carries sizes, read out
+  of apk's and dpkg's own databases where the scanner does not report them, and each layer says how
+  large it is.
+- **Help you can search.** A field that filters, topics grouped under headings that say what kind of
+  question they answer, troubleshooting first rather than fifth, and the way out at the bottom.
+
+### Fixed
+
+- **Stopping the container services appeared to do nothing.** Dermaga has a page for exactly that,
+  and it never appeared: listing containers is what fails first when the services go down, and the
+  watcher returned there — so the one pass able to report it was the one pass that never got as far
+  as asking.
+- **Creating a volume took minutes.** Making it takes six tenths of a second; what followed was a
+  helper container, measured at over two minutes on a busy Mac, and the request waited for all of it.
+  It now runs behind the caller.
+- **The window opened four pixels too narrow.** It was sized for the images table, back when that was
+  the widest thing in the app — so on a fresh install the licence column fell off the end of an
+  image's package table, and the findings opened underneath went with it.
+- **Clearing up after deleted images no longer waits on the scanner.** Forgetting an image that is
+  gone needs the image list and nothing else, but it sat below the check for whether the scanner was
+  installed.
+- **Removing something that is already gone is no longer an error.** Browsing a volume starts a
+  helper container and tidies it away afterwards, whether or not one ever ran; being told it was not
+  there was written into the log as a failure.
+- **The severity bar is five segments on every row.** Empty segments were painted white, which on a
+  tinted row is a hole rather than a zero.
+- The finding window follows the theme. It renders instead of the app rather than inside it, so the
+  hook that turns dark mode on never ran for it.
+- A dialog opened from the title bar inherited the chrome's near-white type onto a light panel.
+- Dialogs no longer carry a close box: each has a Cancel or Close in its foot, and closes on Escape
+  and on a click outside.
+- Two lines in the file browser padded nothing, leaving the drop hint against the left edge and the
+  bottom of the window at once.
+- The manual button for clearing stale scan results is gone. The sweep that already runs on every
+  change had been doing the work for some time.
+
 ## [v1.9.0] — 2026-08-21
 
 ### Added
