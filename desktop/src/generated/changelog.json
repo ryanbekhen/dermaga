@@ -1,5 +1,40 @@
 [
   {
+    "version": "v1.10.0",
+    "date": "2026-08-22",
+    "summary": "",
+    "sections": [
+      {
+        "title": "Changed",
+        "entries": [
+          "**The interface, rebuilt.** Every page has been redrawn: a warm palette whose dark end stops short of the chrome's black, so in dark mode the sidebar and the page beside it no longer run into each other, and a type scale where each step is named for what it is for rather than how big it is. Tables are denser and read down a column properly; detail pages keep a rail of the facts that say *which* thing you are looking at, whichever tab is open.",
+          "**Packages and Vulnerabilities are one tab.** They were two, and they are not two things — every finding is a fact about a package that is already listed. So it is one list of packages, each with a bar showing how many findings of each severity it carries. Packages with something against them sort to the top, worst first; the rest of the inventory follows alphabetically, which answers the security question at the top of the page and leaves the inventory in the order you would look something up in. Open a package to see the CVEs in it, and open a CVE for a window of its own.",
+          "**`⌘K` searches from the title bar.** The command palette is gone, and what replaced it is the field at the top of the window: `⌘K` puts the caret there, and the results are a page rather than a panel over the one you were reading. It still does things as well as find them — start, stop or restart a container **or a machine**, run a container from an image, attach and detach a network, or open the create, pull, build and load forms directly. Arrow keys walk the results; hover no longer steals the selection out from under them.",
+          "**Results are kept in a database rather than a folder of JSON.** Scans, templates and unfinished container edits were three files rewritten whole on every change: finishing one scan of one image meant writing every scan of every image back to disk, and anything could open the file and edit it. They now live in `~/.dermaga/dermaga.db`, written one record at a time. **Your existing files are moved into it on first launch and then removed**, so nobody is left with both. The move never overwrites a record already there, keeps any file it could not read rather than deleting it, and leaves `config.json` alone — preferences are still plain JSON you can edit by hand or keep in dotfiles."
+        ]
+      },
+      {
+        "title": "Added",
+        "entries": [
+          "**Everything Trivy knows about a finding, not five fields of it.** A stored vulnerability held the id, the package and the version that fixes it; the scanner reports twenty fields and the rest were being parsed and thrown away. Opening a CVE now gives it a window of its own with the description, what upstream intends to do about it, when it was published and last revised, the weaknesses it is an instance of, every vendor's score where they disagree, and all of its references. The CVSS vector is read out in words as well as printed: a flaw reachable over the network with no privileges is a different morning's work from one needing a local account, and the score alone flattens that difference into a number.",
+          "**What is actually inside an image, and what it costs.** The package list now carries sizes, read out of apk's and dpkg's own databases where the scanner does not report them, and each layer says how large it is. Asking the scanner for the full inventory costs nothing — it already reads every package database in the image to do its job.",
+          "**Help you can search.** The help page was a wall of cards in no particular order. It is now a field that filters, topics grouped under headings that say what kind of question they answer, troubleshooting first rather than fifth, and the way out — issues, documentation, the changelog — at the bottom where it is looked for."
+        ]
+      },
+      {
+        "title": "Fixed",
+        "entries": [
+          "**The window opened four pixels too narrow.** It was sized for the images table, back when that was the widest thing in the app. An image's package table needs 1284 with the sidebar and the rail either side of it, and the window opened at 1280 — so on a fresh install the licence column fell off the end, and the findings opened underneath went with it.",
+          "**Clearing up after deleted images no longer waits on the scanner.** Forgetting an image that is gone needs the image list and nothing else, but it sat below the check for whether the scanner was installed. Anyone who had not installed Trivy, or whose vulnerability database had not finished downloading, kept a result for every image they had ever deleted, with no way to be rid of them.",
+          "**Removing something that is already gone is no longer an error.** Browsing a volume starts a helper container and tidies it away afterwards, whether or not one ever ran. Being told it was not there is the outcome that was wanted, but it was written into the log as a failure.",
+          "**The severity bar is five segments on every row.** Empty segments were painted white, which on a tinted row is a hole rather than a zero — the bar read as a coloured fragment with its ends torn off. They keep their own colour now, so one row can be compared with the next.",
+          "Two lines in the file browser padded nothing, leaving the drop hint against the left edge and the bottom of the window at the same time.",
+          "The manual button for clearing stale scan results is gone. The sweep that already runs on every change had been doing the work for some time, so by the time anyone reached the button there was nothing left for it to do."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.9.0",
     "date": "2026-08-21",
     "summary": "",
