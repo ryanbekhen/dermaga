@@ -82,7 +82,7 @@ const COLUMNS: Column[] = [
   { key: 'tags', label: 'Tags', width: 'minmax(120px,1fr)' },
   // Wide enough for all five segments of the strip, which is the same bar the
   // image's own Packages tab is headed by.
-  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '168px' },
+  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '148px' },
   { key: 'digest', label: 'Digest', width: '116px' },
   { key: 'platform', label: 'Platform', width: '124px' },
   { key: 'size', label: 'Size', width: '84px', align: 'right' },

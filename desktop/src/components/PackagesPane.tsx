@@ -84,7 +84,7 @@ const TONE: Record<Severity, { text: string; strip: string; faint: string; icon:
 // splitting it into two tabs made the reader join them back up by hand.
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(160px,2.4fr)' },
-  { key: 'vulns', label: 'Vulnerabilities', width: '168px' },
+  { key: 'vulns', label: 'Vulnerabilities', width: '148px' },
   { key: 'version', label: 'Version', width: '116px' },
   { key: 'size', label: 'Size', width: '84px', align: 'right' },
   { key: 'type', label: 'Type', width: '96px' },
@@ -503,19 +503,21 @@ export function SeverityStrip({
   onPick?: (severity: Severity) => void;
 }) {
   return (
-    <div
-      className="flex shrink-0 overflow-hidden rounded-md"
-      role="group"
-      aria-label="Findings by severity"
-    >
+    <div className="flex shrink-0" role="group" aria-label="Findings by severity">
       {ORDER.map((severity) => {
         const count = counts[severity] ?? 0;
         const on = active === severity;
         const tone = TONE[severity];
         const named = severity.toLowerCase();
-        // w-8, not w-7: a single severity can pass a hundred on a big image,
-        // and a segment sized to two digits clips the third.
-        const paint = `flex h-6 w-8 shrink-0 items-center justify-center border-r border-white/25 text-tiny font-semibold tabular-nums last:border-r-0 dark:border-black/25 ${
+        // The corners are on the end segments themselves, not on a rounded
+        // box clipping them. WebKit does not reliably clip a child's own
+        // background to a rounded parent inside a subgrid, so the right end
+        // came out square while the left looked fine.
+        //
+        // 28x20: wide enough that a three-digit count -- which a single
+        // severity does reach on a large image -- is not cut off, and no
+        // taller than the line of text beside it.
+        const paint = `flex h-5 w-7 shrink-0 items-center justify-center border-r border-white/25 text-tiny font-semibold tabular-nums first:rounded-l-md last:rounded-r-md last:border-r-0 dark:border-black/25 ${
           count === 0 ? tone.faint : tone.strip
         }`;
 
