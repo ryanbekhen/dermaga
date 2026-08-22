@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { PLACEHOLDER_ROWS, PLACEHOLDER_WIDTHS, SkeletonBar } from './Skeleton';
 
 export interface Column {
@@ -63,6 +63,89 @@ export function DataTable<T>({
   loading = false,
 }: DataTableProps<T>) {
   const keys = rows.map(rowKey);
+
+  /**
+   * The row the keys are on.
+   *
+   * Held as the row's own key rather than as its position, so filtering the
+   * list does not silently move the cursor onto whatever slid into that slot.
+   * A row that filters away simply stops being the one -- indexOf returns -1
+   * and nothing is marked, which is the truth.
+   */
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const activeRow = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    activeRow.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeKey]);
+
+  /**
+   * Arrows walk the list, Return opens, Space picks.
+   *
+   * Bound to the window and deliberately alive while the caret is in a filter
+   * field: type a few letters, arrow down, press Return is the whole point,
+   * and a single-line field has nowhere for an up-arrow to go anyway. A
+   * textarea does, and the terminal is one, so those are left alone -- as is
+   * anything behind an open dialog, which owns the keyboard while it is up.
+   */
+  useEffect(() => {
+    if (rows.length === 0) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (document.querySelector('[role="dialog"]')) return;
+
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused?.tagName === 'TEXTAREA' || focused?.isContentEditable) return;
+
+      const current = activeKey ? keys.indexOf(activeKey) : -1;
+
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        // From nothing, down lands on the first row and up on the last, so
+        // either arrow is a way in rather than only a way along.
+        const next =
+          current === -1
+            ? step === 1
+              ? 0
+              : keys.length - 1
+            : Math.min(keys.length - 1, Math.max(0, current + step));
+
+        setActiveKey(keys[next]);
+        return;
+      }
+
+      if (current === -1) return;
+
+      if (event.key === 'Enter' && onOpen) {
+        event.preventDefault();
+        onOpen(rows[current]);
+        return;
+      }
+
+      // Space, where there are checkboxes to fill: picking a row without
+      // reaching for the mouse is most of what bulk actions are for. Not
+      // while typing, though -- a space in a filter is a space.
+      if (event.key === ' ' && selection && focused?.tagName !== 'INPUT') {
+        event.preventDefault();
+        // Written out here rather than calling the toggle below it: that one
+        // is declared further down the component, and reaching backwards for
+        // it from an effect is what the compiler's immutability rule is
+        // there to stop.
+        const next = new Set(selection.selected);
+        if (!next.delete(keys[current])) next.add(keys[current]);
+        selection.onChange(next);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // keys and rows are rebuilt every render; the values that decide what the
+    // handler does are the ones listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, rows, onOpen, selection]);
+
   const selectedHere = keys.filter((key) => selection?.selected.has(key));
   const allSelected = keys.length > 0 && selectedHere.length === keys.length;
 
@@ -182,16 +265,22 @@ export function DataTable<T>({
             // The hand is on the whole row for the same reason. A row is not
             // shaped like a control, so hover alone left the reader to
             // discover by trying that it opens.
+            const isActive = key === activeKey;
+
             const main = (
               <li
                 key={key}
+                ref={isActive ? activeRow : undefined}
                 onClick={onOpen ? () => onOpen(row) : undefined}
+                aria-current={isActive ? 'true' : undefined}
                 className={`group col-span-full grid grid-cols-subgrid items-center text-body transition-colors ${
                   onOpen ? 'cursor-pointer' : ''
                 } ${
                   isSelected
                     ? 'bg-brand-50 dark:bg-brand-600/10'
-                    : 'hover:bg-ink-50 dark:hover:bg-ink-900/60'
+                    : isActive
+                      ? 'bg-ink-150 dark:bg-ink-800/70'
+                      : 'hover:bg-ink-50 dark:hover:bg-ink-900/60'
                 }`}
               >
                 <span />

@@ -203,6 +203,7 @@ function CreateNetworkDialog({ onClose }: { onClose: () => void }) {
     <Modal
       title="New network"
       onClose={onClose}
+      onSubmit={() => void submit()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost" disabled={saving}>

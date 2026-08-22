@@ -227,6 +227,7 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
       title="Log in to a registry"
       subtitle="Apple's CLI stores the credentials; Dermaga does not keep them."
       onClose={onClose}
+      onSubmit={() => void submit()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">

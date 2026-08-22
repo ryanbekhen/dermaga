@@ -53,6 +53,12 @@ const SECTIONS: Section[] = [
         keywords: 'refresh reload update realtime polling',
       },
       {
+        question: 'Working without the mouse',
+        answer:
+          'Cmd+1 through Cmd+9 switch tabs on any detail page, the way they do in Safari and Finder. Inside a dialog, Return in a list of ports or volumes adds another row and puts the caret in it, Cmd+Return does what the main button does, and Escape closes without saving. Tab wraps at the end of a dialog rather than escaping to the page behind it.',
+        keywords: 'keyboard shortcut tab focus accessibility dialog form',
+      },
+      {
         question: 'Finding anything: ⌘K',
         answer:
           'Cmd+K puts the caret in the search field at the top of the window. It finds containers, images, volumes, networks, machines and pages by name — and the things you can do to them: start, stop or restart a container or a machine, run a container from an image, attach or detach a network, or open the create, pull, build and load forms directly. Arrow keys walk the results, Return opens the one you are on.',
@@ -190,12 +196,30 @@ const SECTIONS: Section[] = [
   },
 ];
 
-const SHORTCUTS: [string, string][] = [
-  ['⌘K', 'Search everything, and act on what you find'],
-  ['↑ ↓', 'Move through the results'],
-  ['↩', 'Open the result you are on'],
-  ['Esc', 'Clear the search'],
-  ['⌘,', 'Settings'],
+// Two groups, because the same key means different things in each: Return
+// opens a search result and adds a row to a list, and Escape clears a query
+// and closes a dialog. One flat table of that is a table nobody trusts.
+const KEYS: { where: string; keys: [string, string][] }[] = [
+  {
+    where: 'Anywhere',
+    keys: [
+      ['⌘K', 'Search everything, and act on what you find'],
+      ['↑ ↓', 'Move through the results'],
+      ['↩', 'Open the result you are on'],
+      ['⌘1…9', 'Switch tab on a detail page'],
+      ['⌘,', 'Settings'],
+      ['Esc', 'Clear the search'],
+    ],
+  },
+  {
+    where: 'In a dialog',
+    keys: [
+      ['↩', 'In a list of ports, volumes or labels: add another row and go to it'],
+      ['⌘↩', 'Do what the dialog’s main button does'],
+      ['⇥', 'Next field; the last one wraps back to the first'],
+      ['Esc', 'Close without saving'],
+    ],
+  },
 ];
 
 export function HelpView({ version }: { version: string }) {
@@ -285,19 +309,26 @@ export function HelpView({ version }: { version: string }) {
               <h2 className="label-mono border-b border-ink-200 pb-1.5 dark:border-ink-800">
                 Keyboard
               </h2>
-              <dl className="flex flex-col">
-                {SHORTCUTS.map(([keys, description]) => (
-                  <div
-                    key={keys}
-                    className="flex items-baseline justify-between gap-4 border-b border-ink-150 py-1.5 last:border-0 dark:border-ink-800"
-                  >
-                    <dt className="w-16 shrink-0 font-mono text-small font-medium">{keys}</dt>
-                    <dd className="flex-1 text-small text-ink-600 dark:text-ink-400">
-                      {description}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+              {KEYS.map(({ where, keys }) => (
+                <div key={where} className="flex flex-col gap-1">
+                  <p className="text-small font-medium">{where}</p>
+                  <dl className="flex flex-col">
+                    {keys.map(([combination, description]) => (
+                      <div
+                        key={combination}
+                        className="flex items-baseline justify-between gap-4 border-b border-ink-150 py-1.5 last:border-0 dark:border-ink-800"
+                      >
+                        <dt className="w-16 shrink-0 font-mono text-small font-medium">
+                          {combination}
+                        </dt>
+                        <dd className="flex-1 text-small text-ink-600 dark:text-ink-400">
+                          {description}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
             </section>
 
             {/* The way out, at the bottom, which is where it is looked for. */}

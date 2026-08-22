@@ -202,6 +202,7 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
     <Modal
       title="New volume"
       onClose={onClose}
+      onSubmit={() => void submit()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost" disabled={saving}>

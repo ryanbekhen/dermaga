@@ -52,6 +52,7 @@ export function CreateMachineDialog({ onClose }: { onClose: () => void }) {
       title="New machine"
       subtitle="Creates a Linux VM for containers to run in. Progress appears in the list."
       onClose={onClose}
+      onSubmit={create}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
@@ -172,6 +173,7 @@ export function MachineSettingsDialog({
       title={`Configure ${machine.id}`}
       subtitle="New values take effect the next time the machine starts."
       onClose={onClose}
+      onSubmit={() => void submit()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost" disabled={saving}>

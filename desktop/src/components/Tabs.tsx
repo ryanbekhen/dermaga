@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface TabDefinition {
@@ -22,9 +23,37 @@ interface TabsProps {
  * the front of a stack rather than as one of several things switched on.
  */
 export function Tabs({ tabs, active, onSelect }: TabsProps) {
+  /**
+   * Cmd+1 through Cmd+9 pick a tab by position.
+   *
+   * The Mac convention, and the same keys Safari, Finder and Terminal use --
+   * so it is one fewer thing to learn rather than one more. Held with a
+   * modifier, it works while the caret is in a filter field, which is where it
+   * usually is on a page with a list on it.
+   *
+   * Bound to the window rather than to the strip: nothing here has focus most
+   * of the time, and a shortcut that only works after you have clicked a tab
+   * is a shortcut for people who did not need it.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.metaKey && !event.ctrlKey) return;
+      if (event.altKey || event.shiftKey) return;
+
+      const at = Number(event.key);
+      if (!Number.isInteger(at) || at < 1 || at > tabs.length) return;
+
+      event.preventDefault();
+      onSelect(tabs[at - 1].id);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [tabs, onSelect]);
+
   return (
     <div role="tablist" className="flex flex-wrap gap-6 px-7">
-      {tabs.map(({ id, label, icon: Icon }) => {
+      {tabs.map(({ id, label, icon: Icon }, index) => {
         const selected = id === active;
 
         return (
@@ -33,6 +62,7 @@ export function Tabs({ tabs, active, onSelect }: TabsProps) {
             role="tab"
             aria-selected={selected}
             onClick={() => onSelect(id)}
+            title={`${label} — ⌘${index + 1}`}
             // The strip sits on the rule that closes the header, so the
             // underline is pulled down a pixel to cover it rather than to
             // stack a second line just above it.

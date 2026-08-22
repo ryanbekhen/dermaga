@@ -285,6 +285,7 @@ function AttachDialog({
       title={`Attach a container to ${network.name}`}
       subtitle="Apple’s CLI attaches networks only at creation, so the container is stopped, recreated with the same settings plus this network, and started again. Named volumes survive; anything written to its filesystem does not."
       onClose={onClose}
+      onSubmit={() => void attach()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost" disabled={busy}>

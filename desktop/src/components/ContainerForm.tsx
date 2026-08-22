@@ -206,6 +206,7 @@ export function ContainerForm({
           : 'Runs `container run --detach` with these settings.'
       }
       onClose={onClose}
+      onSubmit={submit}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">

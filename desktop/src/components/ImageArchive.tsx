@@ -85,6 +85,10 @@ export function SaveImageDialog({
       title={`Save ${reference}`}
       subtitle="An archive holds one platform."
       onClose={onClose}
+      onSubmit={() => {
+        onClose();
+        void saveImage(reference, platform, onSaved);
+      }}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">

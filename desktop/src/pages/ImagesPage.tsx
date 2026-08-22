@@ -405,6 +405,7 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
       title="Build image"
       subtitle="Progress appears in the list; you can keep working while it builds."
       onClose={onClose}
+      onSubmit={build}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
@@ -513,6 +514,7 @@ function PullDialog({ onClose }: { onClose: () => void }) {
       title="Pull image"
       subtitle="Progress appears in the list; you can keep working while it downloads."
       onClose={onClose}
+      onSubmit={pull}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">

@@ -355,6 +355,7 @@ function PushDialog({ reference, onClose }: { reference: string; onClose: () => 
       title="Push image"
       subtitle="Progress appears in the image list; you can keep working."
       onClose={onClose}
+      onSubmit={() => void push()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">

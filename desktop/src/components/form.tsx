@@ -17,6 +17,7 @@ export function Modal({
   title,
   subtitle,
   onClose,
+  onSubmit,
   children,
   footer,
   hint,
@@ -25,6 +26,17 @@ export function Modal({
   title: string;
   subtitle?: string;
   onClose: () => void;
+  /**
+   * What the dialog's primary button does, so Cmd+Return can do it too.
+   *
+   * A dialog is not a form element here -- the fields are laid out in panels
+   * rather than submitted -- so there was no key that finished one. Escape
+   * has always cancelled; this is the other half of that pair, and it is the
+   * modifier version deliberately: plain Return in a field adds a row to the
+   * list it is in, and creating a container by accident is not a small
+   * mistake.
+   */
+  onSubmit?: () => void;
   children: ReactNode;
   footer: ReactNode;
   /**
@@ -75,6 +87,12 @@ export function Modal({
         return;
       }
 
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && onSubmit) {
+        event.preventDefault();
+        onSubmit();
+        return;
+      }
+
       if (event.key !== 'Tab') return;
 
       const stops = focusableIn(panel);
@@ -96,7 +114,7 @@ export function Modal({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [onClose, onSubmit]);
 
   return (
     <div
@@ -174,6 +192,51 @@ export function Fieldset({
   addLabel?: string;
   children: ReactNode;
 }) {
+  const body = useRef<HTMLDivElement>(null);
+
+  /**
+   * Add a row, and put the caret in it.
+   *
+   * The button that adds a row sits after the rows -- it has to, or it would
+   * be above the thing it appends to -- so pressing it left focus *past* the
+   * row it had just created. Reaching the new fields meant shift-Tabbing
+   * backwards over the button you had only just pressed, every single time.
+   *
+   * The row does not exist yet when this runs, so the caret is placed on the
+   * next frame, once React has committed it.
+   */
+  const add = () => {
+    onAdd?.();
+
+    requestAnimationFrame(() => {
+      const rows = body.current?.querySelectorAll<HTMLElement>('[data-row]');
+      const last = rows?.[rows.length - 1];
+
+      last?.querySelector<HTMLInputElement>('input, select, textarea')?.focus();
+    });
+  };
+
+  /**
+   * Return, in a row, means another row.
+   *
+   * It is what the key means everywhere else a list is typed into, and there
+   * is nothing else for it to do here: the dialog is not a form element, so
+   * Return in a field did nothing at all.
+   *
+   * A select is left alone -- Return there commits the open menu -- and so is
+   * anything held with a modifier, which is how the dialog is submitted.
+   */
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (!onAdd || event.key !== 'Enter') return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    const target = event.target as HTMLElement;
+    if (target.tagName !== 'INPUT') return;
+
+    event.preventDefault();
+    add();
+  };
+
   return (
     <fieldset className="flex flex-col gap-2">
       {/* The rule runs from the label to the right edge, which is what makes a
@@ -186,12 +249,17 @@ export function Fieldset({
       </div>
       {hint && <p className="text-tiny text-ink-600 dark:text-ink-400">{hint}</p>}
 
-      <div className="flex flex-col gap-2.5 rounded-xl border border-ink-200 bg-white p-3.5 dark:border-ink-800 dark:bg-ink-900">
+      <div
+        ref={body}
+        onKeyDown={onKeyDown}
+        className="flex flex-col gap-2.5 rounded-xl border border-ink-200 bg-white p-3.5 dark:border-ink-800 dark:bg-ink-900"
+      >
         {children}
         {onAdd && (
           <button
             type="button"
-            onClick={onAdd}
+            onClick={add}
+            title={`${addLabel} — or press Return in any field here`}
             className="self-start text-small text-brand-700 hover:underline dark:text-brand-400"
           >
             + {addLabel}
@@ -205,7 +273,9 @@ export function Fieldset({
 /** One removable row inside a Fieldset. */
 export function Row({ onRemove, children }: { onRemove: () => void; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
+    // Marked so the fieldset above can find the row it has just added and put
+    // the caret in it.
+    <div data-row className="flex items-center gap-2">
       {children}
       <button
         type="button"
