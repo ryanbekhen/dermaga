@@ -695,7 +695,23 @@ func (cm *Manager) Remove(ctx context.Context, id string, force bool) error {
 	args = append(args, id)
 
 	if _, err := cm.runner.Run(ctx, args...); err != nil {
+		// Asking for something to be gone and being told it already is, is
+		// the outcome that was wanted. Two callers ask for exactly that --
+		// the volume browser wipes the slate before starting its helper, and
+		// tears it down again on the way out whether or not it ever ran -- so
+		// treating "not found" as failure logged an error on the ordinary
+		// path and left it in the log for somebody to worry about.
+		//
+		// The listing is still announced: if the container was gone but this
+		// process still had it, the view was wrong until now.
+		if cli.IsNotFound(err) {
+			cm.changed.Changed()
+
+			return nil
+		}
+
 		cm.logger.Error("Failed to remove container", "id", id, "error", err)
+
 		return err
 	}
 	cm.changed.Changed()

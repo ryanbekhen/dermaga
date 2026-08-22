@@ -47,6 +47,29 @@ func (r *Runner) Run(ctx context.Context, args ...string) ([]byte, error) {
 	return r.RunTool(ctx, Binary, args...)
 }
 
+// IsNotFound reports whether the CLI refused because the thing it was asked
+// about is not there.
+//
+// The runtime says so in its own vocabulary, wrapped a couple of layers deep:
+//
+//	internalError: "failed to delete container"
+//	  (cause: "notFound: "container with ID x not found"")
+//
+// which reaches here as text, since the CLI exits 1 for everything and has no
+// distinguishable status to read instead.
+//
+// It matches the `notFound:` token rather than the words "not found" on their
+// own. A missing binary fails with "executable file not found in $PATH", and
+// reading that as "already gone" would turn an uninstalled CLI into a silent
+// success on every delete.
+func IsNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(err.Error()), "notfound:")
+}
+
 // RunTool is Run for a binary other than `container`.
 func (r *Runner) RunTool(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	cmd := r.Tool(ctx, binary, args...)
