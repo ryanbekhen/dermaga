@@ -12,7 +12,7 @@ import (
 // time on this goroutine, so a machine full of images warms up gradually
 // instead of exporting several gigabytes at once.
 func (m *Manager) runSweep(ctx context.Context) {
-	if m.source == nil || !m.Status().Installed || !m.Status().DatabaseReady {
+	if m.source == nil {
 		return
 	}
 
@@ -22,8 +22,8 @@ func (m *Manager) runSweep(ctx context.Context) {
 		return
 	}
 
-	// Results for images that are gone are dead weight in the file and noise
-	// in the UI, so every pass clears them out.
+	// Results for images that are gone are dead weight in the database and
+	// noise in the UI, so every pass clears them out.
 	m.forgetMissing(refs)
 
 	// And so is a warning about an image that is no longer here. A failure
@@ -32,9 +32,29 @@ func (m *Manager) runSweep(ctx context.Context) {
 	// nothing left to explain it.
 	m.forgetStaleFailure(refs)
 
+	// Clearing up comes first and is not the scanner's to refuse. Forgetting
+	// an image that has been deleted needs no Trivy and no vulnerability
+	// database -- it needs the list of images, which is already in hand. Under
+	// the old order these two lines sat below the check, so somebody who never
+	// installed the scanner, or whose database had not downloaded yet, kept
+	// every result for every image they had ever deleted.
+	if !m.Status().Installed || !m.Status().DatabaseReady {
+		return
+	}
+
 	// Only what actually needs doing, so the count the user sees counts down
 	// to zero rather than sitting at "1 of 12" while eleven are skipped.
-	pending := make([]ImageRef, 0, len(refs))
+	//
+	// Images nobody has an answer for come first, and images whose answer has
+	// merely gone stale come after. The difference matters twice: on a fresh
+	// install every image is in the first group and the page fills in the
+	// order somebody is likely to open them, and after an upgrade -- where the
+	// stored reports are all suddenly too old at once -- a newly pulled image
+	// is not stuck behind a queue of rescans that already have something to
+	// show. A stale report stays on screen until its rescan replaces it, so
+	// waiting costs the reader nothing.
+	var unscanned, stale []ImageRef
+
 	for _, ref := range refs {
 		// An image with no arm64 in it cannot be read here at all. Left in the
 		// list it is attempted on every pass, fails on every pass, and leaves a
@@ -43,10 +63,18 @@ func (m *Manager) runSweep(ctx context.Context) {
 			continue
 		}
 
-		if !m.hasFreshReport(ref) {
-			pending = append(pending, ref)
+		if m.hasFreshReport(ref) {
+			continue
+		}
+
+		if _, held := m.Report(ref.Reference); held {
+			stale = append(stale, ref)
+		} else {
+			unscanned = append(unscanned, ref)
 		}
 	}
+
+	pending := append(unscanned, stale...)
 
 	for i, ref := range pending {
 		if ctx.Err() != nil {
@@ -179,26 +207,20 @@ func (m *Manager) forgetMissing(refs []ImageRef) int {
 	return len(gone)
 }
 
-// ForgetMissing is the manual form: the same clean-up the sweep does, for a
-// user who wants the file tidied now. Results for images still present are
-// kept -- throwing those away would only mean scanning them again.
-func (m *Manager) ForgetMissing(ctx context.Context) int {
-	if m.source == nil {
-		return 0
-	}
-
-	refs, err := m.source(ctx)
-	if err != nil {
-		return 0
-	}
-
-	return m.forgetMissing(refs)
-}
-
-// maxReportAge is the backstop. Database and scanner versions catch almost
-// everything, but if either is unreadable a result could otherwise sit there
-// for ever; a week is short enough to stay honest and long enough not to churn.
-const maxReportAge = 7 * 24 * time.Hour
+// maxReportAge is how long an answer is trusted for.
+//
+// Database and scanner versions catch most of what makes a result wrong, and
+// between them they are what usually invalidates a result: Trivy publishes a
+// database roughly daily, and every stored report is rescanned when it does.
+// This is the backstop for everything else.
+//
+// Twelve hours, and the number is a budget rather than a preference. A scan
+// exports the whole image to a temporary directory, runs Trivy over it and
+// reads its package database -- so on a Mac with twenty images, halving this
+// number doubles a real amount of disk and CPU, for ever, in the background.
+// Twelve picks up a new vulnerability database within half a day of it landing
+// while costing a quarter of what three hours did.
+const maxReportAge = 12 * time.Hour
 
 // outdatedResult decides whether a stored result still speaks for the image.
 // Anything that could change the answer counts: a newer vulnerability

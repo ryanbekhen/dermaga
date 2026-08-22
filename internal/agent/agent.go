@@ -682,12 +682,6 @@ func (a *Agent) registerScanner() {
 		return a.scanner.Reports(), nil
 	})
 
-	// Results for images that still exist are worth keeping -- discarding them
-	// only means scanning them again. What goes is what no longer has an image.
-	a.server.Register("scanner.clear", func(ctx context.Context, _ json.RawMessage) (any, error) {
-		return map[string]any{"removed": a.scanner.ForgetMissing(ctx)}, nil
-	})
-
 	a.server.Register("scanner.dismiss", func(_ context.Context, _ json.RawMessage) (any, error) {
 		a.scanner.Dismiss()
 

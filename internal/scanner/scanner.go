@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,81 @@ type Finding struct {
 	Severity string `json:"severity"`
 	Title    string `json:"title,omitempty"`
 	URL      string `json:"url,omitempty"`
+
+	// What follows is only read when a finding is opened, and it is most of
+	// what a report weighs: the description alone is a paragraph, and a busy
+	// image has a couple of hundred findings. It is kept anyway, because the
+	// alternative is a detail panel that has to go and ask -- and by then the
+	// image may not be on the machine to ask about.
+	//
+	// What is deliberately not kept: the reference lists, which run to seventy
+	// links a finding and are all reachable from URL; and the CVSS vectors,
+	// of which a dozen vendors publish slightly different ones.
+
+	// "fixed", "affected", "will_not_fix", "end_of_life". Often the more
+	// useful of the two gradings: whether anybody intends to fix it at all.
+	Status string `json:"status,omitempty"`
+	// The paragraph explaining what the flaw actually is.
+	Description string `json:"description,omitempty"`
+	// The classes of weakness, as CWE identifiers.
+	Weaknesses []string `json:"weaknesses,omitempty"`
+	// When it became public. A flaw from last week and one from three years
+	// ago that is still unpatched are different situations.
+	Published string `json:"published,omitempty"`
+	// When it was last revised. A flaw whose entry changed yesterday is one
+	// somebody is still working out.
+	LastModified string `json:"lastModified,omitempty"`
+	// The highest CVSS score any vendor gave it, 0 when none did. A number
+	// sorts and compares where five severity buckets cannot.
+	Score float64 `json:"score,omitempty"`
+	// The vector behind that score: how it is reached and what it costs.
+	Vector string `json:"vector,omitempty"`
+	// Every vendor's rating, because they disagree and which one applies
+	// depends on the distribution in the image.
+	Ratings []Rating `json:"ratings,omitempty"`
+	// Everything written about it elsewhere. The longest field by far -- some
+	// findings carry seventy links -- and the reason it is kept is that this
+	// is the list somebody works through when deciding what to do.
+	References []string `json:"references,omitempty"`
+	// The layer that brought the vulnerable package in, by digest. Ties a
+	// finding to a line of the Dockerfile that produced it.
+	Layer string `json:"layer,omitempty"`
+	// Which security database said so.
+	SourceName string `json:"sourceName,omitempty"`
+	SourceURL  string `json:"sourceUrl,omitempty"`
+}
+
+// Rating is one vendor's grading of one vulnerability.
+type Rating struct {
+	// "nvd", "redhat", "ubuntu" -- whoever published it.
+	Source string  `json:"source"`
+	Score  float64 `json:"score,omitempty"`
+	Vector string  `json:"vector,omitempty"`
+}
+
+// Layer is one layer of an image, as its manifest describes it. The size is
+// the compressed blob -- what the image costs to pull and to store, which is
+// the number people are deciding about.
+type Layer struct {
+	Digest      string `json:"digest"`
+	SizeInBytes int64  `json:"size"`
+}
+
+// Package is one thing Trivy found installed in an image, whether or not
+// anything is known to be wrong with it.
+type Package struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	// The ecosystem Trivy read it from: "alpine", "npm", "gobinary".
+	Type string `json:"type,omitempty"`
+	// What was read to find it -- a package database, a lockfile path.
+	Source   string   `json:"source,omitempty"`
+	Licenses []string `json:"licenses,omitempty"`
+	// How much room it takes once unpacked. Only OS packages have one: apk and
+	// dpkg record it, and a Go module or an npm dependency is compiled or
+	// bundled into something else and has no size of its own. Zero means "not
+	// a thing with a size", not "empty".
+	SizeInBytes int64 `json:"size,omitempty"`
 }
 
 // Report is one scan of one image.
@@ -120,6 +196,14 @@ type Report struct {
 	Targets  int            `json:"targets"`
 	Summary  map[string]int `json:"summary"`
 	Findings []Finding      `json:"findings"`
+	// Everything installed, not only what has a CVE against it. Absent from
+	// reports stored before Dermaga started asking for it; those are answered
+	// as "rescan to see this" rather than as an empty image.
+	Packages []Package `json:"packages,omitempty"`
+	// The image's layers, biggest first in cost if not in order. Read from the
+	// manifest while the image was unpacked for the scan; absent from reports
+	// stored before Dermaga started reading it.
+	Layers []Layer `json:"layers,omitempty"`
 }
 
 type Manager struct {
@@ -321,14 +405,22 @@ func (m *Manager) run(ctx context.Context) {
 	//   at startup      install or update Trivy, refresh the database if it is
 	//                   stale, then scan whatever has no current result
 	//   on any change   scan images that have just appeared
-	//   every 6 hours   the same as startup
+	//   every hour      the same as startup
 	//
-	// Trivy stamps its database with a NextUpdate 24 hours out, so a six-hourly
-	// check picks up a new one within hours of it landing while costing nothing
-	// when there is none -- it reads a local file. When the database does turn
-	// over, every stored result is against the old one and is scanned again, so
-	// the counts on screen always reflect the database in hand.
-	ticker := time.NewTicker(6 * time.Hour)
+	// Hourly rather than six-hourly because a result is only trusted for three
+	// hours now (see maxReportAge): a pass that came round every six would let
+	// an answer sit twice as long as it is meant to be believed. The pass
+	// itself costs a list and a timestamp comparison per image and scans only
+	// what has actually gone stale, so running it more often is nearly free --
+	// what costs is a scan, and the age rule decides how many of those there
+	// are, not the ticker.
+	//
+	// Trivy stamps its database with a NextUpdate 24 hours out, so the check
+	// picks up a new one within the hour while costing nothing when there is
+	// none -- it reads a local file. When the database does turn over, every
+	// stored result is against the old one and is scanned again, so the counts
+	// on screen always reflect the database in hand.
+	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 
 	// nil until a change asks for a sweep; a select on a nil channel simply
@@ -529,10 +621,16 @@ func (m *Manager) runScan(ctx context.Context, reference string) (Report, error)
 
 	// --skip-db-update because keeping the database current is this package's
 	// job, done on its own schedule rather than in the middle of a scan.
+	//
+	// --list-all-pkgs makes Trivy report everything it found installed, not
+	// only the packages it has something to say about. Without it the only
+	// inventory available is "the packages with a CVE against them", which is
+	// the one list guaranteed to misrepresent what is in the image.
 	out, err := m.runner.Tool(ctx, Formula,
 		"image", "--input", layout,
 		"--format", "json",
 		"--scanners", "vuln",
+		"--list-all-pkgs",
 		"--skip-db-update",
 		"--quiet",
 	).Output()
@@ -540,7 +638,24 @@ func (m *Manager) runScan(ctx context.Context, reference string) (Report, error)
 		return Report{}, err
 	}
 
-	return parseReport(reference, out)
+	report, err := parseReport(reference, out)
+	if err != nil {
+		return Report{}, err
+	}
+
+	// Read from the image's own package database, because Trivy does not pass
+	// it on: it reads that file to find the packages and reports everything
+	// about them except how much room they take. The layers, by contrast, it
+	// does report -- see parseReport -- so there is nothing to read twice.
+	if sizes := packageSizes(layout, report.Layers); len(sizes) > 0 {
+		for i := range report.Packages {
+			if size, ok := sizes[report.Packages[i].Name]; ok {
+				report.Packages[i].SizeInBytes = size
+			}
+		}
+	}
+
+	return report, nil
 }
 
 func parseReport(reference string, out []byte) (Report, error) {
@@ -550,16 +665,57 @@ func parseReport(reference string, out []byte) (Report, error) {
 				Family string `json:"Family"`
 				Name   string `json:"Name"`
 			} `json:"OS"`
+			// Trivy reports the layers of the image it read, in manifest order,
+			// with the compressed size of each. Dermaga used to walk the OCI
+			// layout for this itself -- index, manifest, layer list -- which
+			// was a second reading of something already in hand.
+			Layers []Layer `json:"Layers"`
 		} `json:"Metadata"`
 		Results []struct {
+			Target   string `json:"Target"`
+			Class    string `json:"Class"`
+			Type     string `json:"Type"`
+			Packages []struct {
+				Name     string   `json:"Name"`
+				Version  string   `json:"Version"`
+				Licenses []string `json:"Licenses"`
+			} `json:"Packages"`
 			Vulnerabilities []struct {
-				VulnerabilityID  string `json:"VulnerabilityID"`
-				PkgName          string `json:"PkgName"`
-				InstalledVersion string `json:"InstalledVersion"`
-				FixedVersion     string `json:"FixedVersion"`
-				Severity         string `json:"Severity"`
-				Title            string `json:"Title"`
-				PrimaryURL       string `json:"PrimaryURL"`
+				VulnerabilityID  string   `json:"VulnerabilityID"`
+				PkgName          string   `json:"PkgName"`
+				InstalledVersion string   `json:"InstalledVersion"`
+				FixedVersion     string   `json:"FixedVersion"`
+				Status           string   `json:"Status"`
+				Severity         string   `json:"Severity"`
+				Title            string   `json:"Title"`
+				Description      string   `json:"Description"`
+				PrimaryURL       string   `json:"PrimaryURL"`
+				CweIDs           []string `json:"CweIDs"`
+				PublishedDate    string   `json:"PublishedDate"`
+				LastModifiedDate string   `json:"LastModifiedDate"`
+				References       []string `json:"References"`
+				// Which layer of the image brought the vulnerable package in.
+				Layer struct {
+					Digest string `json:"Digest"`
+					DiffID string `json:"DiffID"`
+				} `json:"Layer"`
+				// Where the finding came from -- a distribution's own security
+				// database, or the NVD.
+				DataSource struct {
+					ID   string `json:"ID"`
+					Name string `json:"Name"`
+					URL  string `json:"URL"`
+				} `json:"DataSource"`
+				// Every vendor that rated it, each with a vector and a score.
+				// Vendors disagree, sometimes by a lot, and which one applies
+				// depends on the distribution in the image -- so all of them
+				// are kept rather than a winner picked here.
+				CVSS map[string]struct {
+					V3Vector string  `json:"V3Vector"`
+					V3Score  float64 `json:"V3Score"`
+					V2Vector string  `json:"V2Vector"`
+					V2Score  float64 `json:"V2Score"`
+				} `json:"CVSS"`
 			} `json:"Vulnerabilities"`
 		} `json:"Results"`
 	}
@@ -573,6 +729,8 @@ func parseReport(reference string, out []byte) (Report, error) {
 		ScannedAt: time.Now().UTC().Format(time.RFC3339),
 		Summary:   map[string]int{},
 		Findings:  []Finding{},
+		Packages:  []Package{},
+		Layers:    raw.Metadata.Layers,
 	}
 
 	if family := raw.Metadata.OS.Family; family != "" {
@@ -582,16 +740,81 @@ func parseReport(reference string, out []byte) (Report, error) {
 	report.Targets = len(raw.Results)
 
 	for _, result := range raw.Results {
+		// Trivy reports one result per thing it analysed -- the OS package
+		// database, then a lockfile per language. The target is what it read,
+		// and it is the only way to tell an apk package from one npm put in
+		// /app/node_modules.
+		source := result.Target
+		if source == "" {
+			source = result.Type
+		}
+
+		for _, pkg := range result.Packages {
+			if pkg.Name == "" {
+				continue
+			}
+
+			report.Packages = append(report.Packages, Package{
+				Name:     pkg.Name,
+				Version:  pkg.Version,
+				Type:     result.Type,
+				Source:   source,
+				Licenses: pkg.Licenses,
+			})
+		}
+
 		for _, v := range result.Vulnerabilities {
 			report.Summary[v.Severity]++
+			// Sorted, so the panel that shows them is stable between scans --
+			// a Go map is walked in a different order every time.
+			sources := make([]string, 0, len(v.CVSS))
+			for source := range v.CVSS {
+				sources = append(sources, source)
+			}
+			sort.Strings(sources)
+
+			ratings := make([]Rating, 0, len(sources))
+			score, vector := 0.0, ""
+
+			for _, source := range sources {
+				cvss := v.CVSS[source]
+
+				// Version 3 where it exists; a vendor that only published a v2
+				// score is still a vendor with an opinion.
+				rating := Rating{Source: source, Score: cvss.V3Score, Vector: cvss.V3Vector}
+				if rating.Score == 0 && cvss.V2Score > 0 {
+					rating = Rating{Source: source, Score: cvss.V2Score, Vector: cvss.V2Vector}
+				}
+
+				ratings = append(ratings, rating)
+
+				// The headline figure is the worst anybody gave it, and it
+				// carries that vendor's vector with it so the two agree.
+				if rating.Score > score {
+					score, vector = rating.Score, rating.Vector
+				}
+			}
+
 			report.Findings = append(report.Findings, Finding{
-				ID:        v.VulnerabilityID,
-				Package:   v.PkgName,
-				Installed: v.InstalledVersion,
-				Fixed:     v.FixedVersion,
-				Severity:  v.Severity,
-				Title:     v.Title,
-				URL:       v.PrimaryURL,
+				ID:           v.VulnerabilityID,
+				Package:      v.PkgName,
+				Installed:    v.InstalledVersion,
+				Fixed:        v.FixedVersion,
+				Status:       v.Status,
+				Severity:     v.Severity,
+				Title:        v.Title,
+				Description:  v.Description,
+				URL:          v.PrimaryURL,
+				Weaknesses:   v.CweIDs,
+				Published:    v.PublishedDate,
+				LastModified: v.LastModifiedDate,
+				Score:        score,
+				Vector:       vector,
+				Ratings:      ratings,
+				References:   v.References,
+				Layer:        v.Layer.Digest,
+				SourceName:   v.DataSource.Name,
+				SourceURL:    v.DataSource.URL,
 			})
 		}
 	}
