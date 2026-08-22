@@ -41,9 +41,9 @@ unpacking the layers can take a minute, and an image scanned in between looks em
 exporting several gigabytes at once. By the time you open an image, the answer is usually already
 there.
 
-**What is kept, and for how long.** Results live in `~/.dermaga/scans.json`, so closing the app does
+**What is kept, and for how long.** Results live in `~/.dermaga/dermaga.db`, so closing the app does
 not mean rescanning everything on the next launch. A result is taken again when the database turns
-over, when Trivy itself is upgraded, or when it is more than a week old, so the counts on screen
+over, when Trivy itself is upgraded, or when it is more than twelve hours old, so the counts on screen
 always reflect the database in hand. Results for images that no longer exist are cleared on every
 pass, and the System page drops stale ones on request.
 

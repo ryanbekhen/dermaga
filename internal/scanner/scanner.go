@@ -407,9 +407,9 @@ func (m *Manager) run(ctx context.Context) {
 	//   on any change   scan images that have just appeared
 	//   every hour      the same as startup
 	//
-	// Hourly rather than six-hourly because a result is only trusted for three
-	// hours now (see maxReportAge): a pass that came round every six would let
-	// an answer sit twice as long as it is meant to be believed. The pass
+	// Hourly rather than daily because a result is trusted for twelve hours
+	// (see maxReportAge): a pass that came round once a day would let an
+	// answer sit twice as long as it is meant to be believed. The pass
 	// itself costs a list and a timestamp comparison per image and scans only
 	// what has actually gone stale, so running it more often is nearly free --
 	// what costs is a scan, and the age rule decides how many of those there

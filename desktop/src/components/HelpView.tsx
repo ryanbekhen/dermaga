@@ -1,218 +1,355 @@
-import {
-  Activity,
-  ArrowDownToLine,
-  BellRing,
-  Boxes,
-  CloudUpload,
-  Command,
-  FileDown,
-  FolderTree,
-  Hammer,
-  Keyboard,
-  Pencil,
-  Radio,
-  Server,
-  ShieldCheck,
-  Terminal,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useMemo, useState } from 'react';
+import { ExternalLink, Search } from 'lucide-react';
+import { openExternal } from '../services/ipc';
 import { useUIStore } from '../store/uiStore';
 
+/**
+ * Help, in the shape help is usually in.
+ *
+ * This was fourteen cards of equal weight in a two-column grid -- everything
+ * the app does, in no particular order, with nothing to search and nothing to
+ * say which of it mattered. That is a page of tips, not a help system: the
+ * question somebody arrives with is "why is this doing that", and the answer
+ * was somewhere in the middle of the wall.
+ *
+ * So: a field that filters, topics grouped under headings that say what kind
+ * of question they answer, troubleshooting given a section of its own rather
+ * than a card among equals, and the way out -- issues, docs, the changelog --
+ * at the bottom where it is looked for.
+ */
+
+interface Topic {
+  question: string;
+  answer: string;
+  /** Extra words to match on that the text does not happen to contain. */
+  keywords?: string;
+}
+
+interface Section {
+  title: string;
+  topics: Topic[];
+}
+
+const SECTIONS: Section[] = [
+  {
+    title: 'Getting started',
+    topics: [
+      {
+        question: 'What Dermaga is',
+        answer:
+          "A window over Apple's own container CLI, not a replacement for it. Every action shells out to that CLI, so anything you do here is visible to `container ls`, and anything you do in a terminal shows up here within seconds.",
+        keywords: 'about what is docker desktop alternative',
+      },
+      {
+        question: 'Nothing starts, and nothing explains why',
+        answer:
+          'Open System. Containers run inside a Linux VM, and without the background services running nothing else can work — Dermaga replaces its whole window with a button to start them. You can also read their logs there and reclaim disk space.',
+        keywords: 'broken stuck services machine vm not working',
+      },
+      {
+        question: 'Everything is live',
+        answer:
+          'There is no refresh button and no polling. The agent holds a stream open and pushes new state the instant anything changes, including changes you make in a terminal. Logs and pull progress arrive the same way.',
+        keywords: 'refresh reload update realtime polling',
+      },
+      {
+        question: 'Finding anything: ⌘K',
+        answer:
+          'Cmd+K puts the caret in the search field at the top of the window. It finds containers, images, volumes, networks, machines and pages by name — and the things you can do to them: start, stop or restart a container or a machine, run a container from an image, attach or detach a network, or open the create, pull, build and load forms directly. Arrow keys walk the results, Return opens the one you are on.',
+        keywords: 'search command palette shortcut cmd k find',
+      },
+    ],
+  },
+  {
+    title: 'Containers',
+    topics: [
+      {
+        question: 'A shell inside a container',
+        answer:
+          'The Terminal tab attaches `container exec` to a pty, so you get a real prompt with line editing, colours and resize. It prefers bash and falls back to sh. Run as opens it as the image’s own user, as root, or as anyone else.',
+        keywords: 'exec bash sh tty console',
+      },
+      {
+        question: 'Editing a container recreates it',
+        answer:
+          'Apple’s CLI has no update command, so saving the edit form stops, deletes and re-runs the container with the new spec. Named volumes survive; the container filesystem does not, and the form says so before you commit. A change that fails to start rolls back to the previous container, and what you typed is kept.',
+        keywords: 'update change modify recreate rollback env',
+      },
+      {
+        question: 'Files in and out',
+        answer:
+          'The Files tab browses a running container and moves things both ways: drop from Finder to copy in, drag a file out to take it. Browsing runs `ls` inside the container, so an image built FROM scratch has nothing to browse with and says so.',
+        keywords: 'copy cp drag drop finder filesystem',
+      },
+      {
+        question: 'What a container is doing',
+        answer:
+          'The Usage tab draws CPU, memory, network and disk as they happen — a reading every five seconds over the last two minutes. The shape is what a live number cannot show: memory that climbs and never falls is a leak; a burst of traffic every thirty seconds is a health check rather than a user.',
+        keywords: 'stats cpu memory chart graph metrics',
+      },
+      {
+        question: 'Starting a container with Dermaga',
+        answer:
+          'Mark one and it comes up when the agent does — when you open the app, or at login with the background service on. It is not a restart policy: nothing watches a container that dies later, because without the service there is nothing running to watch it.',
+        keywords: 'autostart boot login restart policy',
+      },
+      {
+        question: 'When a container dies',
+        answer:
+          'A container that stops without being asked to is reported in the window, and as a sound when the window is not what you are looking at. A stop you asked for stays quiet. macOS only delivers notifications from an app signed with a Developer ID, so on a build you made yourself they are attempted and rarely arrive.',
+        keywords: 'exit crash notification alert sound',
+      },
+    ],
+  },
+  {
+    title: 'Images and security',
+    topics: [
+      {
+        question: 'Vulnerabilities are scanned in the background',
+        answer:
+          'Images are scanned as they appear, not when you ask, so the answer is usually waiting by the time you open one. Results are kept between launches and refreshed when the vulnerability database turns over, when the scanner is upgraded, when a tag moves to a new digest, or after twelve hours. Everything runs on this Mac; nothing about your images leaves it.',
+        keywords: 'cve trivy scan security severity',
+      },
+      {
+        question: 'Reading the Packages tab',
+        answer:
+          'One row per package, with a bar of five segments against it — critical, high, medium, low, unknown. Packages with findings sort to the top, worst first; the rest of the inventory follows alphabetically. Open a row to see the CVEs in that package, and open a CVE for a window of its own with the description, the CVSS vector read out in words, every vendor’s score and all the references.',
+        keywords: 'packages cve severity bar strip findings',
+      },
+      {
+        question: 'Building an image',
+        answer:
+          'Build on the Images page takes a context folder, a tag and the usual build arguments. Progress appears as a row in the list rather than a log window, and the builder container is started for you the first time.',
+        keywords: 'dockerfile build context buildkit',
+      },
+      {
+        question: 'Moving an image without a registry',
+        answer:
+          'Save writes an image out as an OCI archive, and Load reads one back in. An archive holds a single platform, so one is chosen when the image has more than one; only the variants actually pulled here can be written out.',
+        keywords: 'export import oci archive tar save load',
+      },
+      {
+        question: 'Pushing to a registry',
+        answer:
+          'Sign in under Registries, then push from an image’s page; it is tagged for the destination first if the name differs. Credentials go to Apple’s CLI over stdin and are never held here. A registry on this machine has no TLS, so Plain HTTP is set for you when the address is local.',
+        keywords: 'push pull login credentials docker hub ghcr',
+      },
+      {
+        question: 'Deleting an image removes every tag on it',
+        answer:
+          'References that share a digest are one image, and removing a single tag would leave the bytes on disk under another name. That is why tags sharing a digest are shown as one row.',
+        keywords: 'remove rm tag digest',
+      },
+    ],
+  },
+  {
+    title: 'Volumes, networks and machines',
+    topics: [
+      {
+        question: 'Looking inside a volume nothing has mounted',
+        answer:
+          'Dermaga starts a small helper container to read it. Rather than fetch that image from a registry — which would put the network between you and your own data — it keeps a copy as an OCI archive in ~/.dermaga and loads it back when the image is gone.',
+        keywords: 'volume browse helper mount offline',
+      },
+      {
+        question: 'Seeing a network',
+        answer:
+          'Open one and it is drawn: the network in the middle, every container attached around the edge with the address it holds there, and the gateway as a node of its own. Attach or detach a container from the network’s page, or from search.',
+        keywords: 'network topology graph attach detach ip',
+      },
+      {
+        question: 'Machines are not containers',
+        answer:
+          'Containers run inside a Linux VM, called a machine. You can create, boot, stop, resize (CPU, memory, home mount) and delete them. If containers will not start at all, the machine is the first place to look after System.',
+        keywords: 'vm virtual machine linux kernel resize',
+      },
+    ],
+  },
+  {
+    title: 'Keeping it current',
+    topics: [
+      {
+        question: 'Updating Dermaga',
+        answer:
+          'The title bar says when a newer release exists: one click downloads it, opens the installer and stands aside so it can be replaced. Click the version itself to read what changed in each release.',
+        keywords: 'update upgrade version release changelog',
+      },
+      {
+        question: 'Updating the container CLI',
+        answer:
+          'System shows the installed version and offers an update when Homebrew has a newer one. The check reads Homebrew’s local index rather than running brew update, so it costs nothing and never changes your Homebrew state on its own. A CLI installed from Apple’s .pkg is left alone.',
+        keywords: 'homebrew brew cli apple container update',
+      },
+      {
+        question: 'Where settings are kept',
+        answer:
+          'Preferences are plain JSON in ~/.dermaga/config.json, safe to edit by hand or keep in dotfiles. Scan results, templates and unfinished edits live beside it in ~/.dermaga/dermaga.db.',
+        keywords: 'config settings json database bbolt dotfiles',
+      },
+    ],
+  },
+];
+
 const SHORTCUTS: [string, string][] = [
-  ['⌘K', 'Command palette'],
-  ['⌘F', 'Focus search'],
-  ['Esc', 'Clear search, or close the palette'],
-  ['⌘,', 'Open settings'],
+  ['⌘K', 'Search everything, and act on what you find'],
+  ['↑ ↓', 'Move through the results'],
+  ['↩', 'Open the result you are on'],
+  ['Esc', 'Clear the search'],
+  ['⌘,', 'Settings'],
 ];
 
 export function HelpView({ version }: { version: string }) {
   const navigate = useUIStore((s) => s.navigate);
+  const [query, setQuery] = useState('');
+
+  const needle = query.trim().toLowerCase();
+
+  const sections = useMemo(() => {
+    if (!needle) return SECTIONS;
+
+    return SECTIONS.map((section) => ({
+      ...section,
+      topics: section.topics.filter((topic) =>
+        `${topic.question} ${topic.answer} ${topic.keywords ?? ''}`.toLowerCase().includes(needle)
+      ),
+    })).filter((section) => section.topics.length > 0);
+  }, [needle]);
+
+  const found = sections.reduce((sum, section) => sum + section.topics.length, 0);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
-      {/* Centred so a wide window reads as a document, not a left-aligned strip. */}
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-        <header>
-          <h1 className="text-xl font-semibold">Help</h1>
-          <p className="text-tiny text-ink-600 dark:text-ink-400">
-            Dermaga v{version} · a UI over Apple&rsquo;s{' '}
-            <code className="font-mono">container</code> CLI · MIT licensed
-          </p>
+      {/* One column, and a narrow one. Help is read a sentence at a time, and
+          two columns make the reader choose which side to start on. */}
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+        <header className="flex flex-col gap-4">
+          <div>
+            <h1 className="text-page font-semibold">Help</h1>
+            <p className="pt-1 text-small text-ink-600 dark:text-ink-400">
+              Dermaga v{version} · a window over Apple&rsquo;s{' '}
+              <code className="font-mono">container</code> CLI · MIT licensed
+            </p>
+          </div>
+
+          {/* The field is what makes this help rather than an article: nobody
+              reads a help page from the top, they arrive with one question. */}
+          <div className="relative">
+            <Search
+              size={14}
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search help…"
+              aria-label="Search help"
+              className="input h-9 w-full rounded-lg pl-9"
+            />
+          </div>
         </header>
 
-        <div className="grid gap-x-10 gap-y-5 md:grid-cols-2">
-          <Card icon={Boxes} title="What you can manage">
-            <p>
-              Containers, the images they run, volumes and networks they attach to, the machines
-              hosting them, and the background services themselves. Every action shells out to the
-              CLI, so anything you do here is visible to{' '}
-              <code className="font-mono">container ls</code> and the other way round.
-            </p>
-          </Card>
+        {needle && found === 0 ? (
+          <p className="py-8 text-center text-body text-ink-600 dark:text-ink-400">
+            Nothing here matches “{query}”. If the answer is missing rather than hidden,{' '}
+            <ExternalButton href="https://github.com/ryanbekhen/dermaga/issues/new/choose">
+              ask for it
+            </ExternalButton>
+            .
+          </p>
+        ) : (
+          sections.map((section) => (
+            <section key={section.title} className="flex flex-col gap-3">
+              <h2 className="label-mono border-b border-ink-200 pb-1.5 dark:border-ink-800">
+                {section.title}
+              </h2>
 
-          <Card icon={Radio} title="Everything is live">
-            <p>
-              No refresh button and no polling. The server holds an event stream open and pushes new
-              state the instant anything changes — including changes you make in a terminal. Logs
-              and pull progress stream the same way.
-            </p>
-          </Card>
+              <div className="flex flex-col gap-4">
+                {section.topics.map((topic) => (
+                  <div key={topic.question} className="flex flex-col gap-1">
+                    <h3 className="text-item font-medium">{topic.question}</h3>
+                    <p className="selectable text-body leading-relaxed text-ink-600 dark:text-ink-400">
+                      {topic.answer}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))
+        )}
 
-          <Card icon={Terminal} title="Terminal tab">
-            <p>
-              Each running container gets a real shell: the server attaches{' '}
-              <code className="font-mono">container exec</code> to a pty, so you get a prompt, line
-              editing, colours and resize. It prefers <code className="font-mono">bash</code> and
-              falls back to <code className="font-mono">sh</code>. <strong>Run as</strong> opens it
-              as the image&rsquo;s own user, as root, or as anyone else.
-            </p>
-          </Card>
+        {!needle && (
+          <>
+            <section className="flex flex-col gap-3">
+              <h2 className="label-mono border-b border-ink-200 pb-1.5 dark:border-ink-800">
+                Keyboard
+              </h2>
+              <dl className="flex flex-col">
+                {SHORTCUTS.map(([keys, description]) => (
+                  <div
+                    key={keys}
+                    className="flex items-baseline justify-between gap-4 border-b border-ink-150 py-1.5 last:border-0 dark:border-ink-800"
+                  >
+                    <dt className="w-16 shrink-0 font-mono text-small font-medium">{keys}</dt>
+                    <dd className="flex-1 text-small text-ink-600 dark:text-ink-400">
+                      {description}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
 
-          <Card icon={Pencil} title="Editing recreates">
-            <p>
-              Apple&rsquo;s CLI has no update command, so saving the edit form stops, deletes and
-              re-runs the container with the new spec. Named volumes survive; the container
-              filesystem does not. A failed change rolls back to the previous container. Environment
-              variables can be edited as fields or pasted in as{' '}
-              <code className="font-mono">.env</code> text.
-            </p>
-          </Card>
-
-          <Card icon={Server} title="When nothing works">
-            <p>
-              Check <strong>System</strong>. If the container services are stopped, nothing can
-              start until they are back up — you can start them there, watch their logs, and reclaim
-              disk space from unused images, containers and volumes.
-            </p>
-          </Card>
-
-          <Card icon={ShieldCheck} title="Vulnerabilities">
-            <p>
-              Images are scanned in the background as they appear, so the counts are usually waiting
-              by the time you open one. Results are kept between launches and refreshed when the
-              vulnerability database changes, when a tag moves to a new digest, or after a week.
-              Everything runs on this Mac; nothing about your images leaves it.
-            </p>
-          </Card>
-
-          <Card icon={Hammer} title="Building images">
-            <p>
-              <strong>Build</strong> on the Images page takes a context folder, a tag and the usual
-              build arguments. Progress appears as a row in the list rather than a log window, and
-              the builder container is started for you the first time.
-            </p>
-          </Card>
-
-          <Card icon={FileDown} title="Images as files">
-            <p>
-              <strong>Save</strong> — on an image&rsquo;s page, or on its row in the list — writes
-              it out as an OCI archive, and <strong>Load</strong> on the Images page reads one back
-              in — how to move an image to a Mac with no registry between them. An archive holds a
-              single platform, so one is chosen when the image has more than one; only the variants
-              actually pulled here can be written out.
-            </p>
-          </Card>
-
-          <Card icon={Activity} title="What a container is doing">
-            <p>
-              A container&rsquo;s <strong>Usage</strong> tab draws CPU, memory, network and disk as
-              they happen — a reading every five seconds, over the last two minutes. The shape is
-              what a live number cannot show: memory that climbs and never falls is a leak, a burst
-              of traffic every thirty seconds is a health check rather than a user. Dermaga keeps
-              that window in memory while it runs, so the tab opens on a chart that is already drawn
-              — and forgets it when it quits.
-            </p>
-          </Card>
-
-          <Card icon={ArrowDownToLine} title="Staying current">
-            <p>
-              The bottom-right corner says which version is running, and speaks up when a newer one
-              exists: one click downloads it, opens the installer and closes Dermaga so it can be
-              replaced. Click the version itself for{' '}
-              <button
-                onClick={() => navigate({ name: 'changelog' })}
-                className="font-semibold text-brand-700 hover:underline dark:text-brand-400"
-              >
-                what changed in each release
-              </button>
-              . <strong>No Linux kernel</strong> there means containers cannot run at all -- Dermaga
-              installs one on first launch, and if that could not finish the warning stays, with the
-              command to run by hand.
-            </p>
-          </Card>
-
-          <Card icon={FolderTree} title="Files in a container">
-            <p>
-              The <strong>Files</strong> tab browses a running container and moves things both ways:
-              drop from Finder to copy in, drag a file out to take it. Browsing runs{' '}
-              <code className="font-mono">ls</code> inside the container, so an image built from
-              scratch has nothing to browse with and says so.
-            </p>
-          </Card>
-
-          <Card icon={CloudUpload} title="Registries">
-            <p>
-              Sign in under <strong>Registries</strong>, then push from an image&rsquo;s page; it is
-              tagged for the destination first if the name differs. Credentials go to Apple&rsquo;s
-              CLI over stdin and are never held here. A registry on this machine has no TLS, so{' '}
-              <strong>Plain HTTP</strong> is set for you when the address is local.
-            </p>
-          </Card>
-
-          <Card icon={BellRing} title="When a container dies">
-            <p>
-              A container that stops without being asked to is reported — in the window, and as a
-              sound when the window is not what you are looking at. A stop you asked for stays
-              quiet. macOS notifications need an app signed with a Developer ID, so on these builds
-              they are attempted but rarely arrive; nothing is lost when they do not.
-            </p>
-          </Card>
-
-          <Card icon={Command} title="Finding anything">
-            <p>
-              <strong>⌘K</strong> opens the command palette: type a few letters of a container,
-              image, machine or page and press Return. It also does things rather than only pointing
-              at them — <strong>Create container</strong>, <strong>Pull image</strong>,{' '}
-              <strong>Build image</strong> and the rest land on the right page with the form already
-              open, and a container can be started or stopped without finding its row.{' '}
-              <strong>⌘F</strong> is still the search box on the page you are on.
-            </p>
-          </Card>
-
-          <Card icon={Keyboard} title="Keyboard">
-            <dl className="flex flex-col gap-1">
-              {SHORTCUTS.map(([keys, description]) => (
-                <div key={keys} className="row">
-                  <dt className="row-key font-mono text-xs">{keys}</dt>
-                  <dd className="row-value">{description}</dd>
-                </div>
-              ))}
-            </dl>
-          </Card>
-        </div>
+            {/* The way out, at the bottom, which is where it is looked for. */}
+            <section className="flex flex-col gap-3">
+              <h2 className="label-mono border-b border-ink-200 pb-1.5 dark:border-ink-800">
+                More help
+              </h2>
+              <ul className="flex flex-col gap-2 text-body">
+                <li>
+                  <button
+                    onClick={() => navigate({ name: 'changelog' })}
+                    className="font-medium text-brand-700 hover:underline dark:text-brand-400"
+                  >
+                    What changed in each release
+                  </button>
+                </li>
+                <li>
+                  <ExternalButton href="https://github.com/ryanbekhen/dermaga#readme">
+                    Documentation on GitHub
+                  </ExternalButton>
+                </li>
+                <li>
+                  <ExternalButton href="https://github.com/ryanbekhen/dermaga/issues/new/choose">
+                    Report a problem, or ask for something
+                  </ExternalButton>
+                </li>
+                <li>
+                  <ExternalButton href="https://github.com/ryanbekhen/dermaga/security/advisories/new">
+                    Report a security problem privately
+                  </ExternalButton>
+                </li>
+              </ul>
+            </section>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-/** Unboxed group, matching the detail pages: a ruled heading and its content. */
-function Card({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  children: ReactNode;
-}) {
+function ExternalButton({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:text-ink-600 dark:[&_p]:text-ink-400">
-      <div className="flex items-center gap-2 border-b border-ink-200 pb-1 dark:border-ink-700">
-        <Icon size={12} className="text-brand-600" aria-hidden />
-        <h2 className="label-caps">{title}</h2>
-      </div>
+    <a
+      href={href}
+      onClick={(event) => {
+        event.preventDefault();
+        void openExternal(href);
+      }}
+      className="inline-flex items-center gap-1.5 font-medium text-brand-700 hover:underline dark:text-brand-400"
+    >
       {children}
-    </section>
+      <ExternalLink size={12} aria-hidden />
+    </a>
   );
 }
