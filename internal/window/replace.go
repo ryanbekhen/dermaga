@@ -176,6 +176,27 @@ func examine(dmg string) (mount, candidate, current string, err error) {
 		return "", "", "", err
 	}
 
+	// And the bundle itself, which is a different question with a different
+	// answer. Since Ventura, macOS refuses to let one app modify another's
+	// bundle in /Applications without App Management permission -- and it
+	// refuses with EPERM, not EACCES, on a directory whose Unix permissions
+	// say the user owns it and may write to it:
+	//
+	//	/Applications              drwxrwxr-x root admin   writable
+	//	/Applications/Dermaga.app  drwxr-xr-x <user>       EPERM
+	//
+	// Only the parent was checked, so this looked installable, said "Restart
+	// to update", and then failed -- after the app had quit, because handOver
+	// only arms the swap and returns. There was no moment left in which to
+	// fall back to the disk image, and nothing came back up.
+	//
+	// Asked here instead, the answer arrives while there is still something to
+	// do with it: the update is offered as a download to drag across, which is
+	// the way that works.
+	if err := writable(current); err != nil {
+		return "", "", "", fmt.Errorf("macOS does not allow Dermaga to replace its own bundle here")
+	}
+
 	mount, err = mountImage(dmg)
 	if err != nil {
 		return "", "", "", err
