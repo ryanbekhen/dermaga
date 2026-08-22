@@ -51,9 +51,17 @@ usually waiting by the time you open one. The Packages tab lists what is inside 
 severity bar against each package; opening one shows the CVEs in it, and opening a CVE gives it a
 window of its own. Runs entirely on your Mac.
 
+<p align="center">
+  <img src="assets/screenshot-packages.png" alt="The Packages tab of an image, with one package opened to show the CVEs in it" width="900">
+</p>
+
 **Volumes and networks** — see which containers mount a volume and where it lands inside each, and
 look inside one even when nothing has it mounted. Open a network and see it drawn: every container
 attached, with the address it holds there.
+
+<p align="center">
+  <img src="assets/screenshot-network.png" alt="A network drawn as a graph, with every container attached to it" width="900">
+</p>
 
 **Machines** — create, boot, stop, resize and delete the Linux VMs containers run inside.
 

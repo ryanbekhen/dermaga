@@ -82,13 +82,18 @@ const TONE: Record<Severity, { text: string; strip: string; faint: string; icon:
 // findings hang off the row that owns them rather than forming a list of
 // their own: 177 findings across 43 packages is one list read two ways, and
 // splitting it into two tabs made the reader join them back up by hand.
+// The minimums are what decide whether this fits. Six columns beside a
+// 320px rail need 844px at their old floors and had 740 -- so the table
+// scrolled sideways, the licence fell off the end, and the findings opened
+// underneath ran off with it. Lower floors truncate a name; a floor too high
+// hides a whole column behind a scrollbar nobody thinks to drag.
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'Name', width: 'minmax(160px,2.4fr)' },
+  { key: 'name', label: 'Name', width: 'minmax(120px,2.4fr)' },
   { key: 'vulns', label: 'Vulnerabilities', width: '148px' },
-  { key: 'version', label: 'Version', width: '116px' },
-  { key: 'size', label: 'Size', width: '84px', align: 'right' },
-  { key: 'type', label: 'Type', width: '96px' },
-  { key: 'licences', label: 'Licence', width: 'minmax(100px,1fr)' },
+  { key: 'version', label: 'Version', width: 'minmax(96px,0.9fr)' },
+  { key: 'size', label: 'Size', width: '72px', align: 'right' },
+  { key: 'type', label: 'Type', width: '76px' },
+  { key: 'licences', label: 'Licence', width: 'minmax(80px,1fr)' },
 ];
 
 /** A package, with whatever is known against it. */
@@ -456,18 +461,20 @@ function FindingList({
               <span className="w-36 shrink-0 truncate font-mono text-code font-medium">
                 {finding.id}
               </span>
-              <span className="min-w-0 flex-1 truncate text-small text-ink-600 dark:text-ink-400">
-                {finding.title || '—'}
-              </span>
-              {/* What to do about it, which is the only reason to read a row
-                  of these rather than open one. */}
+              {/* What to do about it, next to the name rather than at the far
+                  end. It is the only reason to read a row of these rather
+                  than open one, and the far end is the first thing to leave
+                  the screen when the window narrows. */}
               {finding.fixed ? (
-                <span className="shrink-0 font-mono text-tiny text-emerald-700 dark:text-emerald-500">
+                <span className="w-28 shrink-0 truncate font-mono text-tiny text-emerald-700 dark:text-emerald-500">
                   → {finding.fixed}
                 </span>
               ) : (
-                <span className="shrink-0 text-tiny text-ink-500">no fix yet</span>
+                <span className="w-28 shrink-0 text-tiny text-ink-500">no fix yet</span>
               )}
+              <span className="min-w-0 flex-1 truncate text-small text-ink-600 dark:text-ink-400">
+                {finding.title || '—'}
+              </span>
             </button>
           </li>
         ))}
