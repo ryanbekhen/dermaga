@@ -53,8 +53,16 @@ export const api = {
   },
 
   /** Reports what was actually freed, which may be nothing. */
-  async pruneSystem(): Promise<{ freedBytes: number; failures?: string[] }> {
-    return invoke('system.prune');
+  /**
+   * Reclaims what one kind of resource is holding.
+   *
+   * One kind per call, deliberately: images can be pulled again and a volume
+   * cannot be recovered at all, so they are never freed by the same press.
+   */
+  async pruneSystem(
+    kind: 'images' | 'volumes' | 'containers'
+  ): Promise<{ freedBytes: number; failures?: string[] }> {
+    return invoke('system.prune', { kind });
   },
 
   /** Containers cannot run without one, and starting the services does not

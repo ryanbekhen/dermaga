@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LogPane } from '../components/LogPane';
 import { Row, Section } from '../components/DetailRow';
 import { StatusPill } from '../components/StatusBadge';
-import { DiskBreakdown, StatTile } from '../components/StatTile';
+import { StatTile } from '../components/StatTile';
 import { DetailLayout, DetailPane, DetailScroll, DetailSections } from '../components/DetailLayout';
 import type { TabDefinition } from '../components/Tabs';
 import { Checkbox } from '../components/form';
@@ -40,10 +40,14 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
   const usage = useResourceStore((s) => s.disk);
   const [toolchain, setToolchain] = useState<ToolchainStatus | null>(null);
   const update = useCommandProgress('toolchain.update');
-  const [pending, setPending] = useState<'start' | 'stop' | 'prune' | null>(null);
+  const [pending, setPending] = useState<
+    'start' | 'stop' | 'clean-images' | 'clean-volumes' | 'clean-containers' | null
+  >(null);
   const [installKernel, setInstallKernel] = useState(false);
   const [confirmingStop, setConfirmingStop] = useState(false);
-  const [confirmingPrune, setConfirmingPrune] = useState(false);
+  // Which kind is being cleaned, or null. One dialog rather than three: the
+  // question is the same shape every time, only its consequences differ.
+  const [cleaning, setCleaning] = useState<'images' | 'volumes' | 'containers' | null>(null);
   const scanner = useScannerStore((s) => s.status);
   const reports = useScannerStore((s) => s.reports);
   const scanCount = Object.keys(reports).length;
@@ -84,7 +88,7 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
   }, [loadToolchain]);
 
   const run = async (
-    action: 'start' | 'stop' | 'prune',
+    action: 'start' | 'stop' | 'clean-images' | 'clean-volumes' | 'clean-containers',
     work: () => Promise<string | void>,
     message: string
   ) => {
@@ -100,11 +104,6 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
       setPending(null);
     }
   };
-
-  const reclaimable =
-    (usage?.containers.reclaimable ?? 0) +
-    (usage?.images.reclaimable ?? 0) +
-    (usage?.volumes.reclaimable ?? 0);
 
   // What the runtime occupies altogether, which is what each figure is a share
   // of. Not the size of the disk: Dermaga is not told that, and a meter drawn
@@ -173,72 +172,74 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
               much of the disk this has taken and how much of that is waste. */}
           {running && usage && (
             <>
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {/* Three tiles, each with its own way of being cleaned. The
+                  reclaimable total that used to sit in a fourth is gone: it
+                  was one number standing for three different promises, and the
+                  single button under it freed images, volumes and containers
+                  together -- so a press meant to recover disk from images
+                  could take a volume's only copy of its data with it.
+
+                  The disk breakdown bar went with it. Three tiles already say
+                  what three slices said, and the bar said it a second time
+                  underneath. */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {/* "Unpacked", because this is not the number the Images page
+                    shows and the two looked like they contradicted each other
+                    by a factor of eighty.
+
+                    Both are true. The Images page adds up compressed layers --
+                    what was downloaded. This adds up the snapshots those
+                    layers are extracted into for a container to run from, and
+                    each one is an ext4 filesystem that costs about a gigabyte
+                    however small the image was. */}
                 <StatTile
-                  label="Images"
+                  label="Image snapshots"
                   value={bytesToLabel(usage.images.sizeInBytes)}
                   percent={share(usage.images.sizeInBytes, onDisk)}
                   note={`${usage.images.active} of ${usage.images.total} in use`}
+                  title="Each image unpacked into a filesystem it can run from. Not the compressed download the Images page adds up, which is far smaller."
+                  action={
+                    <CleanButton
+                      bytes={usage.images.reclaimable}
+                      busy={pending === 'clean-images'}
+                      disabled={pending !== null}
+                      onClick={() => setCleaning('images')}
+                    />
+                  }
                 />
                 <StatTile
-                  label="Volumes"
+                  label="Volume data"
                   value={bytesToLabel(usage.volumes.sizeInBytes)}
+                  title="What containers have written to the volumes you created. Nothing else keeps a copy."
                   percent={share(usage.volumes.sizeInBytes, onDisk)}
                   tone="ink"
                   note={`${usage.volumes.active} of ${usage.volumes.total} in use`}
+                  action={
+                    <CleanButton
+                      bytes={usage.volumes.reclaimable}
+                      busy={pending === 'clean-volumes'}
+                      disabled={pending !== null}
+                      onClick={() => setCleaning('volumes')}
+                    />
+                  }
                 />
                 <StatTile
-                  label="Containers"
+                  label="Container filesystems"
                   value={bytesToLabel(usage.containers.sizeInBytes)}
+                  title="What each container has written since it started, on top of the image it came from."
                   percent={share(usage.containers.sizeInBytes, onDisk)}
                   tone="emerald"
                   note={`${usage.containers.active} of ${usage.containers.total} running`}
-                />
-                <StatTile
-                  label="Reclaimable"
-                  value={bytesToLabel(reclaimable)}
-                  note={
-                    reclaimable > 0 ? (
-                      <span className="text-brand-700 dark:text-brand-400">
-                        Unused images, stopped containers and loose volumes
-                      </span>
-                    ) : (
-                      'Everything on disk is still in use'
-                    )
+                  action={
+                    <CleanButton
+                      bytes={usage.containers.reclaimable}
+                      busy={pending === 'clean-containers'}
+                      disabled={pending !== null}
+                      onClick={() => setCleaning('containers')}
+                    />
                   }
                 />
               </div>
-
-              <Section
-                title="Disk breakdown"
-                span
-                plain
-                action={
-                  reclaimable > 0 ? (
-                    <Button
-                      icon={Trash2}
-                      busy={pending === 'prune'}
-                      busyLabel="Reclaiming…"
-                      disabled={pending !== null}
-                      onClick={() => setConfirmingPrune(true)}
-                    >
-                      Delete unused · {bytesToLabel(reclaimable)}
-                    </Button>
-                  ) : null
-                }
-              >
-                <DiskBreakdown
-                  slices={[
-                    { label: 'Images', bytes: usage.images.sizeInBytes, color: 'bg-brand-600' },
-                    { label: 'Volumes', bytes: usage.volumes.sizeInBytes, color: 'bg-brand-400' },
-                    {
-                      label: 'Containers',
-                      bytes: usage.containers.sizeInBytes,
-                      color: 'bg-ink-800 dark:bg-ink-300',
-                    },
-                  ]}
-                />
-              </Section>
             </>
           )}
 
@@ -339,29 +340,26 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
         </DetailPane>
       )}
 
-      {confirmingPrune && (
+      {cleaning && (
         <ConfirmDialog
-          title={`Delete ${doomed.length} unused image${doomed.length === 1 ? '' : 's'}?`}
-          body={
-            doomed.length > 0
-              ? `These are deleted and have to be pulled again: ${doomed.join(', ')}. Stopped containers and unused volumes and networks go too. Anything built here and never pushed cannot be recovered.`
-              : 'Stopped containers and unused volumes and networks are removed. No images are affected.'
-          }
-          confirmLabel="Reclaim"
+          title={CLEANUP[cleaning].title(doomed)}
+          body={CLEANUP[cleaning].body(doomed)}
+          confirmLabel={CLEANUP[cleaning].confirm}
           onConfirm={() => {
-            setConfirmingPrune(false);
+            const kind = cleaning;
+            setCleaning(null);
             void run(
-              'prune',
+              `clean-${kind}`,
               async () => {
-                const { freedBytes } = await api.pruneSystem();
+                const { freedBytes } = await api.pruneSystem(kind);
                 return freedBytes > 0
                   ? `Reclaimed ${bytesToLabel(freedBytes)}`
-                  : 'Nothing to reclaim — everything on disk is still in use';
+                  : 'Nothing to reclaim — all of it is still in use';
               },
-              'Reclaimed unused resources'
+              'Reclaimed unused space'
             );
           }}
-          onCancel={() => setConfirmingPrune(false)}
+          onCancel={() => setCleaning(null)}
         />
       )}
 
@@ -380,3 +378,71 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
     </DetailLayout>
   );
 }
+
+/**
+ * Frees what one tile is holding, or says there is nothing to free.
+ *
+ * Present even at zero, and disabled: a control that appears only when there
+ * is work to do is a control nobody learns is there, and its absence reads as
+ * a missing feature rather than as a tidy machine.
+ */
+function CleanButton({
+  bytes,
+  busy,
+  disabled,
+  onClick,
+}: {
+  bytes: number;
+  busy: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  if (bytes <= 0) {
+    return <p className="text-xs text-ink-500">Nothing to free</p>;
+  }
+
+  return (
+    <Button
+      icon={Trash2}
+      busy={busy}
+      busyLabel="Freeing…"
+      disabled={disabled}
+      className="text-orange-700 dark:text-orange-500"
+      onClick={onClick}
+    >
+      Free {bytesToLabel(bytes)}
+    </Button>
+  );
+}
+
+/**
+ * What each cleanup is about to do, in its own words.
+ *
+ * Separately worded because the consequences are not the same kind of thing.
+ * An image comes back with a pull. A volume does not come back at all.
+ */
+const CLEANUP: Record<
+  'images' | 'volumes' | 'containers',
+  { title: (doomed: string[]) => string; body: (doomed: string[]) => string; confirm: string }
+> = {
+  images: {
+    title: (doomed) => `Delete ${doomed.length} unused image${doomed.length === 1 ? '' : 's'}?`,
+    body: (doomed) =>
+      doomed.length > 0
+        ? `These are deleted and have to be pulled again: ${doomed.join(', ')}. Anything built here and never pushed cannot be recovered.`
+        : 'Every image no container is using is deleted, and has to be pulled again.',
+    confirm: 'Delete images',
+  },
+  volumes: {
+    title: () => 'Delete volumes nothing is using?',
+    body: () =>
+      'A volume holds the only copy of whatever was written to it, and deleting one cannot be undone — there is nowhere to pull it back from. Volumes still mounted by a container are left alone.',
+    confirm: 'Delete volumes',
+  },
+  containers: {
+    title: () => 'Remove stopped containers?',
+    body: () =>
+      'Containers that are not running are removed, along with anything written to their filesystems. Named volumes they mounted survive, and the images they came from are untouched.',
+    confirm: 'Remove containers',
+  },
+};

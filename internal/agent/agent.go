@@ -403,8 +403,20 @@ func (a *Agent) registerSystem() {
 		return a.system.DiskUsage(ctx)
 	})
 
-	a.server.Register("system.prune", func(ctx context.Context, _ json.RawMessage) (any, error) {
-		return a.system.Prune(ctx), nil
+	a.server.Register("system.prune", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Kind string `json:"kind"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := a.system.Prune(ctx, system.Kind(args.Kind))
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return result, nil
 	})
 }
 

@@ -194,26 +194,51 @@ type PruneResult struct {
 	Failures   []string `json:"failures,omitempty"`
 }
 
-// Prune reclaims space across every resource type that supports it. Each is
-// best-effort: one failure should not hide the space the others freed.
-func (sm *Manager) Prune(ctx context.Context) PruneResult {
-	before := sm.totalBytes(ctx)
+// Kind names what a prune is allowed to touch.
+//
+// One kind at a time, deliberately. These used to run together behind a single
+// "reclaim" button, which put two very different things under one press:
+// images can be pulled again, and a volume holds the only copy of whatever was
+// written to it. Worse, they compounded -- pruning stopped containers freed
+// their volumes, which the volume prune in the next line then deleted.
+type Kind string
 
-	var failures []string
+const (
+	KindImages     Kind = "images"
+	KindVolumes    Kind = "volumes"
+	KindContainers Kind = "containers"
+)
 
-	for _, target := range [][]string{
-		{"prune"},
+func (k Kind) args() ([]string, bool) {
+	switch k {
+	case KindImages:
 		// Without --all this removes only dangling images, while `system df`
 		// counts every image no container uses as reclaimable -- so the button
 		// would promise gigabytes and free nothing.
-		{"image", "prune", "--all"},
-		{"volume", "prune"},
-		{"network", "prune"},
-	} {
-		if _, err := sm.runner.Run(ctx, target...); err != nil {
-			sm.logger.Debug("Prune step failed", "target", target, "error", err)
-			failures = append(failures, strings.Join(target, " "))
-		}
+		return []string{"image", "prune", "--all"}, true
+	case KindVolumes:
+		return []string{"volume", "prune"}, true
+	case KindContainers:
+		return []string{"prune"}, true
+	}
+
+	return nil, false
+}
+
+// Prune reclaims the space one kind of resource is holding and reports how
+// much that turned out to be.
+func (sm *Manager) Prune(ctx context.Context, kind Kind) (PruneResult, error) {
+	args, ok := kind.args()
+	if !ok {
+		return PruneResult{}, fmt.Errorf("nothing called %q can be pruned", kind)
+	}
+
+	before := sm.totalBytes(ctx)
+
+	var failures []string
+	if _, err := sm.runner.Run(ctx, args...); err != nil {
+		sm.logger.Debug("Prune failed", "kind", kind, "error", err)
+		failures = append(failures, strings.Join(args, " "))
 	}
 
 	sm.changed.Changed()
@@ -223,7 +248,7 @@ func (sm *Manager) Prune(ctx context.Context) PruneResult {
 		freed = 0
 	}
 
-	return PruneResult{FreedBytes: freed, Failures: failures}
+	return PruneResult{FreedBytes: freed, Failures: failures}, nil
 }
 
 // totalBytes is everything on disk across the resource types, or 0 if the
