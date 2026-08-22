@@ -22,6 +22,7 @@ import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
+import { DockerfileEditor } from '../components/DockerfileEditor';
 import { useUIStore } from '../store/uiStore';
 import type { BuildSpec, Image } from '../types';
 import { formatBytes, formatDuration, shortDigest } from '../utils/format';
@@ -214,7 +215,7 @@ export function ImagesPage() {
           return [
             <NameCell key="name">
               <span className="truncate text-sm font-semibold">{group.names.join(', ')}</span>
-              {users.length > 0 && <Badge tone="brand">in use</Badge>}
+{users.length > 0 && <Badge tone="brand">in use</Badge>}
             </NameCell>,
             // A tag is as long as whoever built the image decided -- a commit
             // SHA, a branch name, a date and a build number. Left to its own
@@ -295,7 +296,12 @@ export function ImagesPage() {
 
       {pulling.open && <PullDialog onClose={() => pulling.close()} />}
 
-      {building.open && <BuildDialog onClose={() => building.close()} />}
+      {building.open && (
+        <BuildDialog
+          from={building.target === 'paste' ? 'paste' : 'folder'}
+          onClose={() => building.close()}
+        />
+      )}
     </div>
   );
 }
@@ -329,7 +335,21 @@ function VulnerabilityCell({ group }: { group: ImageGroup }) {
  * Builds an image from a Dockerfile. The context directory is the only thing
  * required; everything else maps to a flag the CLI already understands.
  */
-function BuildDialog({ onClose }: { onClose: () => void }) {
+function BuildDialog({
+  from: opened,
+  onClose,
+}: {
+  /** Which half search asked for; the toggle still moves between them. */
+  from: 'folder' | 'paste';
+  onClose: () => void;
+}) {
+  // Two ways in, one dialog. A pasted Dockerfile and a project folder are the
+  // same act with the same options -- the tag, the build args, the builder
+  // that has to be up -- and splitting them into two dialogs would mean
+  // keeping two copies of all of it in step.
+  const [from, setFrom] = useState<'folder' | 'paste'>(opened);
+  const [text, setText] = useState('');
+
   const [context, setContext] = useState('');
   const [dockerfile, setDockerfile] = useState('');
   const [tag, setTag] = useState('');
@@ -354,13 +374,24 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
     if (chosen) setContext(chosen);
   };
 
+  // A pasted Dockerfile that reaches for files beside it has nothing to
+  // resolve them against, so the folder field appears -- rather than the build
+  // failing on the line that uses them.
+  const pasteNeedsContext = from === 'paste' && /^\s*(copy|add)\b/im.test(text);
+
+  const ready =
+    from === 'folder'
+      ? Boolean(context.trim())
+      : Boolean(tag.trim() && text.trim()) && (!pasteNeedsContext || Boolean(context.trim()));
+
   const build = () => {
     const folder = context.replace(/\/+$/, '').split('/').pop() || 'image';
-    const name = tag.trim() || folder;
+    const name = from === 'paste' ? tag.trim() : tag.trim() || folder;
 
     const spec: BuildSpec = {
-      context,
-      dockerfile: dockerfile.trim() || undefined,
+      context: from === 'paste' && !pasteNeedsContext ? '' : context,
+      dockerfileText: from === 'paste' ? text : undefined,
+      dockerfile: from === 'paste' ? undefined : dockerfile.trim() || undefined,
       tag: tag.trim() || undefined,
       target: target.trim() || undefined,
       buildArgs: buildArgs
@@ -403,53 +434,134 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       title="Build image"
-      subtitle="Progress appears in the list; you can keep working while it builds."
+      subtitle="Progress appears in the title bar; you can keep working while it builds."
       onClose={onClose}
-      onSubmit={build}
+      onSubmit={() => ready && build()}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
             Cancel
           </button>
-          <button onClick={build} className="btn-primary" disabled={!context.trim()}>
+          {/* No "build and run". A build takes minutes, by which time you are
+              somewhere else in the app -- and finishing by navigating away
+              from whatever that is, to open a form over the top of it, is the
+              same interruption as a caret jumping while you type. The image
+              lands in the list, and running it is a thing you do when you are
+              ready to. */}
+          <button onClick={() => build()} className="btn-primary" disabled={!ready}>
             Build
           </button>
         </>
       }
     >
-      <Field label="Context" hint="The folder COPY and ADD paths are resolved from.">
-        <div className="flex gap-2">
-          <input
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-            placeholder="/Users/you/projects/api"
-            autoFocus
-            className="input flex-1"
-          />
-          <button onClick={() => void choose()} className="btn-ghost shrink-0">
-            <FolderOpen size={13} aria-hidden />
-            Choose…
+      {/* Which of the two this is. First, because it decides what the rest of
+          the dialog even asks for. */}
+      <div className="flex gap-1 rounded-lg bg-ink-150 p-1 dark:bg-ink-800">
+        {(
+          [
+            ['folder', 'From a folder'],
+            ['paste', 'From a Dockerfile'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setFrom(value)}
+            aria-pressed={from === value}
+            className={`flex-1 rounded-md px-3 py-1.5 text-small transition-colors ${
+              from === value
+                ? 'bg-white font-medium text-ink-900 shadow-sm dark:bg-ink-950 dark:text-ink-100'
+                : 'text-ink-600 hover:text-ink-800 dark:text-ink-400 dark:hover:text-ink-100'
+            }`}
+          >
+            {label}
           </button>
-        </div>
-      </Field>
+        ))}
+      </div>
 
-      <Field label="Tag" hint="Names the result, for example api:dev. Optional.">
-        <input
-          value={tag}
-          onChange={(e) => setTag(e.target.value)}
-          placeholder="api:dev"
-          className="input"
-        />
-      </Field>
+      {from === 'paste' ? (
+        <>
+          {/* Asked first, and required. Nothing can be run without a name, and
+              asking for one after somebody has typed fifty lines is asking
+              after they have decided they are finished. Not guessed from the
+              FROM line either: python:3.12 would suggest "python", which is
+              the name of an image already in the list. */}
+          <Field
+            label="Tag"
+            hint="Names the image this builds. Required — Run needs something to start."
+          >
+            <input
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="my-api:dev"
+              autoFocus
+              className="input"
+            />
+          </Field>
 
-      <Field label="Dockerfile" hint="Relative to the context. Defaults to ./Dockerfile.">
-        <input
-          value={dockerfile}
-          onChange={(e) => setDockerfile(e.target.value)}
-          placeholder="Dockerfile"
-          className="input"
-        />
-      </Field>
+          <Field
+            label="Dockerfile"
+            hint="Written to a directory of its own for the build, and removed when it finishes."
+          >
+            <DockerfileEditor value={text} onChange={setText} />
+          </Field>
+
+          {pasteNeedsContext && (
+            <Field
+              label="Context"
+              hint="COPY and ADD need a folder to resolve against. A pasted Dockerfile has none of its own."
+            >
+              <div className="flex gap-2">
+                <input
+                  value={context}
+                  onChange={(e) => setContext(e.target.value)}
+                  placeholder="/Users/you/projects/api"
+                  className="input flex-1"
+                />
+                <button onClick={() => void choose()} className="btn-ghost shrink-0">
+                  <FolderOpen size={13} aria-hidden />
+                  Choose…
+                </button>
+              </div>
+            </Field>
+          )}
+        </>
+      ) : (
+        <>
+          <Field label="Context" hint="The folder COPY and ADD paths are resolved from.">
+            <div className="flex gap-2">
+              <input
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="/Users/you/projects/api"
+                autoFocus
+                className="input flex-1"
+              />
+              <button onClick={() => void choose()} className="btn-ghost shrink-0">
+                <FolderOpen size={13} aria-hidden />
+                Choose…
+              </button>
+            </div>
+          </Field>
+
+          <Field label="Tag" hint="Names the result, for example api:dev. Optional.">
+            <input
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="api:dev"
+              className="input"
+            />
+          </Field>
+
+          <Field label="Dockerfile" hint="Relative to the context. Defaults to ./Dockerfile.">
+            <input
+              value={dockerfile}
+              onChange={(e) => setDockerfile(e.target.value)}
+              placeholder="Dockerfile"
+              className="input"
+            />
+          </Field>
+        </>
+      )}
 
       <Field label="Target stage" hint="Stops at a named stage in a multi-stage build. Optional.">
         <input
@@ -512,7 +624,7 @@ function PullDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       title="Pull image"
-      subtitle="Progress appears in the list; you can keep working while it downloads."
+      subtitle="Progress appears in the title bar; you can keep working while it downloads."
       onClose={onClose}
       onSubmit={pull}
       footer={

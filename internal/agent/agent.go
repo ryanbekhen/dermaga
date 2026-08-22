@@ -125,6 +125,17 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		agent.scanner.UseStore(opened)
 		agent.templates.UseStore(opened)
 		agent.containers.UsePendingStore(opened)
+
+		// A build from a pasted Dockerfile writes it to a directory of its own
+		// and removes it when the build ends. A build that never ended -- the
+		// app was quit, the machine went down, the removal itself failed --
+		// leaves one behind, and nothing else is ever going to notice.
+		//
+		// Inside this branch on purpose. The store opened, which means this
+		// process holds its exclusive lock, which means no second agent is
+		// running with a build in flight whose context this would delete.
+		// Nothing has been served yet either, so everything here is litter.
+		images.SweepStagedBuilds()
 	}
 
 	// The scanner works on its own goroutine and reports where it has got to;
@@ -1064,14 +1075,43 @@ func (a *Agent) registerImages() {
 		if err != nil {
 			return nil, err
 		}
+		// A Dockerfile typed into the app is written out first, and the
+		// directory holding it becomes the context -- unless a real one was
+		// named, which is what a paste with COPY in it needs.
+		var staged string
+		if text := strings.TrimSpace(opts.DockerfileText); text != "" {
+			dir, file, err := images.StageDockerfile(opts.DockerfileText)
+			if err != nil {
+				return nil, rpc.Fail(err.Error())
+			}
+
+			staged = dir
+			opts.Dockerfile = file
+			if strings.TrimSpace(opts.Context) == "" {
+				opts.Context = dir
+			}
+		}
+
 		if strings.TrimSpace(opts.Context) == "" {
 			return nil, rpc.Fail("a build needs a context directory")
 		}
 
-		id, err := a.streams.runCommand(ctx, "build", func(ctx context.Context) (*exec.Cmd, error) {
+		// The directory dies with the build, not with this request: the
+		// request returns the moment the build starts, and the build reads
+		// that directory for as long as it runs.
+		id, err := a.streams.runCommandThen(ctx, "build", func(ctx context.Context) (*exec.Cmd, error) {
 			return a.images.BuildCommand(ctx, opts), nil
+		}, func() {
+			if staged != "" {
+				_ = os.RemoveAll(staged)
+			}
 		})
 		if err != nil {
+			// Nothing was started, so nothing else will clear this up.
+			if staged != "" {
+				_ = os.RemoveAll(staged)
+			}
+
 			return nil, rpc.Fail(err.Error())
 		}
 

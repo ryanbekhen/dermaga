@@ -190,10 +190,21 @@ export function SearchResultsPage() {
       run: () => navigateWith({ name: 'images' }, 'image.pull'),
     },
     {
-      label: 'Build image from a Dockerfile',
+      label: 'Build image from a folder',
       icon: Hammer,
-      keywords: 'compile context',
-      run: () => navigateWith({ name: 'images' }, 'image.build'),
+      keywords: 'compile context dockerfile project directory',
+      run: () => navigateWith({ name: 'images' }, 'image.build', 'folder'),
+    },
+    {
+      // The same dialog, opened on its other half. Two entries because they
+      // are two different things to have decided before typing anything: one
+      // needs a project on disk, the other needs a Dockerfile on the
+      // clipboard, and searching for the one you meant should not land on the
+      // one you did not.
+      label: 'Build image from a pasted Dockerfile',
+      icon: Hammer,
+      keywords: 'compile paste clipboard text quick',
+      run: () => navigateWith({ name: 'images' }, 'image.build', 'paste'),
     },
     {
       label: 'Load image from a file',

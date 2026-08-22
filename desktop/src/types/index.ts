@@ -347,6 +347,12 @@ export interface MachineSpec {
 /** One `container build` run. Only the context directory is required. */
 export interface BuildSpec {
   context: string;
+  /**
+   * A Dockerfile typed into the app rather than one on disk. The agent writes
+   * it to a directory of its own, which becomes the context unless `context`
+   * names a real one — which is what a paste with COPY in it needs.
+   */
+  dockerfileText?: string;
   dockerfile?: string;
   tag?: string;
   target?: string;

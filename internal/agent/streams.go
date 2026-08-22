@@ -110,6 +110,25 @@ func (s *streams) end(id string, err error) {
 // to stderr as well as stdout, so both are folded together -- a pull's progress
 // and its failure arrive on the same channel.
 func (s *streams) runCommand(ctx context.Context, prefix string, build func(context.Context) (*exec.Cmd, error)) (string, error) {
+	return s.runCommandThen(ctx, prefix, build, nil)
+}
+
+// runCommandThen is runCommand with something to do once the command has
+// finished, whichever way it went.
+//
+// The request returns as soon as the command starts -- that is the point of a
+// stream -- so anything the command needs on disk cannot be cleaned up by the
+// handler that made it. A build from a pasted Dockerfile is exactly that: the
+// directory holding it has to outlive the request and die with the build.
+//
+// Not called when starting fails; there is no command to wait on then, and the
+// caller still holds the error to tidy up after itself.
+func (s *streams) runCommandThen(
+	ctx context.Context,
+	prefix string,
+	build func(context.Context) (*exec.Cmd, error),
+	done func(),
+) (string, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	id := s.nextID(prefix)
 
@@ -151,6 +170,10 @@ func (s *streams) runCommand(ctx context.Context, prefix string, build func(cont
 		}
 
 		s.end(id, err)
+
+		if done != nil {
+			done()
+		}
 	}()
 
 	return id, nil

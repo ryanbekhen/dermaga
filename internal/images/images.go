@@ -288,12 +288,17 @@ type BuildOptions struct {
 	Context string `json:"context"`
 	// Dockerfile is a path to the file, relative to Context or absolute.
 	// Empty means the CLI's own default.
-	Dockerfile string   `json:"dockerfile"`
-	Tag        string   `json:"tag"`
-	Target     string   `json:"target"`
-	Platform   string   `json:"platform"`
-	BuildArgs  []string `json:"buildArgs"`
-	NoCache    bool     `json:"noCache"`
+	Dockerfile string `json:"dockerfile"`
+	// DockerfileText is a Dockerfile typed into the app rather than one that
+	// exists on disk. Set, it is written to a directory of its own, which
+	// becomes the context unless Context names a real one -- which is what a
+	// pasted Dockerfile with COPY in it needs.
+	DockerfileText string   `json:"dockerfileText,omitempty"`
+	Tag            string   `json:"tag"`
+	Target         string   `json:"target"`
+	Platform       string   `json:"platform"`
+	BuildArgs      []string `json:"buildArgs"`
+	NoCache        bool     `json:"noCache"`
 }
 
 // BuildCommand builds an image from a Dockerfile. Output is streamed, so the
