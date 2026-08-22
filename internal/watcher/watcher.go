@@ -135,27 +135,43 @@ func (w *Watcher) refresh(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	containerList, err := w.sources.Containers(ctx)
-	if err != nil {
+	// Listing containers is what fails first when the services go down -- and
+	// this used to return here, which meant the one pass that could have
+	// reported "the services are down" was the one pass that never got as far
+	// as asking. The window carried on showing the last good state, and
+	// stopping the services from inside the app appeared to do nothing at all.
+	//
+	// So a failed listing is not a skipped pass. The lists stay as they were --
+	// blanking them would turn one flaky subcommand into an empty window --
+	// and everything below still runs, because what it reports is exactly the
+	// thing that has gone wrong.
+	snapshot := Snapshot{}
+
+	if containerList, err := w.sources.Containers(ctx); err == nil {
+		// Supporting resources are best-effort: containers still render
+		// without them, and one flaky subcommand should not blank the whole UI.
+		machineList := collect(ctx, w.sources.Machines, w.logger, "machines")
+		imageList := collect(ctx, w.sources.Images, w.logger, "images")
+		volumeList := collect(ctx, w.sources.Volumes, w.logger, "volumes")
+		networkList := collect(ctx, w.sources.Networks, w.logger, "networks")
+
+		annotateUsage(containerList, volumeList, networkList)
+
+		snapshot.Containers = containerList
+		snapshot.Machines = machineList
+		snapshot.Images = imageList
+		snapshot.Volumes = volumeList
+		snapshot.Networks = networkList
+	} else {
 		w.logger.Debug("Watch refresh failed", "error", err)
-		return
-	}
 
-	// Supporting resources are best-effort: containers still render without
-	// them, and one flaky subcommand should not blank the whole UI.
-	machineList := collect(ctx, w.sources.Machines, w.logger, "machines")
-	imageList := collect(ctx, w.sources.Images, w.logger, "images")
-	volumeList := collect(ctx, w.sources.Volumes, w.logger, "volumes")
-	networkList := collect(ctx, w.sources.Networks, w.logger, "networks")
-
-	annotateUsage(containerList, volumeList, networkList)
-
-	snapshot := Snapshot{
-		Containers: containerList,
-		Machines:   machineList,
-		Images:     imageList,
-		Volumes:    volumeList,
-		Networks:   networkList,
+		w.mu.RLock()
+		snapshot.Containers = w.latest.Containers
+		snapshot.Machines = w.latest.Machines
+		snapshot.Images = w.latest.Images
+		snapshot.Volumes = w.latest.Volumes
+		snapshot.Networks = w.latest.Networks
+		w.mu.RUnlock()
 	}
 
 	if w.sources.System != nil {

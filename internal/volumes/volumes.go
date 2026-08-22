@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
@@ -163,12 +164,31 @@ func (m *Manager) Create(ctx context.Context, spec Spec) error {
 
 	// A volume made here comes out looking empty, so that images which inspect
 	// their data directory before touching it -- redis, Postgres -- behave the
-	// way their authors intended. Best effort: a volume that exists is worth
-	// more than one that failed to be tidied, and the volume page can finish
-	// the job later.
-	if err := m.Tidy(ctx, spec.Name, nil); err != nil {
-		m.logger.Warn("Created the volume but could not tidy it", "name", spec.Name, "error", err)
-	}
+	// way their authors intended.
+	//
+	// Behind the caller's back, though, because tidying means starting a
+	// helper container: measured at over two minutes on a busy Mac, against
+	// six tenths of a second to make the volume itself. Waited on, the form
+	// stayed open for all of it and the volume it had already made sat in the
+	// list behind the dialog.
+	//
+	// The comment here used to say this was best-effort and the page could
+	// finish the job later -- which was true of the error and not of the time.
+	//
+	// The request's context dies with the request, so this takes one of its
+	// own; and it announces again when it is done, because a tidied volume is
+	// a different volume from the one the list is showing.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+		defer cancel()
+
+		if err := m.Tidy(ctx, spec.Name, nil); err != nil {
+			m.logger.Warn("Created the volume but could not tidy it", "name", spec.Name, "error", err)
+			return
+		}
+
+		m.changed.Changed()
+	}()
 
 	return nil
 }
