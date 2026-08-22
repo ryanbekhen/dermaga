@@ -595,7 +595,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## The Go programming language go1.26.0
+## The Go programming language go1.27.0
 
 BSD-3-Clause · <https://go.dev>
 
