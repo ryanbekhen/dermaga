@@ -259,7 +259,11 @@ export function FileBrowser({
         </ul>
       )}
 
-      <p className="flex items-center gap-1.5 pt-2 text-tiny text-ink-500">
+      {/* Pads itself, like everything else in this pane. It used to be the one
+          line that did not, so the hint sat hard against the left edge and on
+          the very bottom of the window -- the only thing on the page touching
+          two edges at once. */}
+      <p className="flex shrink-0 items-center gap-1.5 px-7 pb-3 pt-2.5 text-tiny text-ink-500">
         <HardDriveDownload size={11} aria-hidden />
         Drop files here to copy them in; drag a file out to Finder to take it.
       </p>

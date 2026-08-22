@@ -419,7 +419,10 @@ function VolumeFiles({
   if (state === 'ready') {
     return (
       <>
-        <p className="pb-2 text-tiny text-ink-600 dark:text-ink-400">
+        {/* A note about how this is being read, not the first line of what was
+            read -- so it sits on the bar's own ground rather than loose above
+            the breadcrumb, and pads itself like every other strip. */}
+        <p className="shrink-0 border-b border-ink-200 bg-ink-50 px-7 py-2 text-tiny text-ink-600 dark:border-ink-800 dark:bg-ink-900/50 dark:text-ink-400">
           Browsing through <span className="font-mono">{helper}</span>, a helper container holding
           the volume at <span className="font-mono">{MOUNT}</span>. It is removed when you leave.
         </p>
