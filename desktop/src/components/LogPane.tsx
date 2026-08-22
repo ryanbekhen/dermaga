@@ -16,6 +16,15 @@ const STATUS_LABEL: Record<StreamStatus, string> = {
 // crash, so recognise it and explain it instead.
 const NO_LOG_FILE = /failed to (get|open).{0,40}logs?|stdio\.log/i;
 
+/** A reading about the stream itself, set apart from the output it describes. */
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex h-7 items-center rounded-lg bg-ink-150 px-2.5 font-mono text-code text-ink-700 dark:bg-ink-800 dark:text-ink-300">
+      {children}
+    </span>
+  );
+}
+
 /** One log line, with whatever colour the program that wrote it asked for. */
 function Line({ message }: { message: string }) {
   // Most lines carry none, and every one of them would otherwise pay for a
@@ -97,21 +106,26 @@ export function LogPane({ method, params, controls, missingHint }: LogPaneProps)
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 pb-2 dark:border-ink-700">
-        <span className="text-tiny text-ink-600 dark:text-ink-400">
-          {STATUS_LABEL[status]} · {entries.length} lines
-        </span>
+    // The pane pads itself. It used to sit inside a gutter belonging to the
+    // window, so with that gone every line started hard against the sidebar.
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-7 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* What the stream is doing, as chips rather than a sentence: these are
+            readings, and they change while you watch them. */}
+        <div className="flex items-center gap-2">
+          <Chip>{STATUS_LABEL[status]}</Chip>
+          <Chip>{entries.length} lines</Chip>
+          {controls}
+        </div>
 
         <div className="flex items-center gap-3">
-          {controls}
           <input
             type="search"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Filter…"
             aria-label="Filter log lines"
-            className="input w-40"
+            className="input h-7.5 w-44 rounded-lg"
           />
           <label className="flex items-center gap-2 text-xs text-ink-600 dark:text-ink-400">
             <input
@@ -125,29 +139,37 @@ export function LogPane({ method, params, controls, missingHint }: LogPaneProps)
         </div>
       </div>
 
+      {/* Output on its own dark ground, in both themes. Program output is not
+          the app's prose: it is a transcript, it arrives with its own colours,
+          and half an ANSI palette is invisible on white. */}
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="ansi selectable -mr-5 min-h-0 flex-1 overflow-auto py-2 pr-5 font-mono text-xs leading-relaxed"
+        className="ansi ansi-terminal selectable min-h-0 flex-1 overflow-auto rounded-xl bg-chrome-bg p-4 font-mono text-code leading-[1.75] text-chrome-muted"
       >
         {noLogFile ? (
-          <div className="max-w-prose font-sans text-sm text-ink-500">
-            <p className="text-ink-700 dark:text-ink-300">No logs yet.</p>
+          <div className="max-w-prose font-sans text-sm text-chrome-dim">
+            <p className="text-chrome-text">No logs yet.</p>
             <p className="mt-1">
               {missingHint ?? 'Nothing has been written here yet — there is no log file to read.'}
             </p>
           </div>
         ) : visible.length === 0 ? (
-          <p className="text-ink-500">
+          <p className="font-sans text-sm text-chrome-faint">
             {entries.length === 0 ? 'Waiting for output…' : 'No lines match the filter.'}
           </p>
         ) : (
+          // The stamp in its own column rather than run into the line: every
+          // one is the same width, so the text starts on one left edge and the
+          // transcript can be read down instead of across.
           visible.map((entry, index) => (
-            <p key={index} className="whitespace-pre-wrap break-all">
+            <p key={index} className="flex gap-3">
               {entry.timestamp && (
-                <span className="mr-2 text-brand-700 dark:text-brand-400">{entry.timestamp}</span>
+                <span className="shrink-0 text-chrome-faint">{entry.timestamp}</span>
               )}
-              <Line message={entry.message} />
+              <span className="min-w-0 whitespace-pre-wrap break-all">
+                <Line message={entry.message} />
+              </span>
             </p>
           ))
         )}

@@ -18,23 +18,23 @@ import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { Volume } from '../types';
-import { formatBytes, formatDuration } from '../utils/format';
+import { formatBytes } from '../utils/format';
 
+// Where it lives is the column this list was missing. Format and Created had
+// one each: the first says "ext4" on every row ever shown, and the second is a
+// number nobody sorts a volume list by. Both are in the rail on the volume's
+// own page, next to everything else about it.
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'Name', width: 'minmax(160px,1.4fr)' },
-  { key: 'driver', label: 'Driver', width: '96px' },
-  { key: 'format', label: 'Format', width: '88px' },
-  { key: 'used', label: 'Containers', width: '92px', align: 'right' },
-  { key: 'disk', label: 'On disk', width: '96px', align: 'right' },
-  { key: 'size', label: 'Max size', width: '96px', align: 'right' },
-  { key: 'created', label: 'Created', width: '80px', align: 'right' },
+  { key: 'name', label: 'Name', width: 'minmax(150px,1.3fr)' },
+  { key: 'driver', label: 'Driver', width: '92px' },
+  { key: 'size', label: 'Size', width: '132px' },
+  { key: 'source', label: 'Mountpoint', width: 'minmax(160px,1.5fr)' },
+  { key: 'used', label: 'Used by', width: 'minmax(110px,0.9fr)' },
 ];
 
 export function VolumesPage() {
   const volumes = useResourceStore((s) => s.volumes);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
-  const searchQuery = useUIStore((s) => s.searchQuery);
-  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openVolume = useUIStore((s) => s.openVolume);
   const pushToast = useToastStore((s) => s.push);
 
@@ -45,8 +45,7 @@ export function VolumesPage() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const needle = searchQuery.trim().toLowerCase();
-  const visible = volumes.filter((v) => !needle || v.name.toLowerCase().includes(needle));
+  const visible = volumes;
 
   const remove = async (volume: Volume) => {
     setDeleting(null);
@@ -62,11 +61,10 @@ export function VolumesPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Volumes"
         subtitle="Open one to see what is inside it"
-        search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search volumes…' }}
         actions={
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
@@ -95,7 +93,7 @@ export function VolumesPage() {
         rowKey={(volume) => volume.name}
         selection={{ selected, onChange: setSelected }}
         onOpen={(volume) => openVolume(volume.name)}
-        empty={volumes.length === 0 ? 'No volumes yet.' : 'No volumes match your search.'}
+        empty="No volumes yet."
         loading={!hasLoaded}
         cells={(volume) => [
           <NameCell key="name">
@@ -103,11 +101,21 @@ export function VolumesPage() {
             {volume.usedBy.length > 0 && <Badge tone="brand">in use</Badge>}
           </NameCell>,
           <Muted key="driver">{volume.driver || '—'}</Muted>,
-          <Muted key="format">{volume.format || '—'}</Muted>,
-          <Muted key="used">{volume.usedBy.length || '—'}</Muted>,
-          <Muted key="disk">{formatBytes(volume.usedBytes ?? 0)}</Muted>,
-          <Muted key="size">{formatBytes(volume.sizeInBytes)}</Muted>,
-          <Muted key="created">{volume.createdAt ? formatDuration(volume.createdAt) : '—'}</Muted>,
+          // What it costs over what it may grow to. A volume is sparse, so the
+          // cap on its own has frightened people into deleting a 512 GB volume
+          // holding four megabytes.
+          <span key="size" className="flex min-w-0 items-baseline gap-1.5 font-mono">
+            <span className="truncate text-small">{formatBytes(volume.usedBytes ?? 0)}</span>
+            <span className="truncate text-tiny text-ink-500">
+              of {formatBytes(volume.sizeInBytes)}
+            </span>
+          </span>,
+          <Muted key="source" mono>
+            {volume.source || '—'}
+          </Muted>,
+          <Muted key="used">
+            {volume.usedBy.length > 0 ? volume.usedBy.join(', ') : 'nothing'}
+          </Muted>,
         ]}
         actions={(volume) => (
           <IconButton

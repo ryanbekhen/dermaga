@@ -95,6 +95,7 @@ export function NetworkDetailPage({ network }: { network: Network }) {
   return (
     <DetailLayout
       onBack={back}
+      backTo="Networks"
       title={network.name}
       badges={
         <>
@@ -121,14 +122,19 @@ export function NetworkDetailPage({ network }: { network: Network }) {
         </>
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+      {/* The scroll belongs to the page below the breakpoint and to the column
+          above it. Wide, the map and the facts sit side by side and the facts
+          scroll on their own; narrow, they stack into one tall column -- and
+          the scroll was on the aside, which by then was no longer the thing
+          overflowing, so everything under the fold was simply unreachable. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-7 py-5 lg:flex-row lg:overflow-hidden">
         <NetworkTopology
           network={network}
           containers={containers}
           onOpenContainer={openContainer}
         />
 
-        <aside className="-mr-5 flex shrink-0 flex-col gap-5 overflow-y-auto pr-5 lg:w-80">
+        <aside className="flex shrink-0 flex-col gap-5 lg:w-80 lg:overflow-y-auto">
           <Section title="Addressing">
             <Row label="Subnet" value={network.ipv4Subnet} mono copyable />
             <Row label="Gateway" value={network.ipv4Gateway} mono copyable />

@@ -15,6 +15,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/images"
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
+	"github.com/ryanbekhen/dermaga/internal/system"
 	"github.com/ryanbekhen/dermaga/internal/volumes"
 )
 
@@ -34,6 +35,16 @@ type Snapshot struct {
 	Images     []images.Image         `json:"images"`
 	Volumes    []volumes.Volume       `json:"volumes"`
 	Networks   []networks.Network     `json:"networks"`
+	// Whether the services behind the CLI are up, and whether the CLI is even
+	// installed. Carried here rather than asked for by each window on a timer
+	// of its own: it is a fact about the machine, it changes without anybody
+	// clicking, and the watcher is already the thing that notices such changes.
+	System       *system.Status `json:"system,omitempty"`
+	CLIAvailable bool           `json:"cliAvailable"`
+	// What the runtime occupies. Read only when something else in the snapshot
+	// actually changed -- it costs six times what the rest of a pass does, and
+	// it cannot move unless a container, image or volume has.
+	Disk *system.DiskUsage `json:"disk,omitempty"`
 }
 
 // Sources are the lists a snapshot is built from. Passing them as functions
@@ -44,6 +55,12 @@ type Sources struct {
 	Images     func(context.Context) ([]images.Image, error)
 	Volumes    func(context.Context) ([]volumes.Volume, error)
 	Networks   func(context.Context) ([]networks.Network, error)
+	// Cheap, so it runs every pass.
+	System func(context.Context) (*system.Status, error)
+	// Whether the CLI is on this Mac at all. Not a call; a flag to read.
+	CLIAvailable func() bool
+	// Expensive, so it runs only when a pass found something new.
+	Disk func(context.Context) (*system.DiskUsage, error)
 }
 
 type Watcher struct {
@@ -141,6 +158,20 @@ func (w *Watcher) refresh(ctx context.Context) {
 		Networks:   networkList,
 	}
 
+	if w.sources.System != nil {
+		if status, err := w.sources.System(ctx); err == nil {
+			snapshot.System = status
+		}
+	}
+
+	if w.sources.CLIAvailable != nil {
+		snapshot.CLIAvailable = w.sources.CLIAvailable()
+	}
+
+	// Fingerprinted before the disk is read, and deliberately: reading it is
+	// the expensive part of a pass, and nothing it reports can have moved
+	// unless something above has. Including it here would also make the
+	// fingerprint depend on a figure this pass had not fetched yet.
 	encoded, err := json.Marshal(snapshot)
 	if err != nil {
 		return
@@ -159,6 +190,20 @@ func (w *Watcher) refresh(ctx context.Context) {
 	}
 
 	onChange := w.onChange
+
+	// Something moved, so the disk figures are worth what they cost. Attached
+	// after the comparison, and stored, so a later subscriber joining between
+	// changes is handed the same numbers rather than none.
+	if w.sources.Disk != nil {
+		w.mu.Unlock()
+
+		if usage, err := w.sources.Disk(ctx); err == nil {
+			snapshot.Disk = usage
+		}
+
+		w.mu.Lock()
+		w.latest = snapshot
+	}
 
 	targets := make([]chan Snapshot, 0, len(w.subscribers))
 	for _, ch := range w.subscribers {

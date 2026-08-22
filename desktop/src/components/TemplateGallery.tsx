@@ -5,6 +5,7 @@ import { PLACEHOLDER_WIDTHS, SkeletonBar } from './Skeleton';
 import { Button } from './Button';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
+import { shortImage } from '../utils/format';
 import type { ContainerSpec, Template } from '../types';
 
 /**
@@ -99,19 +100,51 @@ export function TemplateGallery({
     }
   };
 
+  /**
+   * How many cards are on a row, read off the grid rather than assumed.
+   *
+   * The columns come from `auto-fill`, so the number depends on how wide the
+   * dialog happens to be — there is no constant here to hard-code. The browser
+   * has already worked it out by the time a key is pressed, so it is asked.
+   */
+  const columns = () => {
+    const grid = listRef.current;
+    if (!grid) return 1;
+
+    return getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+  };
+
   // Handled where the caret is. Typing narrows the list and the arrows move
   // through what is left, so neither ever asks for the mouse. Escape belongs to
   // the modal itself and is left alone here.
+  //
+  // Left and right step one card; up and down step a whole row. In a column
+  // those were the same thing, and they no longer are: down from the first of
+  // three across has to reach the fourth card, not the second.
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (shown.length === 0) return;
 
-    if (event.key === 'ArrowDown') {
+    const step =
+      event.key === 'ArrowRight'
+        ? 1
+        : event.key === 'ArrowLeft'
+          ? -1
+          : event.key === 'ArrowDown'
+            ? columns()
+            : event.key === 'ArrowUp'
+              ? -columns()
+              : 0;
+
+    if (step !== 0) {
       event.preventDefault();
-      setActive(index + 1 >= shown.length ? 0 : index + 1);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActive(index - 1 < 0 ? shown.length - 1 : index - 1);
-    } else if (event.key === 'Enter') {
+      // Clamped rather than wrapped. A row's worth is more than one card, so
+      // wrapping from the last row would land somewhere apparently arbitrary
+      // — and pressing down at the bottom should stop, not teleport.
+      setActive(Math.min(shown.length - 1, Math.max(0, index + step)));
+      return;
+    }
+
+    if (event.key === 'Enter') {
       event.preventDefault();
       onPick(shown[index].spec);
     }
@@ -119,21 +152,24 @@ export function TemplateGallery({
 
   return (
     <Modal
-      title="Start from a template"
-      subtitle="Everything stays editable before anything is created."
+      title="App templates"
+      subtitle="One-click stacks with sane defaults — everything stays editable before anything is created."
       onClose={onClose}
+      wide
+      hint={
+        shown.length > 0 ? (
+          <span className="flex items-center gap-3">
+            <span>
+              <span className="font-mono">↑↓←→</span> to move
+            </span>
+            <span>
+              <span className="font-mono">↵</span> to use
+            </span>
+          </span>
+        ) : null
+      }
       footer={
         <>
-          {shown.length > 0 && (
-            <span className="mr-auto flex items-center gap-3 text-tiny text-ink-500">
-              <span>
-                <span className="font-mono">↑↓</span> to move
-              </span>
-              <span>
-                <span className="font-mono">↵</span> to use
-              </span>
-            </span>
-          )}
           <Button icon={RefreshCw} busy={refreshing} busyLabel="Fetching…" onClick={refresh}>
             Refresh
           </Button>
@@ -141,6 +177,8 @@ export function TemplateGallery({
         </>
       }
     >
+      {/* The filter sits on a strip of its own, the way a list is narrowed
+          everywhere else in the app. */}
       <label className="relative block">
         <Search
           size={14}
@@ -187,7 +225,7 @@ export function TemplateGallery({
           <WifiOff size={20} className="text-ink-500" aria-hidden />
           <div>
             <p className="text-sm font-semibold">No templates yet</p>
-            <p className="mx-auto mt-1 max-w-sm break-words text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+            <p className="mx-auto mt-1 max-w-sm wrap-break-word text-xs leading-relaxed text-ink-600 dark:text-ink-400">
               They are fetched from a catalogue and kept for when you are offline. This Mac has not
               reached it yet — everything else about creating a container works meanwhile.
             </p>
@@ -201,7 +239,11 @@ export function TemplateGallery({
           Nothing matches “{needle}”.
         </p>
       ) : (
-        <div ref={listRef} className="flex flex-col gap-1.5">
+        // A grid of cards rather than a column of rows. These are things being
+        // chosen between rather than a list being read down, and side by side
+        // is how you compare three of them -- a column shows one at a time
+        // however tall the window is.
+        <div ref={listRef} className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
           {shown.map((template, position) => (
             <button
               key={template.id}
@@ -211,32 +253,38 @@ export function TemplateGallery({
               // lighting up a second one: two highlights at once and Enter
               // becomes a guess.
               onMouseMove={() => setActive(position)}
-              className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition ${
+              className={`flex flex-col gap-2.5 rounded-xl border p-3.5 text-left transition-colors ${
                 position === index
-                  ? 'border-brand-600 bg-brand-600/5'
-                  : 'border-ink-200 dark:border-ink-700'
+                  ? 'border-brand-600/50 bg-brand-50 dark:border-brand-600/50 dark:bg-brand-600/10'
+                  : 'border-ink-200 bg-white hover:border-ink-300 dark:border-ink-800 dark:bg-ink-900 dark:hover:border-ink-700'
               }`}
             >
-              {template.logo ? (
-                <img src={template.logo} alt="" aria-hidden className="h-7 w-7 shrink-0" />
-              ) : (
-                <Monogram name={template.name} />
-              )}
-
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">{template.name}</p>
-                <p className="break-words text-xs leading-relaxed text-ink-600 dark:text-ink-400">
-                  {template.summary}
-                </p>
-                {/* Only what is still theirs to deal with, and only when there
-                    is any: a port two templates both want, an image far larger
-                    than its neighbours. Most have none. */}
-                {template.caveat && (
-                  <p className="mt-1 break-words text-tiny leading-relaxed text-amber-700 dark:text-amber-500">
-                    {template.caveat}
-                  </p>
+              <div className="flex items-center gap-2.5">
+                {template.logo ? (
+                  <img src={template.logo} alt="" aria-hidden className="h-8 w-8 shrink-0" />
+                ) : (
+                  <Monogram name={template.name} />
                 )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-item font-semibold">{template.name}</p>
+                  <p className="truncate font-mono text-tiny text-ink-500">
+                    {shortImage(template.spec.image)}
+                  </p>
+                </div>
               </div>
+
+              <p className="text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+                {template.summary}
+              </p>
+
+              {/* Only what is still theirs to deal with, and only when there is
+                  any: a port two templates both want, an image far larger than
+                  its neighbours. Most have none. */}
+              {template.caveat && (
+                <p className="text-tiny leading-relaxed text-amber-700 dark:text-amber-500">
+                  {template.caveat}
+                </p>
+              )}
             </button>
           ))}
         </div>

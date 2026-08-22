@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import notices from '../generated/notices.json';
+import { openExternal } from '../services/ipc';
 
 interface Notice {
   name: string;
@@ -86,8 +87,10 @@ export function LicenceList() {
                   {entry.url && (
                     <a
                       href={entry.url}
-                      target="_blank"
-                      rel="noreferrer"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void openExternal(entry.url!);
+                      }}
                       className="text-tiny text-brand-700 hover:underline dark:text-brand-400"
                     >
                       {entry.url}

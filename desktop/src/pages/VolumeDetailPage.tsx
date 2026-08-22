@@ -4,7 +4,15 @@ import { Badge } from '../components/DataTable';
 import { Button } from '../components/Button';
 import { Field, Modal } from '../components/form';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
+import {
+  DetailBody,
+  DetailGrid,
+  DetailLayout,
+  DetailPane,
+  RailRow,
+  RailSection,
+} from '../components/DetailLayout';
+import { StatTile } from '../components/StatTile';
 import { Row, Section } from '../components/DetailRow';
 import { FileBrowser } from '../components/FileBrowser';
 import { StatusDot } from '../components/StatusBadge';
@@ -65,6 +73,7 @@ export function VolumeDetailPage({ volume }: { volume: Volume }) {
   return (
     <DetailLayout
       onBack={back}
+      backTo="Volumes"
       title={volume.name}
       subtitle={`${volume.driver || 'local'} · ${volume.format || 'ext4'}`}
       tabs={TABS}
@@ -82,70 +91,58 @@ export function VolumeDetailPage({ volume }: { volume: Volume }) {
         </button>
       }
     >
-      {tab === 'files' ? (
-        <DetailPane>
-          <VolumeFiles volume={volume.name} mounts={mounts} onOpenIn={openContainer} />
-        </DetailPane>
-      ) : (
-        <DetailGrid>
-          <Section title="Volume">
-            <Row label="Driver" value={volume.driver} />
-            <Row label="Format" value={volume.format} />
-            {/* The cap is what it was created with -- half a terabyte, usually.
-                What it costs is the blocks the image actually occupies. */}
-            <Row label="On disk" value={formatBytes(volume.usedBytes ?? 0)} />
-            <Row label="Maximum size" value={formatBytes(volume.sizeInBytes)} />
-            <Row
-              label="Created"
-              value={volume.createdAt ? `${formatDuration(volume.createdAt)} ago` : '—'}
-            />
-            <Row label="Image" value={volume.source} mono copyable wide />
-          </Section>
-
-          <Section title="Permissions" plain>
-            <VolumeOwner
-              volume={volume.name}
-              held={mounts.some(({ container }) => container.status === 'running')}
-            />
-          </Section>
-
-          <Section title={`Mounted by (${mounts.length})`} plain>
-            {mounts.length === 0 ? (
-              <p className="text-xs text-ink-600 dark:text-ink-400">
-                No container mounts this volume. It keeps whatever is in it either way.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-0.5">
-                {mounts.map(({ container, mount }) => (
-                  <li key={`${container.id}-${mount.destination}`}>
-                    <button
-                      onClick={() => openContainer(container.id)}
-                      className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-ink-100 dark:hover:bg-ink-800"
-                    >
-                      <StatusDot status={container.status} />
-                      <span className="min-w-0 shrink-0 truncate text-xs font-medium">
-                        {container.name}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-right font-mono text-tiny text-ink-500">
-                        {mount.destination}
-                        {mount.readOnly ? ' · ro' : ''}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-
-          {Object.keys(volume.labels ?? {}).length > 0 && (
-            <Section title="Labels">
-              {Object.entries(volume.labels).map(([key, value]) => (
-                <Row key={key} label={key} value={value} mono wide />
-              ))}
+      <DetailBody rail={<VolumeRail volume={volume} mounts={mounts} />}>
+        {tab === 'files' ? (
+          <DetailPane>
+            <VolumeFiles volume={volume.name} mounts={mounts} onOpenIn={openContainer} />
+          </DetailPane>
+        ) : (
+          <DetailGrid>
+            <Section title="Permissions" plain>
+              <VolumeOwner
+                volume={volume.name}
+                held={mounts.some(({ container }) => container.status === 'running')}
+              />
             </Section>
-          )}
-        </DetailGrid>
-      )}
+
+            <Section title={`Mounted by (${mounts.length})`} plain>
+              {mounts.length === 0 ? (
+                <p className="text-xs text-ink-600 dark:text-ink-400">
+                  No container mounts this volume. It keeps whatever is in it either way.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-0.5">
+                  {mounts.map(({ container, mount }) => (
+                    <li key={`${container.id}-${mount.destination}`}>
+                      <button
+                        onClick={() => openContainer(container.id)}
+                        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-ink-100 dark:hover:bg-ink-800"
+                      >
+                        <StatusDot status={container.status} />
+                        <span className="min-w-0 shrink-0 truncate text-xs font-medium">
+                          {container.name}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-right font-mono text-tiny text-ink-500">
+                          {mount.destination}
+                          {mount.readOnly ? ' · ro' : ''}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            {Object.keys(volume.labels ?? {}).length > 0 && (
+              <Section title="Labels">
+                {Object.entries(volume.labels).map(([key, value]) => (
+                  <Row key={key} label={key} value={value} mono wide />
+                ))}
+              </Section>
+            )}
+          </DetailGrid>
+        )}
+      </DetailBody>
 
       {deleting && (
         <ConfirmDialog
@@ -251,7 +248,9 @@ function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
         </span>
       </div>
 
-      {error && <p className="break-words text-xs text-orange-700 dark:text-orange-500">{error}</p>}
+      {error && (
+        <p className="wrap-break-word text-xs text-orange-700 dark:text-orange-500">{error}</p>
+      )}
 
       <p className="text-tiny leading-relaxed text-ink-600 dark:text-ink-400">
         {state?.lostFound
@@ -431,7 +430,7 @@ function VolumeFiles({
 
   if (holder) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-7 py-6 text-center">
         <div className="flex max-w-md flex-col gap-1.5">
           <p className="text-sm font-semibold">{holder.container.name} has this volume open</p>
           <p className="text-xs text-ink-600 dark:text-ink-400">
@@ -454,7 +453,7 @@ function VolumeFiles({
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-7 py-6 text-center">
       <div className="flex max-w-md flex-col gap-1.5">
         <p className="text-sm font-semibold">Look inside this volume</p>
         <p className="text-xs text-ink-600 dark:text-ink-400">
@@ -462,7 +461,9 @@ function VolumeFiles({
           container. Dermaga starts a small one — {HELPER_IMAGE}, mounted at {MOUNT} — and removes
           it again when you leave this tab.
         </p>
-        {error && <p className="break-words text-xs text-orange-700 dark:text-orange-500">{error}</p>}
+        {error && (
+          <p className="wrap-break-word text-xs text-orange-700 dark:text-orange-500">{error}</p>
+        )}
       </div>
 
       <button onClick={() => void open()} className="btn-primary" disabled={state === 'starting'}>
@@ -470,5 +471,49 @@ function VolumeFiles({
         {state === 'starting' ? 'Starting…' : 'Browse'}
       </button>
     </div>
+  );
+}
+
+/**
+ * How much of the disk this volume is costing, and what it is.
+ *
+ * The size is a tile rather than a row because it is the only number on the
+ * page anybody is deciding anything about -- whether to delete it. The cap it
+ * was created with is the ceiling underneath: volumes are sparse, so a volume
+ * "of 512 GB" is almost never 512 GB of disk, and showing one figure without
+ * the other has frightened people into deleting things they needed.
+ */
+function VolumeRail({
+  volume,
+  mounts,
+}: {
+  volume: Volume;
+  mounts: { container: Container; mount: Mount }[];
+}) {
+  const used = volume.usedBytes ?? 0;
+  const cap = volume.sizeInBytes;
+
+  return (
+    <>
+      <StatTile
+        label="On disk"
+        value={formatBytes(used)}
+        percent={cap > 0 ? (used / cap) * 100 : 0}
+        note={`of the ${formatBytes(cap)} it can grow to`}
+      />
+
+      <RailSection title="Details">
+        <div className="flex flex-col">
+          <RailRow label="Driver" value={volume.driver} />
+          <RailRow label="Format" value={volume.format} />
+          <RailRow label="Image" value={volume.source} />
+          <RailRow label="Mounted by" value={mounts.length || 'nothing'} />
+          <RailRow
+            label="Created"
+            value={volume.createdAt ? `${formatDuration(volume.createdAt)} ago` : '—'}
+          />
+        </div>
+      </RailSection>
+    </>
   );
 }

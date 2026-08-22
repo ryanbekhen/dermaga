@@ -32,10 +32,10 @@ export function FilterToggle({
       aria-checked={checked}
       title={title}
       onClick={() => onChange(!checked)}
-      className={`btn h-7 gap-1.5 border ${
+      className={`inline-flex h-7.5 shrink-0 items-center gap-1.5 rounded-lg px-3 text-small transition-colors ${
         checked
-          ? 'border-brand-600 bg-brand-600/10 text-brand-700 dark:text-brand-400'
-          : 'border-ink-300 text-ink-600 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800'
+          ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-600/15 dark:text-brand-400'
+          : 'text-ink-600 hover:bg-ink-150 hover:text-ink-800 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100'
       }`}
     >
       {/* The tick is the state, not the colour: colour alone is a poor way to

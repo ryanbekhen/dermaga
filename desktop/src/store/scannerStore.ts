@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../services/api';
+import { useToastStore } from './toastStore';
 import { onNotify } from '../services/ipc';
 import type { ScannerStatus, VulnerabilityReport } from '../types';
 
@@ -53,7 +54,20 @@ export function subscribeToScanner(): () => void {
     }
 
     if (message.method === 'scanner.status') {
-      setStatus(message.params as ScannerStatus);
+      const next = message.params as ScannerStatus;
+      const previous = useScannerStore.getState().status;
+
+      // Said once, when it happens. The scanner used to report itself along the
+      // title bar, which meant a failure sat there until something replaced it;
+      // with that gone, this is the only thing that would otherwise pass in
+      // silence -- and it is the only scanner state anybody needs telling about.
+      if (next?.state === 'failed' && previous?.state !== 'failed') {
+        useToastStore
+          .getState()
+          .push(next.detail || next.error || 'An image could not be scanned', 'error');
+      }
+
+      setStatus(next);
     }
   });
 }

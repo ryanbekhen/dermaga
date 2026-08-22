@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -492,6 +493,100 @@ func (a *App) servicesRunning() bool {
 	return report.Status.Running
 }
 
+// OpenFindingWindow puts one vulnerability on screen in a window of its own.
+//
+// Deliberately an ordinary macOS window, title bar and all, where the main one
+// is frameless: this is a secondary window about one thing, and the title bar
+// is where that thing is named. It also means the window can be moved, zoomed
+// and closed by the usual means without the app drawing any of it.
+//
+// Several can be open at once, one per finding, which is the point -- comparing
+// two of them is the reason to open either.
+func (a *App) OpenFindingWindow(reference, id string) {
+	// A page, not a panel. The width is fixed and the height is not, which is
+	// what a sheet of paper is: the measure a line is set to does not change
+	// because there is more to say, only how far down it goes. It also means
+	// the reader never has to arrange anything -- the window opens at the
+	// proportions it is meant to be read at.
+	//
+	// Close only. Minimise and zoom are for windows you keep; this one is open
+	// while a question is being answered and shut afterwards, and a zoom button
+	// on a fixed width would either do nothing or break the measure.
+	const pageWidth = 620
+
+	window := a.wails.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  id,
+		Width:  pageWidth,
+		Height: 820,
+		// Equal minimum and maximum is how a width is fixed: macOS lets the
+		// bottom edge be dragged and refuses the sides.
+		MinWidth:  pageWidth,
+		MaxWidth:  pageWidth,
+		MinHeight: 420,
+
+		MinimiseButtonState:   application.ButtonHidden,
+		MaximiseButtonState:   application.ButtonHidden,
+		FullscreenButtonState: application.ButtonHidden,
+		Mac: application.MacWindow{
+			// No title bar drawn, so no rule across the top of the page. A
+			// sheet of paper does not have a strip at the top of it, and the
+			// separator was the one line on screen that said "window" rather
+			// than "document".
+			//
+			// The title is still set -- Mission Control and the Window menu
+			// need a name for it -- it is just not painted over the page. The
+			// page says the same thing in its own heading anyway, so drawing
+			// it twice was only ever a way of drawing that line.
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent: true,
+				HideTitle:          true,
+				FullSizeContent:    true,
+				// Same trick the main window uses, for the same reason:
+				// macOS centres the close button in whatever it considers
+				// the title bar, and left alone that is the standard 28pt
+				// strip -- so the button sat near the top of our 44px band
+				// rather than in the middle of it. Reporting a toolbar makes
+				// macOS grow the title bar to fit and re-centre the button
+				// in the taller strip. The toolbar holds nothing and is
+				// never seen; its separator would be the very line this
+				// window is meant not to have.
+				UseToolbar:           true,
+				HideToolbarSeparator: true,
+				ToolbarStyle:         application.MacToolbarStyleUnified,
+			},
+			// The strip the close button is centred in, and what the window
+			// is dragged by. The page leaves the same room at the top, and
+			// the two numbers have to agree or the button drifts off the
+			// line the page starts on.
+			InvisibleTitleBarHeight: 44,
+			WebviewPreferences: application.MacWebviewPreferences{
+				TabFocusesLinks: application.Enabled,
+				// Nothing here is a document, so there is nothing to swipe back
+				// to -- and a swipe that navigates this window away from the
+				// app has no way back.
+				AllowsBackForwardNavigationGestures: application.Disabled,
+			},
+		},
+		// The page's own colour, so opening it does not flash the app's ground
+		// before the sheet is drawn.
+		BackgroundColour: application.NewRGB(255, 255, 255),
+		// A hash, not a path: the asset server hands back one bundle whatever
+		// is asked for, and the window reads its own address to know what it
+		// is for.
+		URL: "/#finding/" + neturl.PathEscape(reference) + "/" + neturl.PathEscape(id),
+
+		// Where the pointer is, which is where the click that opened it came
+		// from -- not on whichever display macOS calls primary. On a two-screen
+		// desk, a window that always appears on the other one is the difference
+		// between an app that behaves and one that does not; and this window
+		// exists to sit beside the list it was opened from.
+		InitialPosition: application.WindowCentered,
+		Screen:          a.screenUnderCursor(),
+	})
+
+	window.Show()
+}
+
 // --- the window -----------------------------------------------------------
 
 func (a *App) createWindow() *application.WebviewWindow {
@@ -500,10 +595,22 @@ func (a *App) createWindow() *application.WebviewWindow {
 		// Wide enough for the images table to fit without scrolling sideways:
 		// the widest table needs 1030 for its columns, and the sidebar and the
 		// page padding take 248 between them.
-		Width:     1280,
-		Height:    800,
-		MinWidth:  900,
-		MinHeight: 600,
+		Width:  1280,
+		Height: 800,
+		// The floor is set by the widest thing the layout has to hold at once:
+		// the sidebar (232), a detail page's rail (320), and enough content
+		// column between them for a table to be read rather than guessed at
+		// (about 500). Below that the panes stop being narrow and start being
+		// squeezed -- headings wrapping onto three lines, columns colliding.
+		//
+		// It used to be 900, which predates the rail. A detail page at 900 left
+		// under 350 for the thing the page is actually about.
+		//
+		// The ceiling on this number is the smallest display anyone runs on:
+		// 1280x800 is the smallest common Mac resolution, so the floor has to
+		// leave room to move the window on one.
+		MinWidth:  1120,
+		MinHeight: 720,
 		Hidden:    true,
 		// A dropped file carries no path of its own to the web side; only this
 		// side can resolve one, and only for files the user actually dropped.
@@ -513,8 +620,29 @@ func (a *App) createWindow() *application.WebviewWindow {
 				AppearsTransparent: true,
 				HideTitle:          true,
 				FullSizeContent:    true,
+				// macOS places the close/minimise/zoom buttons itself, centred
+				// in whatever it considers the title bar to be -- there is no
+				// option anywhere to move them. Left to itself that is the
+				// standard 28pt strip, so the buttons sat near the top of our
+				// 48px bar with the logo a good ten pixels below them.
+				//
+				// A unified toolbar is how a Mac app makes that strip taller:
+				// the window reports a toolbar, macOS grows the title bar to
+				// fit it, and it re-centres the buttons in the taller strip --
+				// which brings them down onto the same line as everything else
+				// in the bar. The toolbar itself holds nothing and is never
+				// seen; its separator would be a second line under our own, so
+				// it is hidden.
+				UseToolbar:           true,
+				HideToolbarSeparator: true,
+				ToolbarStyle:         application.MacToolbarStyleUnified,
 			},
-			InvisibleTitleBarHeight: 38,
+			// Matches the bar the frontend draws, so the whole of it moves the
+			// window and nothing below it does -- and, with the unified
+			// toolbar above, the height macOS centres the buttons in. The two
+			// numbers have to agree: at 48 against a 52pt toolbar the buttons
+			// sat a couple of pixels below the logo.
+			InvisibleTitleBarHeight: 52,
 			WebviewPreferences: application.MacWebviewPreferences{
 				// WebKit leaves buttons and links out of the tab order
 				// unless asked. Without this, Tab inside a dialog skips

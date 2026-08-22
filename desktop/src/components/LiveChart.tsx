@@ -25,9 +25,14 @@ export interface Trace {
   value: (point: UsagePoint) => number;
 }
 
+// The app's own two, rather than a chart library's blue and orange: a pair of
+// charts in colours that appear nowhere else on the page read as something
+// pasted in. The second is the lighter brand red, which keeps a two-line chart
+// legible without introducing a third hue -- these lines are always labelled,
+// so they never have to be told apart by colour alone.
 const TONES = [
-  { text: 'text-blue-600 dark:text-blue-400', dot: 'bg-blue-600 dark:bg-blue-400' },
-  { text: 'text-orange-600 dark:text-orange-500', dot: 'bg-orange-600 dark:bg-orange-500' },
+  { text: 'text-brand-600 dark:text-brand-500', dot: 'bg-brand-600 dark:bg-brand-500' },
+  { text: 'text-brand-400 dark:text-brand-400', dot: 'bg-brand-400' },
 ];
 
 const WIDTH = 320;

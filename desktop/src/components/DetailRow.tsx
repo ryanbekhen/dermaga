@@ -2,9 +2,14 @@ import { useState, type ReactNode } from 'react';
 import { Check, Copy } from 'lucide-react';
 
 /**
- * A titled group of label/value rows. Deliberately unboxed: the detail pages
- * read as one flat surface, with the same uppercase rule the list columns use
- * as their only separator. Boxing every group turned the page into a quilt.
+ * A titled group of label/value rows. Deliberately unboxed: a detail page is
+ * one flat sheet, ruled off by the same mono caps the list columns use.
+ *
+ * Boxing them was tried and it turned the page into a quilt. Panels of very
+ * different heights cannot be made to line up -- two facts beside twelve
+ * leaves a hand's width of nothing under the short one, and every border on
+ * the page draws attention to it. Without the borders the raggedness is simply
+ * not visible, because there is no edge for the eye to measure it against.
  *
  * Its rows sit in a two-column grid by default, so a group of facts has the
  * same shape on every page without each one asking for it. Groups holding
@@ -27,12 +32,12 @@ export function Section({
   plain?: boolean;
 }) {
   return (
-    <section className={`flex flex-col gap-2 ${span ? 'lg:col-span-2' : ''}`}>
-      <div className="flex items-center justify-between gap-3 border-b border-ink-200 pb-1 dark:border-ink-700">
-        <h2 className="label-caps">{title}</h2>
+    <section className={`flex flex-col gap-2.5 ${span ? 'lg:col-span-2' : ''}`}>
+      <div className="flex items-center justify-between gap-3 border-b border-ink-200 pb-1.5 dark:border-ink-800">
+        <h2 className="label-mono">{title}</h2>
         {action}
       </div>
-      {plain ? <div className="flex flex-col gap-1.5">{children}</div> : <Facts>{children}</Facts>}
+      {plain ? <div className="flex flex-col gap-2">{children}</div> : <Facts>{children}</Facts>}
     </section>
   );
 }
@@ -42,7 +47,7 @@ export function Section({
  * inside a `plain` section -- a container's addresses, one grid per interface.
  */
 export function Facts({ children }: { children: ReactNode }) {
-  return <dl className="grid grid-cols-2 gap-x-4 gap-y-3">{children}</dl>;
+  return <dl className="grid grid-cols-2 gap-x-5 gap-y-3.5">{children}</dl>;
 }
 
 interface RowProps {
@@ -82,13 +87,13 @@ export function Row({ label, value, mono = false, copyable = false, wide = false
 
   return (
     <div className={`group flex min-w-0 flex-col gap-0.5 ${wide ? 'col-span-2' : ''}`}>
-      <dt className="truncate text-tiny text-ink-500" title={label}>
+      <dt className="label-mono truncate" title={label}>
         {label}
       </dt>
       <dd className="flex items-start gap-1">
         <span
           className={`selectable min-w-0 break-all leading-snug text-ink-800 dark:text-ink-100 ${
-            mono ? 'font-mono text-xs' : 'text-xs'
+            mono ? 'font-mono text-small' : 'text-body'
           }`}
         >
           {text}
@@ -119,10 +124,10 @@ export function Flags({ flags }: { flags: { label: string; on: boolean }[] }) {
       {flags.map(({ label, on }) => (
         <span
           key={label}
-          className={`rounded px-1.5 py-0.5 text-tiny font-semibold ${
+          className={`rounded-md px-2 py-0.5 font-mono text-tiny ${
             on
-              ? 'bg-brand-600/10 text-brand-700 dark:text-brand-400'
-              : 'bg-ink-100 text-ink-500 dark:bg-ink-800 dark:text-ink-400'
+              ? 'bg-brand-50 text-brand-700 dark:bg-brand-600/15 dark:text-brand-400'
+              : 'bg-ink-150 text-ink-500 dark:bg-ink-800 dark:text-ink-400'
           }`}
         >
           {label}

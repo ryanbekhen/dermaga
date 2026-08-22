@@ -159,14 +159,6 @@ export const api = {
     return (await invoke<Record<string, VulnerabilityReport>>('scanner.reports')) ?? {};
   },
 
-  /**
-   * Drops results for images that no longer exist. Results for images still
-   * present are kept: discarding those would only mean scanning them again.
-   */
-  async clearScans(): Promise<{ removed: number }> {
-    return invoke('scanner.clear');
-  },
-
   /** Puts a scan failure away, for the ones nothing here can fix. */
   async dismissScanFailure(): Promise<ScannerStatus> {
     return invoke('scanner.dismiss');

@@ -133,7 +133,9 @@ export function FileBrowser({
       // `file-drop-target-active` while a file is over it -- which is why the
       // overlay is driven by CSS as well as by state.
       data-file-drop-target="container-files"
-      className="drop-target relative flex min-h-0 flex-1 flex-col"
+      // Pads itself: it used to sit inside a gutter the window provided, so
+      // with that gone the breadcrumb and every filename ran into the edges.
+      className="drop-target relative flex min-h-0 flex-1 flex-col pt-2"
       onDragEnter={(e) => {
         e.preventDefault();
         setDropping(true);
@@ -171,7 +173,7 @@ export function FileBrowser({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 pb-2.5 dark:border-ink-700">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 px-7 pb-2.5 dark:border-ink-800">
         <nav className="flex min-w-0 flex-wrap items-center text-xs" aria-label="Path">
           <button onClick={() => setPath(root)} className="btn-ghost px-1.5 py-0.5 font-mono">
             {rootLabel}
@@ -193,9 +195,9 @@ export function FileBrowser({
       {error ? (
         <Empty title="Cannot browse this container" body={error} />
       ) : loading && entries.length === 0 ? (
-        <ul className="min-h-0 flex-1 divide-y divide-ink-200 overflow-y-auto dark:divide-ink-800">
+        <ul className="min-h-0 flex-1 divide-y divide-ink-150 overflow-y-auto dark:divide-ink-800">
           {Array.from({ length: PLACEHOLDER_ROWS }, (_, at) => (
-            <li key={at} aria-hidden className="flex items-center gap-3 px-2 py-1.5">
+            <li key={at} aria-hidden className="flex items-center gap-3 px-7 py-2">
               <SkeletonBar width="14px" height="h-3.5" at={at} className="shrink-0 rounded-sm" />
               <SkeletonBar width={PLACEHOLDER_WIDTHS[at % PLACEHOLDER_WIDTHS.length]} at={at} />
             </li>
@@ -207,12 +209,12 @@ export function FileBrowser({
           body={`${path} is empty. Drop files from Finder to put something in it.`}
         />
       ) : (
-        <ul className="min-h-0 flex-1 divide-y divide-ink-200 overflow-y-auto dark:divide-ink-800">
+        <ul className="min-h-0 flex-1 divide-y divide-ink-150 overflow-y-auto dark:divide-ink-800">
           {entries.map((entry) => (
             <li
               key={entry.path}
               onDoubleClick={() => entry.isDir && setPath(entry.path)}
-              className="group flex items-center gap-3 px-2 py-1.5 hover:bg-ink-50 dark:hover:bg-ink-900"
+              className="group flex items-center gap-3 px-7 py-2 transition-colors hover:bg-ink-50 dark:hover:bg-ink-900/60"
             >
               <span className="shrink-0 text-ink-500">
                 {entry.isLink ? (
@@ -270,7 +272,7 @@ function Empty({ title, body }: { title: string; body: string }) {
     // Stretches so the pane stays one continuous target even with nothing in it.
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-6 text-center">
       <p className="text-sm font-semibold">{title}</p>
-      <p className="max-w-sm break-words text-xs leading-relaxed text-ink-600 dark:text-ink-400">
+      <p className="max-w-sm wrap-break-word text-xs leading-relaxed text-ink-600 dark:text-ink-400">
         {body}
       </p>
     </div>

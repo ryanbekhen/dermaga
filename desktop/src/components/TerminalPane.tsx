@@ -14,8 +14,6 @@ const STATE_LABEL: Record<SessionState, string> = {
   error: 'could not connect',
 };
 
-// The terminal follows the app theme rather than always being a dark slab, so
-// it sits on the page instead of looking pasted onto it.
 /** The agent base64-encodes terminal bytes; xterm wants them back as text. */
 function decodeBase64(value: string): Uint8Array {
   const binary = atob(value);
@@ -32,39 +30,39 @@ function encodeBase64(value: string): string {
 }
 
 const ANSI = {
-  red: '#ce1126',
-  green: '#10b981',
-  yellow: '#f59e0b',
+  red: '#c21322',
+  green: '#2c8c52',
+  yellow: '#b98200',
   cyan: '#2a9d8f',
 };
 
 const LIGHT_THEME = {
   ...ANSI,
   background: '#ffffff',
-  foreground: '#26262c',
-  cursor: '#ce1126',
+  foreground: '#322d2f',
+  cursor: '#c21322',
   cursorAccent: '#ffffff',
-  selectionBackground: '#ce112633',
-  black: '#26262c',
-  blue: '#a60d1e',
-  magenta: '#5f5f69',
-  white: '#3a3a42',
-  brightBlack: '#81818b',
+  selectionBackground: '#c2132233',
+  black: '#322d2f',
+  blue: '#a50f1c',
+  magenta: '#6e6a67',
+  white: '#4a4644',
+  brightBlack: '#8b8683',
 };
 
 const DARK_THEME = {
   ...ANSI,
-  background: '#131317',
-  foreground: '#f3f3f4',
-  cursor: '#e2596a',
-  cursorAccent: '#131317',
-  selectionBackground: '#ce112655',
-  black: '#26262c',
-  red: '#e2596a',
-  blue: '#e2596a',
-  magenta: '#a8a8b0',
-  white: '#fafafa',
-  brightBlack: '#81818b',
+  background: '#1e1a1c',
+  foreground: '#f7f6f5',
+  cursor: '#e4606b',
+  cursorAccent: '#1e1a1c',
+  selectionBackground: '#c2132255',
+  black: '#322d2f',
+  red: '#e4606b',
+  blue: '#e4606b',
+  magenta: '#a29c99',
+  white: '#fcfbfb',
+  brightBlack: '#8b8683',
 };
 
 /**
@@ -170,26 +168,32 @@ export function TerminalPane({
 
   if (disabled) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6 text-sm text-ink-600 dark:text-ink-400">
+      <div className="flex flex-1 items-center justify-center px-7 py-6 text-sm text-ink-600 dark:text-ink-400">
         {disabledMessage}
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-ink-200 pb-2 dark:border-ink-700">
-        <span className="text-tiny text-ink-600 dark:text-ink-400">
+    // Padded and boxed like the log pane, and for the same reason: this used to
+    // sit inside a gutter the window provided, so with that gone the session
+    // ran into the sidebar on one side and the rail on the other.
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-7 pb-4 pt-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex h-7 items-center rounded-lg bg-ink-150 px-2.5 font-mono text-code text-ink-700 dark:bg-ink-800 dark:text-ink-300">
           {STATE_LABEL[state]} · bash, falling back to sh
         </span>
         {(state === 'closed' || state === 'error') && (
-          <button onClick={() => setAttempt((n) => n + 1)} className="btn-ghost px-3 py-1 text-xs">
+          <button onClick={() => setAttempt((n) => n + 1)} className="btn-ghost">
             New session
           </button>
         )}
       </div>
 
-      <div className="min-h-0 flex-1 py-2">
+      {/* The terminal keeps the app's own background rather than always being a
+          dark slab, so it sits on the page instead of looking pasted onto it --
+          but it is boxed, because a shell session is a thing with edges. */}
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-ink-200 bg-white p-3 dark:border-ink-800 dark:bg-ink-950">
         <div ref={hostRef} className="selectable h-full w-full" />
       </div>
     </div>

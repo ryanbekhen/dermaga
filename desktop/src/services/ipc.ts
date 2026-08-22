@@ -26,6 +26,8 @@ interface Bridge {
   onFilesDropped?: (callback: (paths: string[], target: string) => void) => () => void;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
+  openExternal?: (url: string) => Promise<void>;
+  openFinding?: (reference: string, id: string) => Promise<void>;
   registerContainerNames?: () => Promise<void>;
   takePendingOpen?: () => Promise<string | null>;
   serviceStatus?: () => Promise<ServiceStatus>;
@@ -118,6 +120,32 @@ export function syncSettings(settings: { notifyOnExit: boolean }): void {
 /** Opens the macOS pane where notifications are allowed or refused. */
 export function openNotificationSettings(): Promise<void> {
   return bridge().openNotificationSettings?.() ?? Promise.resolve();
+}
+
+/**
+ * Opens a web address in the user's browser.
+ *
+ * This window is not a browser: an anchor with target="_blank" has nowhere to
+ * put a tab, so every external link in the app did nothing when it was
+ * clicked. macOS is asked to open it instead.
+ *
+ * The Go side refuses anything that is not http or https. These addresses come
+ * from outside — a CVE link from the scanner, a homepage from a licence file —
+ * and `open` acts on any scheme macOS knows.
+ */
+export function openExternal(url: string): Promise<void> {
+  return bridge().openExternal?.(url) ?? Promise.resolve();
+}
+
+/**
+ * Opens one vulnerability in a window of its own.
+ *
+ * Only the two names are passed. A URL is a poor place for a paragraph, and
+ * the report can be rescanned while the window is open — so the window fetches
+ * for itself and shows whatever is current.
+ */
+export function openFindingWindow(reference: string, id: string): Promise<void> {
+  return bridge().openFinding?.(reference, id) ?? Promise.resolve();
 }
 
 /**

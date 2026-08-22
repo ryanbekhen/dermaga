@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Hammer, LayoutGrid, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { Hammer, LayoutGrid, Play, Plus, RotateCw, Square, Trash2 } from 'lucide-react';
 import { ContainerForm } from '../components/ContainerForm';
 import { TemplateGallery } from '../components/TemplateGallery';
 import { TaskRows } from '../components/TaskRows';
@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
-import { StatusDot } from '../components/StatusBadge';
+import { StatusPill } from '../components/StatusBadge';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { isBuilder } from '../utils/builder';
@@ -16,19 +16,24 @@ import { PageHeader } from '../components/PageHeader';
 import { FilterToggle } from '../components/FilterToggle';
 import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
-import type { ContainerSpec, Container } from '../types';
+import type { ContainerSpec, Container, Port } from '../types';
 import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../utils/format';
 
-// Mirrors `container ls` -- name, image, platform, address, CPUs, memory,
-// started -- with live usage folded into the two resource columns.
+// The six things worth knowing about a container without opening it: what it
+// is, what it came from, whether it is up, what it is spending, and how to
+// reach it.
+//
+// Platform used to have a column of its own and said "linux/arm64" on every
+// row of every Mac sold since 2020 -- a column that never varies is a column
+// nobody reads. It is on the detail page, where the rare machine running
+// something else will say so.
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'Name', width: 'minmax(110px,1.1fr)' },
-  { key: 'image', label: 'Image', width: 'minmax(140px,1.6fr)' },
-  { key: 'platform', label: 'Platform', width: '92px' },
-  { key: 'ip', label: 'IP address', width: '132px' },
+  { key: 'name', label: 'Name', width: 'minmax(120px,1.5fr)' },
+  { key: 'image', label: 'Image', width: 'minmax(140px,1.5fr)' },
+  { key: 'status', label: 'Status', width: '112px' },
   { key: 'cpu', label: 'CPU', width: '104px' },
   { key: 'memory', label: 'Memory', width: '128px' },
-  { key: 'up', label: 'Up', width: '64px', align: 'right' },
+  { key: 'ports', label: 'Ports', width: 'minmax(130px,1.2fr)' },
 ];
 
 export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) {
@@ -38,8 +43,6 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const setShowStopped = useSettingsStore((s) => s.setShowStopped);
   const showBuilder = useSettingsStore((s) => s.showBuilder);
   const setShowBuilder = useSettingsStore((s) => s.setShowBuilder);
-  const searchQuery = useUIStore((s) => s.searchQuery);
-  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openContainer = useUIStore((s) => s.openContainer);
   const creating = useDialog('container.create');
   // Picked before the form opens rather than applied to it afterwards: the form
@@ -56,8 +59,6 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const [busy, setBusy] = useState<string | null>(null);
   const pushToast = useToastStore((s) => s.push);
 
-  const needle = searchQuery.trim().toLowerCase();
-
   // What this page is about. Apple's builder is infrastructure rather than
   // somebody's container, so switching it off takes it out of the counting as
   // well as out of the list -- a summary that keeps totalling something it is
@@ -65,15 +66,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   // 2 CPUs and a gigabyte and a half; the difference is not subtle.
   const mine = showBuilder ? containers : containers.filter((c) => !isBuilder(c));
 
-  const visible = mine.filter((container) => {
-    if (!showStopped && container.status !== 'running') return false;
-    if (!needle) return true;
-    return (
-      container.name.toLowerCase().includes(needle) ||
-      container.image.toLowerCase().includes(needle) ||
-      container.id.toLowerCase().includes(needle)
-    );
-  });
+  const visible = mine.filter((container) => showStopped || container.status === 'running');
 
   // Counted against everything in scope, listed or not -- the stopped filter
   // hides rows without changing what exists, and "3 of 4 running" is the one
@@ -87,9 +80,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
     ? 'The Apple Container CLI was not found on this Mac.'
     : mine.length === 0
       ? 'No containers yet. Start from a template, or use “New container”.'
-      : needle
-        ? 'No containers match your search.'
-        : 'No running containers. Turn on the “Stopped” filter to see the rest.';
+      : 'No running containers. Turn on the “Stopped” filter to see the rest.';
 
   const chosen = mine.filter((c) => selected.has(c.id));
   const startable = chosen.filter((c) => c.status !== 'running');
@@ -124,17 +115,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Containers"
         subtitle={`${running.length} of ${mine.length} running · ${allocatedCpus} CPU · ${formatMemory(
           `${Math.round(usedMib)}m`
         )} of ${formatMemory(`${allocatedMib}m`)} memory`}
-        search={{
-          value: searchQuery,
-          onChange: setSearchQuery,
-          placeholder: 'Search containers…',
-        }}
         filters={
           <>
             <FilterToggle
@@ -177,6 +163,24 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                 }
               >
                 Stop
+              </Button>
+              {/* Stop then start, the same pair the detail page runs: the
+                  runtime has no restart of its own, and doing it here rather
+                  than making somebody open four containers in turn is the
+                  whole point of having selected them. */}
+              <Button
+                icon={RotateCw}
+                busy={busy === 'restarted'}
+                busyLabel="Restarting…"
+                disabled={Boolean(busy) || stoppable.length === 0}
+                onClick={() =>
+                  void applyToSelection('restarted', stoppable, async (c) => {
+                    await api.stopContainer(c.id);
+                    await api.startContainer(c.id);
+                  })
+                }
+              >
+                Restart
               </Button>
               <Button
                 icon={Trash2}
@@ -224,42 +228,39 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
           const isRunning = container.status === 'running';
           const address = container.interfaces?.[0]?.ipv4Address;
           const cpu = isRunning ? (container.cpuUsage ?? 0) : 0;
-          const memory = isRunning ? (container.memoryUsagePercent ?? 0) : 0;
 
           return [
+            // Just the name. Apple's runtime gives a container one identifier
+            // and its name is it, so the id underneath was the line above it in
+            // a lighter grey -- and the dot in front of it was the Status
+            // column said again, a hundred pixels to the left.
             <NameCell key="name">
-              <StatusDot status={container.status} />
-              <span className="truncate text-sm font-semibold">{container.name}</span>
+              <span className="truncate text-body font-medium">{container.name}</span>
             </NameCell>,
             <Muted key="image">{shortImage(container.image)}</Muted>,
-            <Muted key="platform">{container.platform ?? '—'}</Muted>,
-            <Muted key="ip" mono>
-              {address ?? '—'}
-            </Muted>,
-            <MeterCell
+            <StatusCell
+              key="status"
+              status={container.status}
+              since={isRunning ? formatDuration(container.startedAt) : null}
+            />,
+            <Measure
               key="cpu"
-              value={cpu}
-              label={isRunning ? `${cpu.toFixed(1)}%` : `${container.cpuAllocation ?? 1} CPU`}
-              sub={isRunning ? `of ${container.cpuAllocation ?? 1}` : 'idle'}
+              value={isRunning ? `${cpu.toFixed(1)}%` : '—'}
+              of={`${container.cpuAllocation ?? 1} CPU`}
             />,
-            <MeterCell
+            <Measure
               key="memory"
-              value={memory}
-              label={
-                isRunning && container.memoryUsage
-                  ? formatMemory(container.memoryUsage)
-                  : formatMemory(container.memoryAllocation)
-              }
-              sub={
-                isRunning && container.memoryUsage
-                  ? `of ${formatMemory(container.memoryAllocation)}`
-                  : ''
-              }
+              value={isRunning && container.memoryUsage ? formatMemory(container.memoryUsage) : '—'}
+              of={formatMemory(container.memoryAllocation)}
             />,
-            <Muted key="up">{isRunning ? formatDuration(container.startedAt) : '—'}</Muted>,
+            <PortsCell
+              key="ports"
+              ports={container.ports}
+              exposed={container.exposedPorts}
+              address={address}
+            />,
           ];
         }}
-        actions={() => <ChevronRight size={14} className="text-ink-400" aria-hidden />}
       />
 
       {/* Creating does not navigate: the new container appears in this list,
@@ -307,23 +308,111 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   );
 }
 
-/** A number with a hairline usage bar underneath — readable at row height. */
-function MeterCell({ value, label, sub }: { value: number; label: string; sub: string }) {
-  const pct = Math.min(100, Math.max(0, value));
-  const fill = pct >= 90 ? 'bg-brand-600' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-600';
+/**
+ * What the container is doing, and for how long.
+ *
+ * The uptime rides under the pill rather than in a column of its own: it is
+ * only ever asked about a container that is up, so a column for it is blank on
+ * every row that is not -- and it answers the same question the pill does.
+ */
+function StatusCell({ status, since }: { status: string; since: string | null }) {
+  return (
+    // The group is only as wide as its widest part and sits at the column's
+    // left edge; inside it, the uptime is centred under the pill. Aligned left
+    // instead, "up 6h 34m" started a few pixels inside the pill's rounded end
+    // and read as a second, smaller thing rather than as a note about it.
+    <span className="flex w-fit min-w-0 flex-col items-center gap-1">
+      <StatusPill status={status} />
+      {since && <span className="truncate font-mono text-tiny text-ink-500">up {since}</span>}
+    </span>
+  );
+}
+
+/**
+ * Somewhere you can actually type into a browser.
+ *
+ * Published ports are shown as the mapping the runtime made. Everything else
+ * gets its own address and the port its image says it listens on, which on
+ * this runtime is a real endpoint: every container has an address of its own,
+ * so `192.168.64.18:80` reaches an unpublished nginx exactly as it stands.
+ *
+ * The address alone used to be shown instead, and it answered half a question.
+ * Knowing where something is without knowing what to knock on is not much use,
+ * and the port was on screen nowhere at all for a container that publishes
+ * nothing -- which, on a runtime that gives every container an address, is
+ * most of them.
+ */
+function PortsCell({
+  ports,
+  exposed,
+  address,
+}: {
+  ports: Port[];
+  exposed?: string[];
+  address?: string;
+}) {
+  if (ports.length === 0) {
+    const listening = (exposed ?? []).map((port) => port.split('/')[0]);
+
+    if (address && listening.length > 0) {
+      return (
+        <span
+          className="flex min-w-0 flex-col gap-0.5"
+          title={(exposed ?? []).map((port) => `${address}:${port}`).join('\n')}
+        >
+          {listening.slice(0, 2).map((port) => (
+            <span key={port} className="truncate font-mono text-code">
+              {address}:{port}
+            </span>
+          ))}
+          {listening.length > 2 && (
+            <span className="truncate text-tiny text-ink-500">and {listening.length - 2} more</span>
+          )}
+        </span>
+      );
+    }
+
+    return <Muted mono>{address ?? '—'}</Muted>;
+  }
+
+  // More than two and the row would grow a paragraph; the rest are counted and
+  // spelled out in full on the detail page.
+  const shown = ports.slice(0, 2);
+  const rest = ports.length - shown.length;
 
   return (
-    <span className="flex min-w-0 flex-col gap-1">
-      <span className="flex items-baseline gap-1">
-        <span className="truncate text-xs font-semibold">{label}</span>
-        {sub && <span className="truncate text-tiny text-ink-500">{sub}</span>}
-      </span>
-      <span className="block h-0.75 w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
+    <span
+      className="flex min-w-0 flex-col gap-0.5"
+      title={ports.map((port) => `${port.host} → ${port.container}/${port.protocol}`).join('\n')}
+    >
+      {shown.map((port) => (
         <span
-          className={`block h-full rounded-full transition-[width] duration-500 ${fill}`}
-          style={{ width: `${pct}%` }}
-        />
-      </span>
+          key={`${port.protocol}-${port.host}-${port.container}`}
+          className="truncate font-mono text-code"
+        >
+          {port.host} → {port.container}
+        </span>
+      ))}
+      {rest > 0 && <span className="truncate text-tiny text-ink-500">and {rest} more</span>}
+    </span>
+  );
+}
+
+/**
+ * A reading and the ceiling it is measured against, both as figures.
+ *
+ * There was a hairline bar under each of these. It was drawn from the same
+ * number written beside it, which is what makes it decoration rather than
+ * information -- and four of them stacked down a column read as a chart nobody
+ * had asked for. Set in mono, the figures line up under each other and the
+ * column can be scanned for the big one, which is the only thing anybody was
+ * using the bars for.
+ */
+function Measure({ value, of }: { value: string; of: string }) {
+  return (
+    <span className="flex min-w-0 items-baseline gap-1.5 font-mono">
+      <span className="truncate text-small">{value}</span>
+      <span className="truncate text-tiny text-ink-500">of {of}</span>
     </span>
   );
 }

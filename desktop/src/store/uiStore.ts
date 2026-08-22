@@ -20,7 +20,12 @@ export type Intent =
 
 interface UIState {
   route: Route;
-  searchQuery: string;
+  /**
+   * What is typed into the title bar. There is one search in this app and this
+   * is it: every page used to carry a box of its own as well, so a name typed
+   * in one of them found nothing while the other had the answer.
+   */
+  globalQuery: string;
   intent: Intent | null;
   /** What the intent is about, when it needs one -- the container to detach. */
   intentTarget: string | null;
@@ -38,29 +43,46 @@ interface UIState {
   /** Switches tabs within the current detail route; ignored elsewhere. */
   setTab: (tab: string) => void;
   back: () => void;
-  setSearchQuery: (query: string) => void;
+  setGlobalQuery: (query: string) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   route: { name: 'containers' },
-  searchQuery: '',
+  globalQuery: '',
   intent: null,
   intentTarget: null,
-  // Every other way of moving drops a pending intent: arriving somewhere by
-  // another route means the user changed their mind.
-  navigate: (route) => set({ route, intent: null, intentTarget: null }),
-  navigateWith: (route, intent, target) => set({ route, intent, intentTarget: target ?? null }),
+  // Moving clears the search: the page you asked for is the page you land on.
+  // Every other way of moving drops a pending intent too -- arriving somewhere
+  // by another route means the user changed their mind.
+  navigate: (route) => set({ route, intent: null, intentTarget: null, globalQuery: '' }),
+  // Navigates and asks the page it lands on to open something, which is how a
+  // search result can be "Pull an image" rather than "go to Images and find
+  // the button".
+  navigateWith: (route, intent, target) =>
+    set({ route, intent, intentTarget: target ?? null, globalQuery: '' }),
   clearIntent: () => set({ intent: null, intentTarget: null }),
-  openContainer: (id, tab = 'overview', path) =>
-    set({ route: { name: 'container', id, tab, path }, intent: null, intentTarget: null }),
+  // Logs, not Inspect. A container is opened to see what it is saying far more
+  // often than to read back the flags it was started with, and the flags are
+  // one tab away either way.
+  openContainer: (id, tab = 'logs', path) =>
+    set({
+      route: { name: 'container', id, tab, path },
+      globalQuery: '',
+    }),
   openMachine: (id, tab = 'overview') =>
-    set({ route: { name: 'machine', id, tab }, intent: null, intentTarget: null }),
+    set({ route: { name: 'machine', id, tab }, intent: null, intentTarget: null, globalQuery: '' }),
   openImage: (reference) =>
-    set({ route: { name: 'image', reference }, intent: null, intentTarget: null }),
+    set({ route: { name: 'image', reference }, intent: null, intentTarget: null, globalQuery: '' }),
   openNetwork: (name) =>
-    set({ route: { name: 'network', network: name }, intent: null, intentTarget: null }),
+    set({
+      route: { name: 'network', network: name },
+      globalQuery: '',
+    }),
   openVolume: (name) =>
-    set({ route: { name: 'volume', volume: name }, intent: null, intentTarget: null }),
+    set({
+      route: { name: 'volume', volume: name },
+      globalQuery: '',
+    }),
   setTab: (tab) =>
     set((state) => {
       if (state.route.name === 'container') {
@@ -73,7 +95,7 @@ export const useUIStore = create<UIState>((set) => ({
     }),
   back: () =>
     set((state) => {
-      const cleared = { intent: null, intentTarget: null };
+      const cleared = { intent: null, intentTarget: null, globalQuery: '' };
       if (state.route.name === 'container') return { route: { name: 'containers' }, ...cleared };
       if (state.route.name === 'machine') return { route: { name: 'machines' }, ...cleared };
       if (state.route.name === 'image') return { route: { name: 'images' }, ...cleared };
@@ -81,5 +103,5 @@ export const useUIStore = create<UIState>((set) => ({
       if (state.route.name === 'volume') return { route: { name: 'volumes' }, ...cleared };
       return state;
     }),
-  setSearchQuery: (searchQuery) => set({ searchQuery }),
+  setGlobalQuery: (globalQuery) => set({ globalQuery }),
 }));

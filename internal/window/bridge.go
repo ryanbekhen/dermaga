@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -157,6 +158,60 @@ func containerBinary() string {
 // only place that can be changed.
 func (b *Bridge) OpenNotificationSettings() error {
 	return exec.Command("open", "x-apple.systempreferences:com.apple.preference.notifications").Run()
+}
+
+// OpenExternal hands a web address to macOS to open in the default browser.
+//
+// The window needs this because it is not a browser: an anchor with
+// target="_blank" has nowhere to open a tab, so every link in the app -- a CVE
+// on the vulnerability list, a project's homepage, a port published to
+// localhost -- did nothing at all when it was clicked.
+//
+// Only http and https, and that is a rule about safety rather than tidiness.
+// These addresses come from outside: Trivy reports the CVE link, a licence
+// file names the homepage. `open` will happily act on any scheme macOS knows,
+// so an unchecked one could be asked to run a file:// path or a
+// x-apple.systempreferences: URL that this app would never offer on purpose.
+// Anything that is not a plain web address is refused and said so.
+func (b *Bridge) OpenExternal(address string) error {
+	parsed, err := neturl.Parse(address)
+	if err != nil {
+		return fmt.Errorf("not an address: %w", err)
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("refusing to open %q: only http and https", parsed.Scheme)
+	}
+
+	// A URL with no host is "https:" and a path, which `open` resolves against
+	// something that is not a website.
+	if parsed.Host == "" {
+		return fmt.Errorf("refusing to open an address with no host")
+	}
+
+	return exec.Command("open", parsed.String()).Run()
+}
+
+// OpenFinding opens one vulnerability in a window of its own.
+//
+// A window rather than a dialog because of what a finding is to read: a
+// paragraph, eight metrics, a dozen scores and up to seventy links. Any of
+// that over the top of the list is a choice between reading and looking, and
+// the reason to read one is almost always to compare it with the next -- which
+// a window that can sit on another screen allows and a dialog does not.
+//
+// It loads the same bundle at a hash the window recognises, and fetches the
+// report itself over the same service. Nothing is passed through the URL but
+// the two names needed to find it again: a URL is a poor place for a paragraph,
+// and the report may be rescanned while the window is open.
+func (b *Bridge) OpenFinding(reference, id string) error {
+	if reference == "" || id == "" {
+		return fmt.Errorf("a finding needs an image and an id")
+	}
+
+	b.app.OpenFindingWindow(reference, id)
+
+	return nil
 }
 
 // TakePendingOpen collects a container the user asked for before there was a

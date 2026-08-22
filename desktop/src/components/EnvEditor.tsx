@@ -25,7 +25,7 @@ export function EnvEditor({
       <pre
         ref={highlight}
         aria-hidden
-        className="pointer-events-none m-0 min-h-40 overflow-hidden whitespace-pre-wrap break-words p-2.5 font-mono text-xs leading-relaxed"
+        className="pointer-events-none m-0 min-h-40 overflow-hidden whitespace-pre-wrap wrap-break-word p-2.5 font-mono text-xs leading-relaxed"
       >
         {painted}
         {/* A trailing newline keeps the last line visible while typing. */}
@@ -43,7 +43,7 @@ export function EnvEditor({
         autoCorrect="off"
         aria-label="Environment variables"
         placeholder={'# One per line\nDATABASE_URL=postgres://localhost/app\nLOG_LEVEL=debug'}
-        className="absolute inset-0 h-full w-full resize-none whitespace-pre-wrap break-words bg-transparent p-2.5 font-mono text-xs leading-relaxed text-transparent caret-brand-600 outline-hidden placeholder:text-ink-500"
+        className="absolute inset-0 h-full w-full resize-none whitespace-pre-wrap wrap-break-word bg-transparent p-2.5 font-mono text-xs leading-relaxed text-transparent caret-brand-600 outline-hidden placeholder:text-ink-500"
       />
     </div>
   );

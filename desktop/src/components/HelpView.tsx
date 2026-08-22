@@ -30,7 +30,7 @@ export function HelpView({ version }: { version: string }) {
   const navigate = useUIStore((s) => s.navigate);
 
   return (
-    <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
+    <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
       {/* Centred so a wide window reads as a document, not a left-aligned strip. */}
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
         <header>

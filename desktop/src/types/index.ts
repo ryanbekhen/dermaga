@@ -59,6 +59,12 @@ export interface Container {
   createdAt: string;
   startedAt?: string;
   ports: Port[];
+  /**
+   * What the image says the container listens on, e.g. "80/tcp". Read from the
+   * image, because the runtime reports what a container publishes to the host
+   * and nothing about what it listens on.
+   */
+  exposedPorts?: string[];
   mounts: Mount[];
   labels: Record<string, string>;
   cpuAllocation?: number;
@@ -411,6 +417,65 @@ export interface Finding {
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
   title?: string;
   url?: string;
+
+  // Read only when a finding is opened.
+
+  /** "fixed", "affected", "will_not_fix", "end_of_life". */
+  status?: string;
+  /** The paragraph explaining what the flaw actually is. */
+  description?: string;
+  /** Classes of weakness, as CWE identifiers. */
+  weaknesses?: string[];
+  /** When it became public. */
+  published?: string;
+  /** When it was last revised. */
+  lastModified?: string;
+  /** The highest CVSS score any vendor gave it; absent when none did. */
+  score?: number;
+  /** The vector behind that score: how it is reached and what it costs. */
+  vector?: string;
+  /** Every vendor's rating, because they disagree. */
+  ratings?: Rating[];
+  /** Everything written about it elsewhere. */
+  references?: string[];
+  /** The layer that brought the vulnerable package in, by digest. */
+  layer?: string;
+  /** Which security database said so. */
+  sourceName?: string;
+  sourceUrl?: string;
+}
+
+/** One vendor's grading of one vulnerability. */
+export interface Rating {
+  source: string;
+  score?: number;
+  vector?: string;
+}
+
+/**
+ * One layer of an image, as its manifest describes it. The size is the
+ * compressed blob — what the image costs to pull and to store.
+ */
+export interface ImageLayer {
+  digest: string;
+  size: number;
+}
+
+/** One thing installed in an image, whether or not anything is wrong with it. */
+export interface ImagePackage {
+  name: string;
+  version?: string;
+  /**
+   * How much room it takes once unpacked. Only OS packages have one — apk and
+   * dpkg record it, while a Go module or an npm dependency is compiled or
+   * bundled into something else. Absent means "not a thing with a size".
+   */
+  size?: number;
+  /** The ecosystem it was read from: "alpine", "npm", "gobinary". */
+  type?: string;
+  /** What was read to find it — a package database, a lockfile path. */
+  source?: string;
+  licenses?: string[];
 }
 
 export interface VulnerabilityReport {
@@ -419,6 +484,19 @@ export interface VulnerabilityReport {
   os?: string;
   summary: Record<string, number>;
   findings: Finding[];
+  /**
+   * Everything installed. Absent from reports stored before Dermaga began
+   * asking Trivy for the full inventory, which is why it is optional: an old
+   * report has no packages listed, and that is not the same as an image with
+   * no packages in it.
+   */
+  packages?: ImagePackage[];
+  /**
+   * The image's layers, in manifest order — which is build order, so the nth
+   * of these is the nth layer-producing step of the build. Read while the
+   * image was unpacked for the scan; absent from reports stored before that.
+   */
+  layers?: ImageLayer[];
 }
 
 /** Whether the buildkit container every build runs through is up. */

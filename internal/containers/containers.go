@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -49,11 +51,18 @@ type Container struct {
 	SSH              bool               `json:"ssh"`
 	ReadOnlyRoot     bool               `json:"readOnlyRoot"`
 	UseInit          bool               `json:"useInit"`
-	Terminal         bool               `json:"terminal"`
-	Entrypoint       string             `json:"entrypoint,omitempty"`
-	Command          []string           `json:"command,omitempty"`
-	WorkingDir       string             `json:"workingDir,omitempty"`
-	User             string             `json:"user,omitempty"`
+	// The ports the image says it listens on, e.g. "80/tcp". Read from the
+	// image rather than the container: the runtime reports what a container
+	// publishes to the host and nothing about what it listens on, so a
+	// container with nothing published had no port anywhere on screen -- and
+	// on this runtime every container has an address of its own, so the port
+	// is the other half of somewhere you can actually reach.
+	ExposedPorts []string `json:"exposedPorts,omitempty"`
+	Terminal     bool     `json:"terminal"`
+	Entrypoint   string   `json:"entrypoint,omitempty"`
+	Command      []string `json:"command,omitempty"`
+	WorkingDir   string   `json:"workingDir,omitempty"`
+	User         string   `json:"user,omitempty"`
 
 	// Live usage, merged in from the stats sampler. The percentages are always
 	// present (0 is a meaningful reading); MemoryUsage is empty until the
@@ -204,6 +213,15 @@ type Manager struct {
 	// Edits that were begun and not finished, so a failed recreate does not
 	// take the user's changes with it.
 	pending *PendingStore
+
+	// What each image says it exposes, keyed by the reference the container
+	// was created from. Cached without expiry on purpose: an image's config is
+	// part of the image, so for a given reference this answer only changes if
+	// the reference is repointed -- and then the container listing carries the
+	// new reference and asks again under that key. A miss costs one inspect,
+	// once, and the listing is pushed every few seconds.
+	exposedMu sync.RWMutex
+	exposed   map[string][]string
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
@@ -212,6 +230,7 @@ func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier
 		logger:  logger,
 		stats:   NewStatsSampler(runner, logger),
 		changed: changed,
+		exposed: map[string][]string{},
 		pending: NewPendingStore(logger),
 	}
 }
@@ -250,8 +269,83 @@ func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
 	}
 
 	cm.stats.Apply(containers)
+	cm.applyExposedPorts(ctx, containers)
 
 	return containers, nil
+}
+
+// applyExposedPorts fills in each container's listening ports from its image.
+//
+// Failures are cached as "nothing", not retried: an image that cannot be
+// inspected now will not inspect any better on the next listing a second from
+// now, and retrying would mean a failed CLI call per container per push.
+func (cm *Manager) applyExposedPorts(ctx context.Context, containers []Container) {
+	for i := range containers {
+		image := containers[i].Image
+		if image == "" {
+			continue
+		}
+
+		cm.exposedMu.RLock()
+		ports, known := cm.exposed[image]
+		cm.exposedMu.RUnlock()
+
+		if !known {
+			ports = cm.readExposedPorts(ctx, image)
+
+			cm.exposedMu.Lock()
+			cm.exposed[image] = ports
+			cm.exposedMu.Unlock()
+		}
+
+		containers[i].ExposedPorts = ports
+	}
+}
+
+// readExposedPorts asks the image what it declares. Every variant of a
+// multi-platform image declares the same ports in practice, so the first is
+// taken rather than the one matching the container's platform -- which the
+// listing does not always report.
+func (cm *Manager) readExposedPorts(ctx context.Context, image string) []string {
+	output, err := cm.runner.Run(ctx, "image", "inspect", image)
+	if err != nil {
+		cm.logger.Debug("could not read exposed ports", "image", image, "error", err)
+		return nil
+	}
+
+	var raw []struct {
+		Variants []struct {
+			Config struct {
+				Config struct {
+					ExposedPorts map[string]any `json:"ExposedPorts"`
+				} `json:"config"`
+			} `json:"config"`
+		} `json:"variants"`
+	}
+
+	if err := json.Unmarshal(output, &raw); err != nil {
+		cm.logger.Debug("could not parse exposed ports", "image", image, "error", err)
+		return nil
+	}
+
+	for _, entry := range raw {
+		for _, variant := range entry.Variants {
+			declared := variant.Config.Config.ExposedPorts
+			if len(declared) == 0 {
+				continue
+			}
+
+			ports := make([]string, 0, len(declared))
+			for port := range declared {
+				ports = append(ports, port)
+			}
+			sort.Strings(ports)
+
+			return ports
+		}
+	}
+
+	return nil
 }
 
 func parseContainerList(output []byte) ([]Container, error) {

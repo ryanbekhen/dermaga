@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { tabWrap } from '../utils/focus';
 
@@ -19,6 +19,7 @@ export function Modal({
   onClose,
   children,
   footer,
+  hint,
   wide = false,
 }: {
   title: string;
@@ -26,22 +27,47 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
   footer: ReactNode;
+  /**
+   * A line along the bottom left, opposite the buttons — what the dialog is
+   * waiting for, or what pressing the button will do. It reads as part of the
+   * decision rather than as another paragraph in the form.
+   */
+  hint?: ReactNode;
   wide?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Claim focus once, when the dialog opens.
+   *
+   * A form should be ready to type in: if no field claimed focus with
+   * autoFocus, the first one takes it -- the close button is first in the DOM,
+   * and landing there means a wasted Tab.
+   *
+   * Once, though, and the empty dependency list is the whole fix. This used to
+   * share an effect with the key handling below, which depends on `onClose` --
+   * and every caller passes an inline arrow, so `onClose` was a new function on
+   * every render and the effect ran on every render with it. That was harmless
+   * only while focus stayed inside the panel. The moment a keystroke caused
+   * React to replace the focused input's DOM node, focus fell to the body, the
+   * next render found it outside the panel and handed it to the first field --
+   * the container's name. Typing an image jumped to the name field mid-word.
+   */
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || panel.contains(document.activeElement)) return;
+
+    const stops = focusableIn(panel);
+    const firstField = stops.find((element) => element.tagName !== 'BUTTON');
+    (firstField ?? stops[0])?.focus();
+  }, []);
+
+  // Escape closes, and Tab is kept inside the panel. Separate from the focus
+  // above precisely so that re-subscribing when `onClose` changes -- which is
+  // every render -- costs nothing more than swapping a listener.
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-
-    // A form opened from the command palette should be ready to type in. If no
-    // field claimed focus with autoFocus, the first one takes it -- the close
-    // button is first in the DOM, and landing there means a wasted Tab.
-    if (!panel.contains(document.activeElement)) {
-      const stops = focusableIn(panel);
-      const firstField = stops.find((element) => element.tagName !== 'BUTTON');
-      (firstField ?? stops[0])?.focus();
-    }
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -74,32 +100,41 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/40 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/55 p-6"
       onClick={onClose}
     >
+      {/* The panel is the page's own paper, and its head and foot are white:
+          the form is laid on it in the same panels a page uses, so the two
+          fixed edges have to be the thing they are laid against. A dialog that
+          was white throughout gave a card inside it nothing to sit on. */}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-full w-full flex-col overflow-hidden rounded-xl border border-ink-200 bg-white shadow-panel dark:border-ink-700 dark:bg-ink-900 ${
-          wide ? 'max-w-3xl' : 'max-w-md'
+        className={`flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-ink-100 shadow-panel dark:bg-ink-950 ${
+          wide ? 'max-w-3xl' : 'max-w-xl'
         }`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-ink-200 p-5 dark:border-ink-700">
-          <div>
-            <h2 className="text-base font-semibold">{title}</h2>
-            {subtitle && <p className="mt-1 text-xs text-ink-600 dark:text-ink-400">{subtitle}</p>}
+        <div className="flex shrink-0 items-start justify-between gap-5 border-b border-ink-200 bg-white px-6 pb-4 pt-5 dark:border-ink-800 dark:bg-ink-900">
+          <div className="min-w-0">
+            <h2 className="text-title font-semibold">{title}</h2>
+            {subtitle && (
+              <p className="pt-1 text-body text-ink-600 dark:text-ink-400">{subtitle}</p>
+            )}
           </div>
-          <button onClick={onClose} className="btn-icon" aria-label="Close">
-            <X size={16} aria-hidden />
+          <button onClick={onClose} className="btn-icon h-7.5 w-7.5 shrink-0" aria-label="Close">
+            <X size={15} aria-hidden />
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">{children}</div>
+        <div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 py-5">
+          {children}
+        </div>
 
-        <div className="flex justify-end gap-2 border-t border-ink-200 p-4 dark:border-ink-700">
+        <div className="header-actions flex shrink-0 items-center gap-2.5 border-t border-ink-200 bg-white px-6 py-3.5 dark:border-ink-800 dark:bg-ink-900">
+          <p className="min-w-0 flex-1 truncate text-xs text-ink-500">{hint}</p>
           {footer}
         </div>
       </div>
@@ -118,7 +153,7 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-semibold">{label}</span>
+      <span className="label-mono">{label}</span>
       {children}
       {hint && <span className="text-tiny text-ink-600 dark:text-ink-400">{hint}</span>}
     </label>
@@ -141,17 +176,28 @@ export function Fieldset({
 }) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-3">
-        <legend className="text-xs font-semibold">{legend}</legend>
+      {/* The rule runs from the label to the right edge, which is what makes a
+          group of fields read as a group without drawing a box around it --
+          the box is the panel underneath, and two edges around one thing is
+          one edge too many. */}
+      <div className="flex items-center gap-3">
+        <legend className="label-mono">{legend}</legend>
+        <span className="h-px flex-1 bg-ink-200 dark:bg-ink-800" aria-hidden />
+      </div>
+      {hint && <p className="text-tiny text-ink-600 dark:text-ink-400">{hint}</p>}
+
+      <div className="flex flex-col gap-2.5 rounded-xl border border-ink-200 bg-white p-3.5 dark:border-ink-800 dark:bg-ink-900">
+        {children}
         {onAdd && (
-          <button type="button" onClick={onAdd} className="btn-ghost px-2 py-1 text-xs">
-            <Plus size={13} aria-hidden />
-            {addLabel}
+          <button
+            type="button"
+            onClick={onAdd}
+            className="self-start text-small text-brand-700 hover:underline dark:text-brand-400"
+          >
+            + {addLabel}
           </button>
         )}
       </div>
-      {hint && <p className="text-tiny text-ink-600 dark:text-ink-400">{hint}</p>}
-      <div className="flex flex-col gap-2">{children}</div>
     </fieldset>
   );
 }

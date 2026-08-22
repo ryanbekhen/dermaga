@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { api } from '../services/api';
 import { invoke, onNotify } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
-import type { Container, Image, Machine, Network, Volume } from '../types';
+import type { Container, DiskUsage, Image, Machine, Network, SystemStatus, Volume } from '../types';
 
 export type ConnectionState = 'connecting' | 'live' | 'disconnected';
 
@@ -12,6 +13,9 @@ interface Snapshot {
   images: Image[];
   volumes: Volume[];
   networks: Network[];
+  system?: SystemStatus;
+  cliAvailable?: boolean;
+  disk?: DiskUsage;
 }
 
 /**
@@ -25,6 +29,7 @@ export function useEventStream() {
   const setImages = useResourceStore((s) => s.setImages);
   const setVolumes = useResourceStore((s) => s.setVolumes);
   const setNetworks = useResourceStore((s) => s.setNetworks);
+  const setHost = useResourceStore((s) => s.setHost);
   const setError = useResourceStore((s) => s.setError);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
 
@@ -50,6 +55,26 @@ export function useEventStream() {
       setImages(snapshot.images ?? []);
       setVolumes(snapshot.volumes ?? []);
       setNetworks(snapshot.networks ?? []);
+      // An agent old enough not to carry the host in its snapshot is still a
+      // working agent -- someone with the background service installed can be
+      // running a copy of Dermaga from before this field existed. Left to the
+      // snapshot alone the window would report "Engine stopped" over a
+      // perfectly healthy machine, which is the worst kind of wrong: confident
+      // and false. Asked for the old way instead, once, and only then.
+      if (snapshot.system === undefined) {
+        void api
+          .getSystem()
+          .then((report) =>
+            setHost({ system: report.status, cliAvailable: report.cliAvailable, disk: null })
+          )
+          .catch(() => {});
+      } else {
+        setHost({
+          system: snapshot.system,
+          cliAvailable: snapshot.cliAvailable ?? true,
+          disk: snapshot.disk ?? null,
+        });
+      }
       setConnection('live');
       setError(null);
     });
@@ -62,7 +87,7 @@ export function useEventStream() {
       });
 
     return unsubscribe;
-  }, [setContainers, setMachines, setImages, setVolumes, setNetworks, setError]);
+  }, [setContainers, setMachines, setImages, setVolumes, setNetworks, setHost, setError]);
 
   return connection;
 }

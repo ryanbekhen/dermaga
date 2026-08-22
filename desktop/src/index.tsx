@@ -4,16 +4,22 @@ import ReactDOM from 'react-dom/client';
 import { announceReady } from './services/bridge.wails';
 import { sealWindow } from './services/notABrowser';
 import App from './App';
+import { FindingWindow, findingRoute } from './pages/FindingWindow';
 import './index.css';
 
 // Before the first frame: a right-click during startup would otherwise still
 // find the browser underneath.
 sealWindow();
 
+// One bundle, two windows. A window opened for a single vulnerability loads
+// the same code at a hash that names it, and renders that instead of the app:
+// it has its own React root, its own bridge, and nothing of the shell -- no
+// sidebar, no title bar of its own, nothing to navigate to. macOS draws its
+// frame, which is where the CVE is named.
+const finding = findingRoute();
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <React.StrictMode>{finding ? <FindingWindow route={finding} /> : <App />}</React.StrictMode>
 );
 
 requestAnimationFrame(() => {
@@ -32,6 +38,8 @@ requestAnimationFrame(() => {
   }
 
   // The next frame is the first one with the UI on it; the splash waits for
-  // this rather than for a timer.
-  announceReady();
+  // this rather than for a timer. Only the main window has a splash behind it
+  // -- a second window announcing itself would dismiss one that is not there,
+  // or worse, one belonging to a launch still in progress.
+  if (!finding) announceReady();
 });

@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Hammer,
   Play,
+  ScanSearch,
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
@@ -98,8 +99,6 @@ export function ImagesPage() {
   const images = useResourceStore((s) => s.images);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const containers = useResourceStore((s) => s.containers);
-  const searchQuery = useUIStore((s) => s.searchQuery);
-  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openImage = useUIStore((s) => s.openImage);
   const pushToast = useToastStore((s) => s.push);
 
@@ -108,17 +107,46 @@ export function ImagesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
 
   const groups = useMemo(() => groupByDigest(images), [images]);
 
-  const needle = searchQuery.trim().toLowerCase();
-  const visible = groups.filter(
-    (group) =>
-      !needle ||
-      group.names.some((n) => n.toLowerCase().includes(needle)) ||
-      group.tags.some((t) => t.reference.toLowerCase().includes(needle))
-  );
+  const visible = groups;
+
+  /**
+   * Queues a scan for each selected image.
+   *
+   * One reference per image rather than per tag: the tags of one image share a
+   * digest, so scanning two of them would export the same bytes twice and
+   * arrive at the same answer.
+   */
+  const scanSelected = async () => {
+    const chosen = groups.filter((group) => selected.has(group.digest));
+
+    setScanning(true);
+    const failed: string[] = [];
+
+    for (const group of chosen) {
+      const reference = group.tags[0]?.reference;
+      if (!reference) continue;
+
+      try {
+        await api.scanImage(reference);
+      } catch {
+        failed.push(reference);
+      }
+    }
+
+    setScanning(false);
+    setSelected(new Set());
+
+    if (failed.length > 0) {
+      pushToast(`Could not queue ${failed.join(', ')}`, 'error');
+    } else {
+      pushToast(`${chosen.length} image${chosen.length === 1 ? '' : 's'} queued for scanning`);
+    }
+  };
 
   const totalSize = groups.reduce((sum, g) => sum + g.sizeInBytes, 0);
 
@@ -126,16 +154,27 @@ export function ImagesPage() {
     containers.filter((c) => group.tags.some((t) => t.reference === c.image)).map((c) => c.name);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Images"
         subtitle={`${groups.length} image${groups.length === 1 ? '' : 's'}${
           images.length !== groups.length ? ` · ${images.length} references` : ''
         } · ${formatBytes(totalSize)}`}
-        search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search images…' }}
         actions={
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
+              {/* Asking for a scan is asking for it next, not asking for the
+                  only one that will ever happen: the scanner works through
+                  images on its own and rescans anything older than three
+                  hours. This is for when you want an answer now. */}
+              <Button
+                icon={ScanSearch}
+                busy={scanning}
+                busyLabel="Queueing…"
+                onClick={() => void scanSelected()}
+              >
+                Scan
+              </Button>
               <Button
                 icon={Trash2}
                 busy={busy}
@@ -173,11 +212,7 @@ export function ImagesPage() {
         rowKey={(group) => group.digest}
         onOpen={(group) => openImage(group.tags[0].reference)}
         selection={{ selected, onChange: setSelected }}
-        empty={
-          images.length === 0
-            ? 'No images yet. Pull one to get started.'
-            : 'No images match your search.'
-        }
+        empty="No images yet. Pull one to get started."
         loading={!hasLoaded}
         cells={(group) => {
           const users = usersOf(group);
@@ -192,7 +227,16 @@ export function ImagesPage() {
             // width it was drawn straight across the vulnerability count
             // beside it, so the column keeps what it can and hands the rest to
             // the tooltip.
-            <div key="tags" className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden">
+            //
+            // On one line, whatever the count. Wrapping made an image with four
+            // tags twice the height of the one above it, and a list whose rows
+            // are all different heights cannot be scanned down a column -- the
+            // eye has to find each row before it can read it.
+            <div
+              key="tags"
+              title={group.tags.map(({ tag }) => tag).join(', ')}
+              className="flex min-w-0 items-center gap-1 overflow-hidden"
+            >
               {group.tags.map(({ tag }) => (
                 <Badge key={tag} fit title={tag}>
                   {tag}
@@ -258,7 +302,6 @@ export function ImagesPage() {
       {pulling.open && <PullDialog onClose={() => pulling.close()} />}
 
       {building.open && <BuildDialog onClose={() => building.close()} />}
-
     </div>
   );
 }

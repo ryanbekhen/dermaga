@@ -1,17 +1,14 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { ArrowLeft, Search } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 interface PageHeaderProps {
   onBack?: () => void;
+  /** Where back goes, named — "Containers", "Images". Shown beside the arrow. */
+  backTo?: string;
   title: string;
   /** Badges rendered beside the title: status, default marker, tags. */
   badges?: ReactNode;
   subtitle?: ReactNode;
-  search?: {
-    value: string;
-    onChange: (value: string) => void;
-    placeholder: string;
-  };
   /**
    * What the list is narrowed by, beside the box that searches it. Kept apart
    * from actions because these stay put: a filter that disappears the moment
@@ -21,90 +18,80 @@ interface PageHeaderProps {
   actions?: ReactNode;
 }
 
-/** Shared so ⌘K can reach whichever page's search is currently mounted. */
-export const PAGE_SEARCH_ID = 'dermaga-page-search';
-
 /**
- * Every page — list or detail — is topped by this. There is no separate app
- * toolbar: a bar spanning only the content column read as an extension of the
- * sidebar, and search belongs to the list it filters anyway.
+ * Every page — list or detail — is topped by this.
+ *
+ * Two rows, not one. The top row is what the page is and the one or two things
+ * it is opened to do; the strip beneath it is how the list below is narrowed.
+ * They used to share a line, which meant a page's verbs and its filters queued
+ * up against the same right edge and swapped places as either side grew — so
+ * the button you were reaching for moved because a filter appeared.
+ *
+ * No search box. Every page used to carry one, which meant two places to type
+ * a name — this one and the field in the title bar, which searches everything
+ * — and the two never agreed about what they had found.
+ *
+ * The rules under each row run the full width of the column, against the
+ * sidebar on one side and the window on the other. That is why the header owns
+ * its own padding rather than sitting inside a gutter: a rule that stops short
+ * of the edge reads as the top of a card, not as the base of a heading.
  */
 export function PageHeader({
   onBack,
+  backTo,
   title,
   badges,
   subtitle,
-  search,
   filters,
   actions,
 }: PageHeaderProps) {
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!search) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      // Only ⌘F: ⌘K opens the command palette, which searches everything
-      // rather than only the list on this page.
-      if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
-        event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-        return;
-      }
-
-      if (event.key === 'Escape' && document.activeElement === searchRef.current) {
-        search.onChange('');
-        searchRef.current?.blur();
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [search]);
+  const hasStrip = Boolean(filters);
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <div className="flex min-w-0 items-center gap-2">
-        {onBack && (
-          <button onClick={onBack} className="btn-icon shrink-0" title="Back" aria-label="Back">
-            <ArrowLeft size={14} aria-hidden />
-          </button>
-        )}
+    <header className="shrink-0">
+      <div
+        className={`flex flex-wrap items-end justify-between gap-x-5 gap-y-3 border-b border-ink-200 px-7 pb-4 dark:border-ink-800 ${
+          onBack ? 'pt-4' : 'pt-6'
+        }`}
+      >
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-lg font-semibold">{title}</h1>
+          {/* Named, and above the title rather than beside it. A bare arrow in
+              a box asks the reader to remember what they came from; the word
+              says it, and putting it on its own line keeps the title starting
+              at the same left edge as every other page's. */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mb-2.5 flex items-center gap-2 text-small text-ink-600 transition-colors hover:text-brand-600 dark:text-ink-400 dark:hover:text-brand-400"
+            >
+              <ArrowLeft size={13} aria-hidden />
+              {backTo ?? 'Back'}
+            </button>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="truncate text-page font-semibold">{title}</h1>
             {badges}
           </div>
           {subtitle && (
-            <p className="truncate text-tiny text-ink-600 dark:text-ink-400">{subtitle}</p>
+            <p className="truncate pt-1 text-body text-ink-600 dark:text-ink-400">{subtitle}</p>
           )}
         </div>
-      </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {filters}
-        {search && (
-          <div className="relative">
-            <Search
-              size={14}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-500"
-              aria-hidden
-            />
-            <input
-              id={PAGE_SEARCH_ID}
-              ref={searchRef}
-              type="search"
-              value={search.value}
-              onChange={(e) => search.onChange(e.target.value)}
-              placeholder={search.placeholder}
-              aria-label={search.placeholder}
-              className="input w-52 pl-7"
-            />
+        {actions && (
+          <div className="header-actions flex shrink-0 flex-wrap items-center justify-end gap-2.5">
+            {actions}
           </div>
         )}
-        {actions}
       </div>
+
+      {hasStrip && (
+        // A shade off the ground it sits on, so the strip reads as part of the
+        // heading rather than as the first row of the list.
+        <div className="flex flex-wrap items-center gap-2 border-b border-ink-200 bg-ink-50 px-7 py-2.5 dark:border-ink-800 dark:bg-ink-900/50">
+          {filters}
+        </div>
+      )}
     </header>
   );
 }

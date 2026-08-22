@@ -1,22 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
-import { Button, IconButton } from '../components/Button';
+import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { DataTable, Muted, NameCell, type Column } from '../components/DataTable';
 import { Field, Modal } from '../components/form';
 import { PageHeader } from '../components/PageHeader';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import { useDialog } from '../hooks/useDialog';
-import { useUIStore } from '../store/uiStore';
 import { formatDuration } from '../utils/format';
 import type { RegistryLogin } from '../types';
-
-const COLUMNS: Column[] = [
-  { key: 'server', label: 'Registry', width: 'minmax(180px,1.4fr)' },
-  { key: 'username', label: 'Username', width: 'minmax(140px,1fr)' },
-  { key: 'created', label: 'Signed in', width: '110px', align: 'right' },
-];
 
 /**
  * The registries this Mac is signed in to.
@@ -30,8 +22,6 @@ export function RegistriesPage() {
   const adding = useDialog('registry.add');
   const [removing, setRemoving] = useState<RegistryLogin | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const searchQuery = useUIStore((s) => s.searchQuery);
-  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const pushToast = useToastStore((s) => s.push);
 
   // Null until the first answer: "not asked yet" and "asked, and there are
@@ -60,20 +50,19 @@ export function RegistriesPage() {
     }
   };
 
-  const needle = searchQuery.trim().toLowerCase();
-  const visible = (logins ?? []).filter(
-    (login) =>
-      !needle ||
-      login.server.toLowerCase().includes(needle) ||
-      (login.username ?? '').toLowerCase().includes(needle)
-  );
+  const visible = logins ?? [];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Registries"
-        subtitle="Where images are pulled from and pushed to"
-        search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search registries…' }}
+        subtitle={
+          logins === null
+            ? 'Where images are pulled from and pushed to'
+            : logins.length === 0
+              ? 'Not signed in anywhere · public images work without this'
+              : `${logins.length} signed in · where images are pulled from and pushed to`
+        }
         actions={
           <button onClick={() => adding.show()} className="btn-primary">
             <LogIn size={13} aria-hidden />
@@ -82,33 +71,83 @@ export function RegistriesPage() {
         }
       />
 
-      <DataTable
-        columns={COLUMNS}
-        rows={visible}
-        rowKey={(login) => login.server}
-        loading={logins === null}
-        empty={
-          logins?.length === 0
-            ? 'Not signed in anywhere. Public images work without this; a private one needs it.'
-            : 'No registry matches your search.'
-        }
-        cells={(login) => [
-          <NameCell key="server">
-            <span className="truncate font-mono text-sm">{login.server}</span>
-          </NameCell>,
-          <Muted key="username">{login.username || '—'}</Muted>,
-          <Muted key="created">{login.created ? formatDuration(login.created) : '—'}</Muted>,
-        ]}
-        actions={(login) => (
-          <IconButton
-            icon={LogOut}
-            busy={busy === login.server}
-            className="border-transparent"
-            aria-label={`Sign out of ${login.server}`}
-            onClick={() => setRemoving(login)}
-          />
+      {/* Cards in two columns rather than three narrow table rows. A registry
+          is an account on a host, which is a thing with a face -- an address,
+          who is signed in, when -- and it reads as one when the three are kept
+          together rather than spread across a row you have to track with a
+          finger. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-7 py-5">
+        {logins !== null && visible.length === 0 && (
+          <div className="flex items-center justify-center pt-16">
+            <div className="max-w-md rounded-xl border border-dashed border-ink-300 bg-white/60 px-6 py-10 text-center text-sm text-ink-600 dark:border-ink-700 dark:bg-ink-900/40 dark:text-ink-400">
+              Not signed in anywhere. Public images work without this; a private one needs it.
+            </div>
+          </div>
         )}
-      />
+
+        {visible.length > 0 && (
+          // As many columns as fit, rather than a fixed two. A card has a
+          // width it reads well at -- a host, a user, a date -- and stretching
+          // one across half a wide window only puts more air between the three
+          // of them. The floor is what the longest realistic host needs
+          // (an ECR address runs to about forty characters); above it the grid
+          // adds columns instead of width.
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3.5">
+            {visible.map((login) => (
+              <li
+                key={login.server}
+                className="flex flex-col gap-3.5 rounded-xl border border-ink-200 bg-white p-4 transition-colors hover:border-ink-300 dark:border-ink-800 dark:bg-ink-900 dark:hover:border-ink-700"
+              >
+                <div className="flex items-center gap-3">
+                  {/* The host's initials on a dark tile. Registries have no
+                      logo Dermaga is allowed to ship, and two letters of the
+                      hostname are enough to tell ghcr.io from docker.io at a
+                      glance across four cards. */}
+                  <span
+                    aria-hidden
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-chrome-bg font-mono text-body text-chrome-text"
+                  >
+                    {initials(login.server)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{hostLabel(login.server)}</p>
+                    <p className="truncate font-mono text-tiny text-ink-500">{login.server}</p>
+                  </div>
+                  <span className="pill bg-emerald-600/10 text-emerald-700 dark:text-emerald-500">
+                    signed in
+                  </span>
+                </div>
+
+                <div className="flex items-end justify-between gap-4 border-t border-ink-150 pt-3.5 dark:border-ink-800">
+                  <dl className="flex min-w-0 gap-6">
+                    <div className="min-w-0">
+                      <dt className="label-mono">User</dt>
+                      <dd className="truncate pt-0.5 text-sm font-medium">
+                        {login.username || '—'}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="label-mono">Signed in</dt>
+                      <dd className="truncate pt-0.5 text-sm font-medium">
+                        {login.created ? `${formatDuration(login.created)} ago` : '—'}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <Button
+                    icon={LogOut}
+                    busy={busy === login.server}
+                    busyLabel="Signing out…"
+                    onClick={() => setRemoving(login)}
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {adding.open && (
         <LoginDialog
@@ -131,6 +170,23 @@ export function RegistriesPage() {
       )}
     </div>
   );
+}
+
+/** The two letters on the tile: the first of each dotted part of the host. */
+function initials(server: string): string {
+  const host = server.split(':')[0] ?? server;
+  const parts = host.split('.').filter(Boolean);
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  return host.slice(0, 2).toUpperCase();
+}
+
+/** The host without its registry-flavoured noise, for the card's heading. */
+function hostLabel(server: string): string {
+  const host = server.split(':')[0] ?? server;
+  if (host === 'registry-1.docker.io' || host === 'docker.io') return 'Docker Hub';
+  if (host === 'ghcr.io') return 'GitHub Packages';
+  if (host.endsWith('.amazonaws.com')) return 'Amazon ECR';
+  return host;
 }
 
 // Told to speak HTTPS to a registry that only speaks HTTP, the CLI waits for a

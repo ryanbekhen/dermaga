@@ -10,7 +10,7 @@ import { useToastStore } from '../store/toastStore';
 const COMMAND = 'container system kernel set --recommended';
 
 /**
- * A warning in the status bar while no Linux kernel is configured.
+ * A warning along the title bar while no Linux kernel is configured.
  *
  * Containers run on a kernel; without one every run fails with an error naming
  * a CLI command. Apple's installer can also hang, in which case Dermaga stops
@@ -69,9 +69,9 @@ export function KernelStatusItem() {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         title="No Linux kernel is configured"
-        className="flex items-center gap-1.5 rounded px-1 font-semibold text-amber-600 hover:bg-ink-200/60 dark:text-amber-500 dark:hover:bg-ink-800"
+        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-amber-500 transition-colors hover:bg-chrome-raised"
       >
-        <TriangleAlert size={11} aria-hidden />
+        <TriangleAlert size={12} aria-hidden />
         No Linux kernel
       </button>
 
@@ -79,7 +79,7 @@ export function KernelStatusItem() {
         <div
           role="dialog"
           aria-label="Linux kernel"
-          className="absolute bottom-6 right-0 z-40 w-96 rounded-lg border border-ink-200 bg-white p-3 text-left shadow-panel dark:border-ink-700 dark:bg-ink-900"
+          className="absolute right-0 top-full z-40 mt-2 w-96 rounded-xl border border-ink-200 bg-white p-3 text-left text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100"
         >
           <p className="text-xs font-semibold">No Linux kernel is configured</p>
           <p className="mt-1 text-tiny leading-relaxed text-ink-600 dark:text-ink-400">

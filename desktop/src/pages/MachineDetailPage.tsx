@@ -13,7 +13,7 @@ import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MachineSettingsDialog } from '../components/MachineForm';
 import { LogPane } from '../components/LogPane';
-import { StatusBadge } from '../components/StatusBadge';
+import { StatusPill } from '../components/StatusBadge';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
 import { Badge } from '../components/DataTable';
 import type { TabDefinition } from '../components/Tabs';
@@ -85,10 +85,11 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
   return (
     <DetailLayout
       onBack={back}
+      backTo="Machines"
       title={machine.id}
       badges={
         <>
-          <StatusBadge status={machine.status} />
+          <StatusPill status={machine.status} />
           {machine.default && <Badge tone="brand">default</Badge>}
         </>
       }

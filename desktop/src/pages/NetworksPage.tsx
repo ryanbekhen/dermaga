@@ -32,8 +32,6 @@ const COLUMNS: Column[] = [
 export function NetworksPage() {
   const networks = useResourceStore((s) => s.networks);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
-  const searchQuery = useUIStore((s) => s.searchQuery);
-  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openNetwork = useUIStore((s) => s.openNetwork);
   const pushToast = useToastStore((s) => s.push);
 
@@ -44,8 +42,7 @@ export function NetworksPage() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const needle = searchQuery.trim().toLowerCase();
-  const visible = networks.filter((n) => !needle || n.name.toLowerCase().includes(needle));
+  const visible = networks;
 
   const remove = async (network: Network) => {
     setDeleting(null);
@@ -61,11 +58,10 @@ export function NetworksPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Networks"
         subtitle="Open one to see what is attached to it"
-        search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search networks…' }}
         actions={
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
@@ -94,7 +90,7 @@ export function NetworksPage() {
         rowKey={(network) => network.name}
         selection={{ selected, onChange: setSelected }}
         onOpen={(network) => openNetwork(network.name)}
-        empty={networks.length === 0 ? 'No networks yet.' : 'No networks match your search.'}
+        empty="No networks yet."
         loading={!hasLoaded}
         cells={(network) => [
           <NameCell key="name">

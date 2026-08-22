@@ -125,6 +125,10 @@ window.dermaga = {
 
   openNotificationSettings: () => call('OpenNotificationSettings'),
 
+  openExternal: (url) => call('OpenExternal', url),
+
+  openFinding: (reference, id) => call('OpenFinding', reference, id),
+
   registerContainerNames: () => call('RegisterContainerNames'),
 
   takePendingOpen: async () => orNull(await call<string>('TakePendingOpen')),

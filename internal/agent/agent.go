@@ -163,10 +163,13 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		Containers: func(ctx context.Context) ([]containers.Container, error) {
 			return agent.containers.List(ctx, true)
 		},
-		Machines: agent.machines.List,
-		Images:   agent.images.List,
-		Volumes:  agent.volumes.List,
-		Networks: agent.networks.List,
+		Machines:     agent.machines.List,
+		Images:       agent.images.List,
+		Volumes:      agent.volumes.List,
+		Networks:     agent.networks.List,
+		System:       agent.system.Status,
+		CLIAvailable: agent.runner.Available,
+		Disk:         agent.system.DiskUsage,
 	}, logger)
 	agent.watcher = pending
 

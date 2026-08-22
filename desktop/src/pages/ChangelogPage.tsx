@@ -29,7 +29,7 @@ export function ChangelogPage({ version }: { version: string }) {
   // Help, Licences -- rather than like something you arrived at from
   // somewhere and can go back from.
   return (
-    <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
+    <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
         <header>
           <h1 className="text-xl font-semibold">What&rsquo;s new</h1>

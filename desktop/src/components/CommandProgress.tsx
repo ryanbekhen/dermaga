@@ -56,7 +56,7 @@ export function CommandProgress({ state, line, error }: ReturnType<typeof useCom
 
   if (state === 'failed') {
     return (
-      <p className="max-w-md break-words text-tiny leading-relaxed text-brand-600 dark:text-brand-400">
+      <p className="max-w-md wrap-break-word text-tiny leading-relaxed text-brand-600 dark:text-brand-400">
         {error}
       </p>
     );

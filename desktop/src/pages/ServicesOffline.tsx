@@ -11,13 +11,7 @@ import type { ToolchainStatus } from '../types';
  * screen would be empty or broken without them, so the only thing offered is
  * the way out.
  */
-export function ServicesOffline({
-  cliMissing,
-  onStarted,
-}: {
-  cliMissing: boolean;
-  onStarted: () => void;
-}) {
+export function ServicesOffline({ cliMissing }: { cliMissing: boolean }) {
   const [starting, setStarting] = useState(false);
   const [kernelNeeded, setKernelNeeded] = useState(false);
   const [toolchain, setToolchain] = useState<ToolchainStatus | null>(null);
@@ -43,7 +37,6 @@ export function ServicesOffline({
     try {
       await api.startSystem(withKernel);
       pushToast('Container services started');
-      onStarted();
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
 
@@ -112,7 +105,6 @@ export function ServicesOffline({
               void install.run((failed) => {
                 if (!failed) {
                   pushToast('Apple Container CLI installed');
-                  onStarted();
                 }
               })
             }

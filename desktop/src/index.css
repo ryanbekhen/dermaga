@@ -4,6 +4,32 @@
    through this directive. */
 @config '../tailwind.config.js';
 
+/* The two faces, shipped inside the app. See src/fonts/README.md for where
+   they come from and why only the Latin cut is here. */
+@font-face {
+  font-family: 'IBM Plex Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 700;
+  src: url('./fonts/ibm-plex-sans-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('./fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('./fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+
 @layer base {
   * {
     margin: 0;
@@ -30,7 +56,10 @@
   body {
     font-family: theme('fontFamily.sans');
     -webkit-font-smoothing: antialiased;
-    @apply bg-white text-ink-800 dark:bg-ink-950 dark:text-ink-100;
+    /* The ground the panels are laid on, not the panels themselves. Content
+       used to be drawn straight onto white, which left a card and the page
+       behind it the same colour and the card's border doing all the work. */
+    @apply bg-ink-100 text-ink-900 dark:bg-ink-950 dark:text-ink-100;
   }
 
   /* Nothing in the chrome should be text-selectable like a document; log and
@@ -38,6 +67,26 @@
   body {
     user-select: none;
     cursor: default;
+  }
+
+  /* And the hand back on everything that answers to a press.
+     Two rules were taking it away: this file sets `cursor: default` on the
+     body above, and Tailwind v4's preflight sets it on `button` -- both on the
+     grounds that a native Mac control does not show a hand. That is true of a
+     Mac, and it was wrong here: nearly every surface in this app is a row, a
+     pill, a segment or a chip drawn from scratch, none of which look like
+     controls at rest, so with no cursor to say otherwise the whole app read as
+     something to look at rather than something to use.
+
+     Disabled controls keep the arrow -- pointing a hand at something that will
+     not respond is a worse lie than pointing nothing. */
+  button:not(:disabled),
+  summary,
+  label[for],
+  a[href],
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']) {
+    cursor: pointer;
   }
 
   input {
@@ -112,16 +161,39 @@
 }
 
 @utility card {
-  @apply rounded-lg border border-ink-200 bg-white p-3 transition-colors dark:border-ink-700 dark:bg-ink-900;
+  @apply rounded-xl border border-ink-200 bg-white p-3 transition-colors dark:border-ink-800 dark:bg-ink-900;
 }
 
 @utility btn {
-  @apply inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+/* The mono caps that label a column, a section or a statistic. One utility
+   rather than five classes repeated: it appears on nearly every page, and the
+   tracking is what makes it read as a label rather than as shouting. */
+@utility label-mono {
+  @apply font-mono text-micro uppercase text-ink-500 dark:text-ink-400;
 }
 
 @layer components {
   .card-interactive {
-    @apply card cursor-pointer hover:border-brand-600 hover:shadow-md;
+    @apply card cursor-pointer hover:border-ink-300 hover:shadow-md dark:hover:border-ink-700;
+  }
+
+  /* The page-header pair: taller than the controls inside a row, because they
+     are the two things a page is opened to press.
+
+     Applied by the header to whatever it is handed rather than asked for at
+     every call site. Every page already says what its verbs are; making each
+     of them also say how big a header button is would be the same sentence
+     written thirty times, and one page would eventually get it wrong. */
+  .btn-lg,
+  .header-actions :is(.btn, .btn-primary, .btn-secondary, .btn-ghost) {
+    @apply h-8.5 gap-2 rounded-lg px-3.5 text-body;
+  }
+
+  .header-actions .btn-icon {
+    @apply h-8.5 w-8.5 rounded-lg;
   }
 
   .btn-primary {
@@ -133,26 +205,32 @@
   }
 
   .btn-ghost {
-    @apply btn border border-ink-300 bg-transparent text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-200 dark:hover:bg-ink-800;
+    @apply btn border border-ink-300 bg-white text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200 dark:hover:bg-ink-800;
   }
 
   .btn-icon {
-    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ink-300 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-ink-700 dark:hover:bg-ink-800;
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ink-300 bg-white transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-ink-700 dark:bg-ink-900 dark:hover:bg-ink-800;
+  }
+
+  /* A status, said in a word on a tint of its own colour. Rounded to the full
+     height so it never reads as a button somebody could press. */
+  .pill {
+    @apply inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-tiny font-medium;
   }
 
   .input {
-    @apply h-7 rounded-md border border-ink-300 bg-ink-50 px-2.5 text-xs text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100;
+    @apply h-7 rounded-md border border-ink-300 bg-white px-2.5 text-xs text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100;
   }
 
   /* The same skin as .input, but a box that holds several lines. .input carries
      the fixed control height every button and field shares, which squashes a
      textarea to a single line however many rows it asks for. */
   .textarea {
-    @apply min-h-20 resize-y rounded-md border border-ink-300 bg-ink-50 px-2.5 py-1.5 text-xs leading-relaxed text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100;
+    @apply min-h-20 resize-y rounded-md border border-ink-300 bg-white px-2.5 py-1.5 text-xs leading-relaxed text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100;
   }
 
   .label-caps {
-    @apply text-tiny font-semibold uppercase tracking-wide text-ink-600 dark:text-ink-400;
+    @apply label-mono;
   }
 
   .row {
@@ -176,43 +254,50 @@
    towards whichever background they are being read against, with the greys taken
    from the app's own scale so a coloured line sits beside an uncoloured one. */
 .ansi {
-  --ansi-fg: #26262c;
+  --ansi-fg: #322d2f;
   --ansi-bg: #ffffff;
-  --ansi-0: #484852;
+  --ansi-0: #4a4644;
   --ansi-1: #b91c1c;
   --ansi-2: #15803d;
   --ansi-3: #a16207;
   --ansi-4: #1d4ed8;
   --ansi-5: #a21caf;
   --ansi-6: #0e7490;
-  --ansi-7: #81818b;
-  --ansi-8: #a8a8b0;
+  --ansi-7: #8b8683;
+  --ansi-8: #a29c99;
   --ansi-9: #dc2626;
   --ansi-10: #16a34a;
   --ansi-11: #ca8a04;
   --ansi-12: #2563eb;
   --ansi-13: #c026d3;
   --ansi-14: #0891b2;
-  --ansi-15: #1a1a1f;
+  --ansi-15: #262123;
 }
 
+/* Output read on a dark box whatever the app's theme is: a log pane, a
+   terminal. The same values the dark theme uses, applied by the element rather
+   than by the theme, so the bright half of the palette is not washed out on a
+   near-black ground in the middle of a light window. */
+.ansi-terminal,
 .dark .ansi {
-  --ansi-fg: #f3f3f4;
-  --ansi-bg: #131317;
-  --ansi-0: #5f5f69;
+  --ansi-fg: #f7f6f5;
+  --ansi-bg: #171416;
+  /* Chrome black, not the page's: this palette dresses the log box, which is
+     an inset cut into the page rather than part of its surface. */
+  --ansi-0: #6e6a67;
   --ansi-1: #f87171;
   --ansi-2: #4ade80;
   --ansi-3: #fbbf24;
   --ansi-4: #60a5fa;
   --ansi-5: #e879f9;
   --ansi-6: #22d3ee;
-  --ansi-7: #d5d5da;
-  --ansi-8: #81818b;
+  --ansi-7: #d6d1ce;
+  --ansi-8: #8b8683;
   --ansi-9: #fca5a5;
   --ansi-10: #86efac;
   --ansi-11: #fde047;
   --ansi-12: #93c5fd;
   --ansi-13: #f0abfc;
   --ansi-14: #67e8f9;
-  --ansi-15: #fafafa;
+  --ansi-15: #fcfbfb;
 }

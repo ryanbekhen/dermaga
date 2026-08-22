@@ -1,9 +1,13 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import {
   Activity,
+  Braces,
+  Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   ExternalLink,
+  ListTree,
   FolderTree,
   Info,
   Pencil,
@@ -18,8 +22,17 @@ import {
 import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
 import { LiveChart, type Trace } from '../components/LiveChart';
-import { StatusBadge } from '../components/StatusBadge';
-import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
+import { StatusPill } from '../components/StatusBadge';
+import {
+  DetailBody,
+  DetailGrid,
+  DetailLayout,
+  DetailPane,
+  DetailScroll,
+  RailMeter,
+  RailRow,
+  RailSection,
+} from '../components/DetailLayout';
 import { SegmentedControl } from '../components/SegmentedControl';
 import type { TabDefinition } from '../components/Tabs';
 import { Button, IconButton } from '../components/Button';
@@ -27,6 +40,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Facts, Flags, Row, Section } from '../components/DetailRow';
 import { ContainerForm } from '../components/ContainerForm';
 import { api } from '../services/api';
+import { openExternal } from '../services/ipc';
 import { useLiveUsage } from '../hooks/useLiveUsage';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
@@ -47,12 +61,22 @@ const TerminalPane = lazy(() =>
   import('../components/TerminalPane').then((m) => ({ default: m.TerminalPane }))
 );
 
+// Named for the CLI commands behind them rather than for what the pane is.
+// Somebody who has run `container inspect`, `container stats` and
+// `container exec` already knows what each of these holds, and this window is
+// a way of running that CLI -- so the tab that runs it should say so. The ids
+// are unchanged: they are what a route carries, and nothing outside this file
+// reads the labels.
+//
+// Logs first and open by default, because it is what a container is opened to
+// look at. What it was started with does not change while you watch it; what it
+// is saying does.
 const TABS: TabDefinition[] = [
-  { id: 'overview', label: 'Overview', icon: Info },
-  { id: 'usage', label: 'Usage', icon: Activity },
   { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'overview', label: 'Inspect', icon: Info },
+  { id: 'usage', label: 'Stats', icon: Activity },
   { id: 'files', label: 'Files', icon: FolderTree },
-  { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
+  { id: 'terminal', label: 'Exec', icon: TerminalSquare },
 ];
 
 // Both need a shell inside the container. An image built FROM scratch has
@@ -133,8 +157,9 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   return (
     <DetailLayout
       onBack={back}
+      backTo="Containers"
       title={container.name}
-      badges={<StatusBadge status={container.status} />}
+      badges={<StatusPill status={container.status} />}
       subtitle={shortImage(container.image)}
       tabs={tabs}
       activeTab={tab}
@@ -250,34 +275,36 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
         </>
       }
     >
-      {tab === 'overview' && <OverviewTab container={container} />}
+      <DetailBody rail={<ContainerRail container={container} />}>
+        {tab === 'overview' && <InspectTab container={container} />}
 
-      {tab === 'usage' && <UsageTab container={container} />}
+        {tab === 'usage' && <UsageTab container={container} />}
 
-      {tab === 'logs' && (
-        <DetailPane>
-          <LogPane method="containers.logs" params={{ id: container.id, tail: logTail }} />
-        </DetailPane>
-      )}
+        {tab === 'logs' && (
+          <DetailPane>
+            <LogPane method="containers.logs" params={{ id: container.id, tail: logTail }} />
+          </DetailPane>
+        )}
 
-      {tab === 'files' && (
-        <DetailPane>
-          <FileBrowser container={container.id} running={running} start={path} />
-        </DetailPane>
-      )}
+        {tab === 'files' && (
+          <DetailPane>
+            <FileBrowser container={container.id} running={running} start={path} />
+          </DetailPane>
+        )}
 
-      {tab === 'terminal' && (
-        <DetailPane>
-          <Suspense fallback={<TabPlaceholder>Loading terminal…</TabPlaceholder>}>
-            <TerminalUser value={shellUser} onChange={setShellUser} />
-            <TerminalPane
-              target={{ kind: 'container', id: container.id }}
-              disabled={!running}
-              disabledMessage="Start the container to open a shell in it."
-            />
-          </Suspense>
-        </DetailPane>
-      )}
+        {tab === 'terminal' && (
+          <DetailPane>
+            <Suspense fallback={<TabPlaceholder>Loading terminal…</TabPlaceholder>}>
+              <TerminalUser value={shellUser} onChange={setShellUser} />
+              <TerminalPane
+                target={{ kind: 'container', id: container.id }}
+                disabled={!running}
+                disabledMessage="Start the container to open a shell in it."
+              />
+            </Suspense>
+          </DetailPane>
+        )}
+      </DetailBody>
 
       {editing && (
         <ContainerForm
@@ -358,22 +385,20 @@ function UsageTab({ container }: { container: Container }) {
 
   if (!running) {
     return (
-      <DetailGrid>
-        <Section title="Live" plain span>
-          <p className="text-xs text-ink-600 dark:text-ink-400">
-            Nothing is measured while the container is stopped. Start it and the readings begin
-            arriving within a few seconds.
-          </p>
-        </Section>
-      </DetailGrid>
+      <DetailScroll>
+        <p className="text-sm text-ink-600 dark:text-ink-400">
+          Nothing is measured while the container is stopped. Start it and the readings begin
+          arriving within a few seconds.
+        </p>
+      </DetailScroll>
     );
   }
 
   return (
-    <DetailGrid>
+    <DetailScroll>
       {/* Said once, at the top, rather than on all four charts: what the window
           is, how often it moves, and that closing the tab ends it. */}
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-ink-500 lg:col-span-2">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-ink-500">
         <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-500">
           <span
             className="h-1.5 w-1.5 rounded-full bg-current motion-safe:animate-pulse"
@@ -387,10 +412,11 @@ function UsageTab({ container }: { container: Container }) {
         <span>kept while Dermaga runs, so closing this and coming back continues it</span>
       </p>
 
-      {/* The reading is spelled out beside the name, the way a dashboard says
-          it: a chart nobody can read a number off is a picture, not an
-          instrument. */}
-      <Section title="CPU" plain>
+      {/* No group heading over each chart. Every one of these already writes
+          its own name and its current reading across the top -- a chart nobody
+          can read a number off is a picture, not an instrument -- so wrapping
+          it in a titled group put "CPU" directly above "CPU usage". */}
+      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-7 lg:grid-cols-2">
         <LiveChart
           points={points}
           traces={CPU}
@@ -399,9 +425,7 @@ function UsageTab({ container }: { container: Container }) {
           reading={`${(container.cpuUsage ?? 0).toFixed(2)}% of ${cores} core${cores > 1 ? 's' : ''}`}
           floor={10}
         />
-      </Section>
 
-      <Section title="Memory" plain>
         <LiveChart
           points={points}
           traces={MEMORY}
@@ -409,13 +433,11 @@ function UsageTab({ container }: { container: Container }) {
           heading="Memory usage"
           reading={`${formatBytes(container.memoryUsageBytes)} / ${formatMemory(container.memoryAllocation)}`}
         />
-      </Section>
 
-      {/* Rates on the chart, totals in the reading: the line says what is
-          happening, the figure says what has happened, and a container quiet
-          now that has pulled a gigabyte is a different container from one that
-          has pulled nothing. */}
-      <Section title="Network" plain>
+        {/* Rates on the chart, totals in the reading: the line says what is
+            happening, the figure says what has happened, and a container quiet
+            now that has pulled a gigabyte is a different container from one
+            that has pulled nothing. */}
         <LiveChart
           points={points}
           traces={NETWORK}
@@ -423,9 +445,7 @@ function UsageTab({ container }: { container: Container }) {
           heading="Network I/O"
           reading={`${total(container.networkRxBytes)} / ${total(container.networkTxBytes)}`}
         />
-      </Section>
 
-      <Section title="Disk" plain>
         <LiveChart
           points={points}
           traces={DISK}
@@ -433,14 +453,13 @@ function UsageTab({ container }: { container: Container }) {
           heading="Disk read/write"
           reading={`${total(container.blockReadBytes)} / ${total(container.blockWriteBytes)}`}
         />
-      </Section>
+      </div>
 
-      <Section title="Processes" plain>
-        <p className="text-xs text-ink-600 dark:text-ink-400">
-          {container.processes ?? 0} running inside this container.
-        </p>
-      </Section>
-    </DetailGrid>
+      <p className="text-xs text-ink-600 dark:text-ink-400">
+        {container.processes ?? 0} process{(container.processes ?? 0) === 1 ? '' : 'es'} running
+        inside this container.
+      </p>
+    </DetailScroll>
   );
 }
 
@@ -452,7 +471,236 @@ function TabPlaceholder({ children }: { children: React.ReactNode }) {
   );
 }
 
-function OverviewTab({ container }: { container: Container }) {
+/** Who the shell runs as. Changing it opens a fresh session as that user. */
+function TerminalUser({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [custom, setCustom] = useState(false);
+  // Typed separately from what is applied: every change reopens the shell, so
+  // committing on each keystroke would open a session for "r", "ro", "roo"…
+  const [draft, setDraft] = useState(value);
+
+  return (
+    <div className="flex items-center gap-2.5 px-7 pt-4">
+      <span className="label-mono">Run as</span>
+
+      <SegmentedControl
+        ariaLabel="Run the shell as"
+        value={custom ? 'custom' : value === 'root' ? 'root' : 'default'}
+        onChange={(next) => {
+          if (next === 'custom') {
+            setCustom(true);
+            setDraft(value === 'root' ? '' : value);
+            return;
+          }
+
+          setCustom(false);
+          setDraft('');
+          onChange(next === 'root' ? 'root' : '');
+        }}
+        segments={[
+          { value: 'default', label: 'Image default' },
+          { value: 'root', label: 'root' },
+          { value: 'custom', label: 'Other…' },
+        ]}
+      />
+
+      {custom && (
+        <>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onChange(draft.trim())}
+            onBlur={() => onChange(draft.trim())}
+            placeholder="name or uid:gid"
+            aria-label="User to run the shell as"
+            className="input w-40"
+          />
+          {draft.trim() !== value && (
+            <span className="text-tiny text-ink-500">press ↵ to apply</span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A published port, and a way to reach it.
+ *
+ * A port mapping is only interesting because something is listening behind it,
+ * and the next thing anyone does with 8080 is open it. TCP only: there is
+ * nothing a browser can do with a UDP port.
+ */
+
+/**
+ * The strip beside every tab: what this container is spending, and what it is.
+ *
+ * These used to be an Overview tab of their own, which meant the port a
+ * container publishes was on a different screen from the log line complaining
+ * that nothing was listening on it. They are the context for the other tabs,
+ * not a tab.
+ */
+function ContainerRail({ container }: { container: Container }) {
+  const running = container.status === 'running';
+  const cores = container.cpuAllocation ?? 1;
+  const rx = container.networkRxPerSec ?? 0;
+  const tx = container.networkTxPerSec ?? 0;
+
+  return (
+    <>
+      {running && (
+        <RailSection title="Live">
+          <div className="flex flex-col gap-3.5">
+            <RailMeter
+              label="CPU"
+              value={`${(container.cpuUsage ?? 0).toFixed(1)}%`}
+              percent={container.cpuUsage ?? 0}
+            />
+            <RailMeter
+              label="Memory"
+              value={`${formatMemory(container.memoryUsage)} / ${formatMemory(
+                container.memoryAllocation
+              )}`}
+              percent={container.memoryUsagePercent ?? 0}
+              tone="rose"
+            />
+            {/* No meter. Throughput has no ceiling to be a share of, and a bar
+                drawn against an invented one would move for no reason. */}
+            <RailMeter label="Network I/O" value={`↓ ${formatRate(rx)}  ↑ ${formatRate(tx)}`} />
+          </div>
+        </RailSection>
+      )}
+
+      <RailSection title="Configuration">
+        <div className="flex flex-col">
+          <RailRow label="Image" value={container.image} />
+          <RailRow label="Platform" value={container.platform} />
+          <RailRow label="Command" value={commandLine(container)} />
+          <RailRow label="CPUs" value={cores} />
+          <RailRow label="Memory" value={formatMemory(container.memoryAllocation)} />
+          <RailRow label="Network" value={container.networks?.join(', ')} />
+          <RailRow label="IP address" value={container.interfaces?.[0]?.ipv4Address} />
+          <RailRow
+            label="Ports"
+            value={
+              container.ports.length > 0
+                ? container.ports
+                    .map((port) => `${port.host}→${port.container}/${port.protocol}`)
+                    .join(', ')
+                : 'none published'
+            }
+          />
+          <RailRow label="Hostname" value={container.hostname} />
+          <RailRow label="Created" value={`${formatDuration(container.createdAt)} ago`} />
+          <RailRow label="Uptime" value={running ? formatDuration(container.startedAt) : '—'} />
+        </div>
+      </RailSection>
+    </>
+  );
+}
+
+/**
+ * The Inspect tab: the configuration, in either of the two ways it is wanted.
+ *
+ * Read is the default and is what the app is for -- labelled fields, a digest
+ * with a copy button beside it, a network you can press to go to. Raw is the
+ * same answer as the runtime gave it, for pasting into an issue: nobody wants
+ * to reconstruct JSON by hand out of a page that had it all along.
+ *
+ * The live readings are stripped out of the raw view. They change every few
+ * seconds, and JSON that reflows under the cursor is JSON nobody can select a
+ * line out of -- they are in the rail beside it, where movement belongs.
+ */
+function InspectTab({ container }: { container: Container }) {
+  const [raw, setRaw] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const json = JSON.stringify(withoutLiveReadings(container), null, 2);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // Clipboard access can be denied; the text is still selectable.
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-3 px-7 pt-4">
+        <SegmentedControl
+          ariaLabel="How to show the configuration"
+          segments={[
+            { value: 'read', label: 'Read', icon: ListTree },
+            { value: 'raw', label: 'Raw', icon: Braces },
+          ]}
+          value={raw ? 'raw' : 'read'}
+          onChange={(value) => setRaw(value === 'raw')}
+        />
+        <div className="flex-1" />
+        <Button icon={copied ? Check : Copy} onClick={() => void copy()}>
+          {copied ? 'Copied' : 'Copy JSON'}
+        </Button>
+      </div>
+
+      {raw ? (
+        <div className="flex min-h-0 flex-1 flex-col px-7 pb-4 pt-2.5">
+          <pre className="selectable min-h-0 flex-1 overflow-auto rounded-xl bg-chrome-bg p-4 font-mono text-code leading-[1.7] text-chrome-muted">
+            {json}
+          </pre>
+        </div>
+      ) : (
+        <ConfigurationView container={container} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The fields that carry a reading rather than a setting. Listed rather than
+ * destructured away: a dozen throwaway bindings is a dozen things a linter is
+ * right to ask about, and a list can be read against the type it came from.
+ */
+const LIVE_READINGS = [
+  'cpuUsage',
+  'memoryUsage',
+  'memoryUsageBytes',
+  'memoryUsagePercent',
+  'networkRxPerSec',
+  'networkTxPerSec',
+  'blockReadPerSec',
+  'blockWritePerSec',
+  'networkRxBytes',
+  'networkTxBytes',
+  'blockReadBytes',
+  'blockWriteBytes',
+  'processes',
+] as const satisfies readonly (keyof Container)[];
+
+/** The container as configured, without the numbers that move while you read. */
+function withoutLiveReadings(container: Container): Partial<Container> {
+  return Object.fromEntries(
+    Object.entries(container).filter(
+      ([key]) => !LIVE_READINGS.includes(key as (typeof LIVE_READINGS)[number])
+    )
+  );
+}
+
+/** What the container was told to run, as one line. */
+function commandLine(container: Container): string {
+  const parts = [container.entrypoint, ...(container.command ?? [])].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : '—';
+}
+
+/**
+ * The configuration as labelled fields: a digest with a copy button beside it,
+ * a network you can press to go to, environment behind a disclosure.
+ *
+ * What identifies the container -- image, platform, ports, addresses, uptime --
+ * is in the rail, on screen whichever tab is open, so it is not repeated here.
+ */
+function ConfigurationView({ container }: { container: Container }) {
   const openNetwork = useUIStore((s) => s.openNetwork);
   const [showEnv, setShowEnv] = useState(false);
   const running = container.status === 'running';
@@ -467,15 +715,6 @@ function OverviewTab({ container }: { container: Container }) {
 
   return (
     <DetailGrid>
-      <Section title="Status">
-        <Row label="State" value={container.status} />
-        <Row label="Uptime" value={running ? formatDuration(container.startedAt) : '—'} />
-        <Row label="Created" value={`${formatDuration(container.createdAt)} ago`} />
-        <Row label="ID" value={container.id} mono copyable />
-        <Row label="Platform" value={container.platform} />
-        <Row label="Image" value={container.image} mono copyable wide />
-      </Section>
-
       <Section title="Resources">
         <Row
           label="CPU"
@@ -527,13 +766,20 @@ function OverviewTab({ container }: { container: Container }) {
         )}
       </Section>
 
+      {/* Only what is set. Half of these are empty on a typical container, and
+          six rows of em-dashes is a panel that has taken twelve lines to say
+          nothing -- the full answer, dashes and all, is under Raw. */}
       <Section title="Process">
-        <Row label="Entrypoint" value={container.entrypoint} mono />
-        <Row label="Command" value={container.command?.join(' ')} mono />
-        <Row label="Working directory" value={container.workingDir} mono />
+        {container.entrypoint && <Row label="Entrypoint" value={container.entrypoint} mono wide />}
+        {(container.command?.length ?? 0) > 0 && (
+          <Row label="Command" value={container.command?.join(' ')} mono wide />
+        )}
+        {container.workingDir && (
+          <Row label="Working directory" value={container.workingDir} mono wide />
+        )}
         <Row label="User" value={container.user || 'root (0:0)'} mono />
-        <Row label="Stop signal" value={container.stopSignal} mono />
-        <Row label="Runtime" value={container.runtimeHandler} mono />
+        {container.stopSignal && <Row label="Stop signal" value={container.stopSignal} mono />}
+        {container.runtimeHandler && <Row label="Runtime" value={container.runtimeHandler} mono />}
       </Section>
 
       {container.ports.length > 0 && (
@@ -641,66 +887,6 @@ function OverviewTab({ container }: { container: Container }) {
     </DetailGrid>
   );
 }
-
-/** Who the shell runs as. Changing it opens a fresh session as that user. */
-function TerminalUser({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [custom, setCustom] = useState(false);
-  // Typed separately from what is applied: every change reopens the shell, so
-  // committing on each keystroke would open a session for "r", "ro", "roo"…
-  const [draft, setDraft] = useState(value);
-
-  return (
-    <div className="flex items-center gap-2 pb-2">
-      <span className="label-caps">Run as</span>
-
-      <SegmentedControl
-        ariaLabel="Run the shell as"
-        value={custom ? 'custom' : value === 'root' ? 'root' : 'default'}
-        onChange={(next) => {
-          if (next === 'custom') {
-            setCustom(true);
-            setDraft(value === 'root' ? '' : value);
-            return;
-          }
-
-          setCustom(false);
-          setDraft('');
-          onChange(next === 'root' ? 'root' : '');
-        }}
-        segments={[
-          { value: 'default', label: 'Image default' },
-          { value: 'root', label: 'root' },
-          { value: 'custom', label: 'Other…' },
-        ]}
-      />
-
-      {custom && (
-        <>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onChange(draft.trim())}
-            onBlur={() => onChange(draft.trim())}
-            placeholder="name or uid:gid"
-            aria-label="User to run the shell as"
-            className="input w-40"
-          />
-          {draft.trim() !== value && (
-            <span className="text-tiny text-ink-500">press ↵ to apply</span>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
- * A published port, and a way to reach it.
- *
- * A port mapping is only interesting because something is listening behind it,
- * and the next thing anyone does with 8080 is open it. TCP only: there is
- * nothing a browser can do with a UDP port.
- */
 function PortRow({ port, running }: { port: Port; running: boolean }) {
   const hostPort = port.host.includes(':') ? port.host.split(':').pop() : port.host;
   const openable = running && port.protocol.toLowerCase() === 'tcp' && Boolean(hostPort);
@@ -714,8 +900,10 @@ function PortRow({ port, running }: { port: Port; running: boolean }) {
         {openable && (
           <a
             href={url}
-            target="_blank"
-            rel="noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternal(url);
+            }}
             title={`Open ${url}`}
             className="btn-icon border-transparent"
             aria-label={`Open ${url} in your browser`}
