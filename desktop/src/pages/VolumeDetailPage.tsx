@@ -83,11 +83,11 @@ export function VolumeDetailPage({ volume }: { volume: Volume }) {
         <button
           onClick={() => setDeleting(true)}
           disabled={busy}
-          className="btn-ghost text-orange-700 disabled:opacity-40 dark:text-orange-500"
+          className="btn-plain text-orange-700 disabled:opacity-40 dark:text-orange-500"
           title="Delete volume"
+          aria-label="Delete volume"
         >
-          <Trash2 size={13} aria-hidden />
-          Delete
+          <Trash2 size={16} aria-hidden />
         </button>
       }
     >
@@ -242,7 +242,7 @@ function VolumeOwner({ volume, held }: { volume: string; held: boolean }) {
               Remove lost+found
             </Button>
           )}
-          <Button icon={UserCog} onClick={() => setChanging(true)}>
+          <Button iconOnly icon={UserCog} onClick={() => setChanging(true)}>
             Set owner…
           </Button>
         </span>

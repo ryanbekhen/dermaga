@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Unplug } from 'lucide-react';
+import { Plug, Trash2, Unplug } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Badge } from '../components/DataTable';
@@ -106,18 +106,22 @@ export function NetworkDetailPage({ network }: { network: Network }) {
       subtitle={[network.mode, network.ipv4Subnet].filter(Boolean).join(' · ') || 'network'}
       actions={
         <>
-          <button onClick={() => attaching.show()} className="btn-ghost">
-            <Plus size={13} aria-hidden />
-            Attach container
+          <button
+            onClick={() => attaching.show()}
+            className="btn-plain-primary"
+            title="Attach a container to this network"
+            aria-label="Attach a container to this network"
+          >
+            <Plug size={18} aria-hidden />
           </button>
           <button
             onClick={() => setDeleting(true)}
             disabled={network.builtin || busy}
-            className="btn-ghost text-orange-700 disabled:opacity-40 dark:text-orange-500"
+            className="btn-plain text-orange-700 disabled:opacity-40 dark:text-orange-500"
             title={network.builtin ? 'The built-in network cannot be deleted' : 'Delete network'}
+            aria-label="Delete network"
           >
-            <Trash2 size={13} aria-hidden />
-            Delete
+            <Trash2 size={16} aria-hidden />
           </button>
         </>
       }

@@ -3,6 +3,7 @@ package window
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ryanbekhen/dermaga/internal/settings"
 	"github.com/ryanbekhen/dermaga/internal/window/assets"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -502,6 +504,37 @@ func (a *App) servicesRunning() bool {
 //
 // Several can be open at once, one per finding, which is the point -- comparing
 // two of them is the reason to open either.
+// paper is the colour a document window is painted before its page arrives.
+//
+// It has to match what the page will be, or opening one flashes the opposite
+// theme for as long as the webview takes to paint. The main window can get
+// away with a fixed dark colour because its chrome is dark either way; this
+// one is a sheet of paper in light mode and near-black in dark, so it has to
+// ask.
+//
+// "system" is what the setting says by default, and the answer to that lives
+// with macOS rather than with us.
+func paper() application.RGBA {
+	dark := false
+
+	switch settings.NewStore(slog.New(slog.DiscardHandler)).Load().Theme {
+	case "dark":
+		dark = true
+	case "light":
+		dark = false
+	default:
+		out, err := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle").Output()
+		dark = err == nil && strings.Contains(string(out), "Dark")
+	}
+
+	if dark {
+		// ink-950, which is what the page paints itself in dark mode.
+		return application.NewRGB(30, 26, 28)
+	}
+
+	return application.NewRGB(255, 255, 255)
+}
+
 func (a *App) OpenFindingWindow(reference, id string) {
 	// A page, not a panel. The width is fixed and the height is not, which is
 	// what a sheet of paper is: the measure a line is set to does not change

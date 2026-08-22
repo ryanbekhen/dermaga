@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Boxes } from 'lucide-react';
 import { PLACEHOLDER_ROWS, PLACEHOLDER_WIDTHS, SkeletonBar } from './Skeleton';
 
 export interface Column {
@@ -6,7 +7,15 @@ export interface Column {
   label: string;
   /** CSS grid track for this column, e.g. "120px" or "minmax(0,1.5fr)". */
   width: string;
-  align?: 'right';
+  /**
+   * Where the heading and its values sit in the track.
+   *
+   * The two are set from one place on purpose: a status stacked over its
+   * uptime was centred in the cell while its heading stayed at the left edge,
+   * and a column whose title does not stand over its contents reads as two
+   * columns that happen to be next to each other.
+   */
+  align?: 'right' | 'center';
 }
 
 export interface Selection {
@@ -212,7 +221,16 @@ export function DataTable<T>({
             />
           )}
           {columns.map((column) => (
-            <span key={column.key} className={column.align === 'right' ? 'text-right' : undefined}>
+            <span
+              key={column.key}
+              className={
+                column.align === 'right'
+                  ? 'text-right'
+                  : column.align === 'center'
+                    ? 'text-center'
+                    : undefined
+              }
+            >
               {column.label}
             </span>
           ))}
@@ -239,7 +257,13 @@ export function DataTable<T>({
                 {columns.map((column, index) => (
                   <div
                     key={column.key}
-                    className={`min-w-0 py-3.5 ${column.align === 'right' ? 'flex justify-end' : ''}`}
+                    className={`min-w-0 py-3.5 ${
+                      column.align === 'right'
+                        ? 'flex justify-end'
+                        : column.align === 'center'
+                          ? 'flex justify-center'
+                          : ''
+                    }`}
                   >
                     <SkeletonBar
                       width={PLACEHOLDER_WIDTHS[index % PLACEHOLDER_WIDTHS.length]}
@@ -299,7 +323,11 @@ export function DataTable<T>({
                   <div
                     key={columns[index]?.key ?? index}
                     className={`min-w-0 py-3.5 ${
-                      columns[index]?.align === 'right' ? 'text-right' : ''
+                      columns[index]?.align === 'right'
+                        ? 'text-right'
+                        : columns[index]?.align === 'center'
+                          ? 'text-center'
+                          : ''
                     }`}
                   >
                     {cell}
@@ -378,6 +406,29 @@ export function Muted({ children, mono = false }: { children: ReactNode; mono?: 
       }`}
     >
       {children}
+    </span>
+  );
+}
+
+/**
+ * That something is holding this row's thing, and what.
+ *
+ * The containers glyph, because "in use" here only ever means "a container is
+ * using it" -- borrowing the icon the sidebar names containers with says that
+ * without a word. The words are not lost: the badge could only say *that* it
+ * was in use, while the tooltip says by what, which is the question anybody
+ * reading the badge was about to ask next.
+ */
+export function InUse({ by }: { by: string[] }) {
+  if (by.length === 0) return null;
+
+  return (
+    <span
+      title={`In use by ${by.join(', ')}`}
+      aria-label={`In use by ${by.join(', ')}`}
+      className="shrink-0 text-brand-600 dark:text-brand-400"
+    >
+      <Boxes size={13} aria-hidden />
     </span>
   );
 }

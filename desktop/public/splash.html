@@ -2,17 +2,43 @@
 <title>Dermaga</title>
 
 <style>
-  /* One size for every state -- steps, kernel setup, fatal error. A window
+  /* The app's own faces, copied into public/ so this document can reach them:
+     it is loaded before the bundle exists and shares nothing with it. Without
+     these the splash was set in the system font and the window it handed over
+     to was set in Plex -- the type changed shape in front of you, on the one
+     screen whose whole job is to look like the app arriving. */
+  @font-face {
+    font-family: "IBM Plex Sans Variable";
+    font-style: normal;
+    font-weight: 100 700;
+    font-display: block;
+    src: url("./ibm-plex-sans-latin-wght-normal.woff2") format("woff2-variations");
+  }
+
+  @font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url("./ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+  }
+
+  /* The chrome palette, verbatim from tailwind.config.js. It was a set of
+     near-blacks invented for this file alone, and they were cooler than the
+     app's -- so the splash faded into a window a shade warmer than itself.
+
+     One size for every state -- steps, kernel setup, fatal error. A window
      that resizes as its content changes shivers, and a splash is on screen
      for seconds: it should be still. */
   :root {
-    --brand: #ce1126;
-    --ink: #0d0d11;
-    --panel: #16161c;
-    --line: rgba(255, 255, 255, 0.08);
-    --text: #f4f4f6;
-    --muted: rgba(244, 244, 246, 0.55);
-    --faint: rgba(244, 244, 246, 0.3);
+    --brand: #c21322;
+    --brand-lit: #e4606b;
+    --ink: #171416;
+    --panel: #221d1f;
+    --line: #332c2e;
+    --text: #f2efee;
+    --muted: #cfc9c6;
+    --faint: #6f6764;
   }
 
   * {
@@ -30,7 +56,8 @@
   }
 
   body {
-    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font: 13px/19px "IBM Plex Sans Variable", -apple-system, BlinkMacSystemFont, system-ui,
+      sans-serif;
     color: var(--text);
     -webkit-app-region: drag;
   }
@@ -42,7 +69,7 @@
     height: 100vh;
     overflow: hidden;
     border-radius: 16px;
-    background: radial-gradient(120% 90% at 8% 0%, #2a1016 0%, var(--ink) 46%, #08080b 100%);
+    background: radial-gradient(120% 90% at 8% 0%, #2a1016 0%, var(--ink) 46%, #0f0d0e 100%);
     box-shadow: 0 24px 70px rgb(0 0 0 / 0.45);
   }
 
@@ -52,7 +79,7 @@
     content: "";
     position: absolute;
     inset: -30% 45% 40% -20%;
-    background: radial-gradient(closest-side, rgba(206, 17, 38, 0.5), transparent 70%);
+    background: radial-gradient(closest-side, rgba(194, 19, 34, 0.5), transparent 70%);
     filter: blur(30px);
     pointer-events: none;
   }
@@ -74,15 +101,16 @@
 
   h1 {
     margin: 0;
-    font-size: 40px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
     line-height: 1.05;
   }
 
   .tagline {
     margin: 8px 0 0;
-    font-size: 14px;
+    font-size: 13.5px;
+    line-height: 20px;
     color: var(--muted);
   }
 
@@ -94,7 +122,10 @@
     padding: 4px 10px;
     border: 1px solid var(--line);
     border-radius: 999px;
-    font-size: 11px;
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--muted);
   }
 
@@ -121,10 +152,12 @@
 
   .status .now {
     font-size: 12.5px;
+    line-height: 18px;
     color: var(--text);
   }
 
   .status .count {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
     font-size: 11px;
     color: var(--faint);
     font-variant-numeric: tabular-nums;
@@ -143,7 +176,7 @@
     width: 0;
     height: 100%;
     border-radius: inherit;
-    background: linear-gradient(90deg, var(--brand), #ff5a6e);
+    background: linear-gradient(90deg, var(--brand), var(--brand-lit));
     transition: width 0.45s ease;
   }
 
@@ -153,9 +186,9 @@
     display: none;
     margin-top: 16px;
     padding: 12px 14px;
-    border: 1px solid rgba(206, 17, 38, 0.28);
-    border-radius: 10px;
-    background: rgba(206, 17, 38, 0.1);
+    border: 1px solid rgba(194, 19, 34, 0.28);
+    border-radius: 12px;
+    background: rgba(194, 19, 34, 0.1);
   }
 
   .setup.on {
@@ -179,8 +212,8 @@
     height: 48px;
     margin-top: 8px;
     overflow: hidden;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10.5px;
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
     line-height: 1.5;
     color: var(--muted);
     overflow-wrap: anywhere;
@@ -208,7 +241,7 @@
     margin: 0;
     font-size: 13px;
     font-weight: 600;
-    color: #ff8b98;
+    color: var(--brand-lit);
   }
 
   .fatal p {
@@ -223,7 +256,7 @@
     flex-shrink: 0;
     padding: 7px 14px;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.06);
     color: var(--text);
     font: inherit;

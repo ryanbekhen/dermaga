@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { LogIn, LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Field, Modal } from '../components/form';
@@ -64,9 +64,13 @@ export function RegistriesPage() {
               : `${logins.length} signed in · where images are pulled from and pushed to`
         }
         actions={
-          <button onClick={() => adding.show()} className="btn-primary">
-            <LogIn size={13} aria-hidden />
-            Log in
+          <button
+            onClick={() => adding.show()}
+            className="btn-plain-primary"
+            title="Log in to a registry"
+            aria-label="Log in to a registry"
+          >
+            <KeyRound size={18} aria-hidden />
           </button>
         }
       />
@@ -135,7 +139,9 @@ export function RegistriesPage() {
                   </dl>
 
                   <Button
+                    iconOnly
                     icon={LogOut}
+                    className="text-orange-700 dark:text-orange-500"
                     busy={busy === login.server}
                     busyLabel="Signing out…"
                     onClick={() => setRemoving(login)}

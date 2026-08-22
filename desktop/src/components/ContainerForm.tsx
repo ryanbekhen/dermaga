@@ -7,7 +7,7 @@ import type { PendingEdit, ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, Modal, Row } from './form';
 import { EnvEditor, formatEnv, parseEnv } from './EnvEditor';
 import { SegmentedControl } from './SegmentedControl';
-import { runTask } from './TaskRows';
+import { runTask } from '../services/tasks';
 import { useTaskStore } from '../store/taskStore';
 
 interface ContainerFormProps {

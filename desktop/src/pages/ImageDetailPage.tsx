@@ -27,7 +27,7 @@ import { PackagesPane, type Severity } from '../components/PackagesPane';
 import { Button } from '../components/Button';
 import { Field, Modal } from '../components/form';
 import { SaveImageDialog, saveImage } from '../components/ImageArchive';
-import { TaskRows, runTask } from '../components/TaskRows';
+import { runTask } from '../services/tasks';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useImageScan, type ImageScan } from '../hooks/useImageScan';
@@ -152,18 +152,27 @@ export function ImageDetailPage({ reference }: { reference: string }) {
                 : 'Reads the image for its layers, its packages and anything known to be wrong with them.'
             }
             onClick={() => void scan.scan()}
+            iconOnly
           >
             {scan.report ? 'Rescan' : 'Scan'}
           </Button>
           {/* The first thing anyone wants from an image, and until now the one
               thing this page could not do. */}
-          <button onClick={() => setRunning(true)} className="btn-ghost">
-            <Play size={13} aria-hidden />
-            Run
+          <button
+            onClick={() => setRunning(true)}
+            className="btn-plain"
+            title="Run a container from this image"
+            aria-label="Run a container from this image"
+          >
+            <Play size={16} aria-hidden />
           </button>
-          <button onClick={() => setPushing(true)} className="btn-ghost">
-            <Upload size={13} aria-hidden />
-            Push
+          <button
+            onClick={() => setPushing(true)}
+            className="btn-plain"
+            title="Push to a registry"
+            aria-label="Push to a registry"
+          >
+            <Upload size={16} aria-hidden />
           </button>
           <button
             onClick={() => {
@@ -176,25 +185,26 @@ export function ImageDetailPage({ reference }: { reference: string }) {
 
               setSaving(true);
             }}
-            className="btn-ghost"
+            className="btn-plain"
             disabled={!detail}
+            title="Save as an OCI archive"
+            aria-label="Save as an OCI archive"
           >
-            <FileDown size={13} aria-hidden />
-            Save
+            <FileDown size={16} aria-hidden />
           </button>
           <button
             onClick={() => setConfirmingDelete(true)}
-            className="btn-ghost text-orange-700 dark:text-orange-500"
+            className="btn-plain text-orange-700 hover:text-orange-800 dark:text-orange-500"
+            title="Delete this image"
+            aria-label="Delete this image"
           >
-            <Trash2 size={13} aria-hidden />
-            Delete
+            <Trash2 size={16} aria-hidden />
           </button>
         </>
       }
     >
       {/* Push and pull progress belongs where the button was pressed, not only
           on the list the user has just navigated away from. */}
-      <TaskRows kind="image" />
 
       <DetailBody
         rail={

@@ -4,6 +4,7 @@ import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
   Badge,
+  InUse,
   DataTable,
   Muted,
   NameCell,
@@ -13,7 +14,7 @@ import {
 import { ContainerForm } from '../components/ContainerForm';
 import { Checkbox, Field, Modal } from '../components/form';
 import { loadImage } from '../components/ImageArchive';
-import { TaskRows, runTask } from '../components/TaskRows';
+import { runTask } from '../services/tasks';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
@@ -163,6 +164,7 @@ export function ImagesPage() {
                   images on its own and rescans anything older than three
                   hours. This is for when you want an answer now. */}
               <Button
+                iconOnly
                 icon={ScanSearch}
                 busy={scanning}
                 busyLabel="Queueing…"
@@ -171,6 +173,7 @@ export function ImagesPage() {
                 Scan
               </Button>
               <Button
+                iconOnly
                 icon={Trash2}
                 busy={busy}
                 busyLabel="Deleting…"
@@ -182,24 +185,39 @@ export function ImagesPage() {
             </SelectionActions>
           ) : (
             <>
-              <button onClick={() => void loadImage()} className="btn-ghost">
-                <FileUp size={13} aria-hidden />
-                Load
+              {/* The seconds are icons; the one thing this page is usually
+                  opened to do keeps its words. A row of three labelled buttons
+                  made them all look equally likely, and on a page whose header
+                  is read once and then never again, the label is worth most on
+                  the one you have not decided against yet. */}
+              <button
+                onClick={() => void loadImage()}
+                className="btn-plain"
+                title="Load an image from an OCI archive"
+                aria-label="Load an image from an OCI archive"
+              >
+                <FileUp size={16} aria-hidden />
               </button>
-              <button onClick={() => building.show()} className="btn-ghost">
-                <Hammer size={13} aria-hidden />
-                Build
+              <button
+                onClick={() => building.show()}
+                className="btn-plain"
+                title="Build an image from a Dockerfile"
+                aria-label="Build an image from a Dockerfile"
+              >
+                <Hammer size={16} aria-hidden />
               </button>
-              <button onClick={() => pulling.show()} className="btn-primary">
-                <Download size={13} aria-hidden />
-                Pull image
+              <button
+                onClick={() => pulling.show()}
+                className="btn-plain-primary"
+                title="Pull an image from a registry"
+                aria-label="Pull an image from a registry"
+              >
+                <Download size={18} aria-hidden />
               </button>
             </>
           )
         }
       />
-
-      <TaskRows kind="image" />
 
       <DataTable
         columns={COLUMNS}
@@ -215,7 +233,7 @@ export function ImagesPage() {
           return [
             <NameCell key="name">
               <span className="truncate text-sm font-semibold">{group.names.join(', ')}</span>
-{users.length > 0 && <Badge tone="brand">in use</Badge>}
+              <InUse by={users} />
             </NameCell>,
             // A tag is as long as whoever built the image decided -- a commit
             // SHA, a branch name, a date and a build number. Left to its own

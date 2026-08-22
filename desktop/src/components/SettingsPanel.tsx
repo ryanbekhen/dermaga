@@ -64,6 +64,7 @@ export function SettingsPanel() {
                     hint="System follows the macOS light and dark setting."
                     control={
                       <SegmentedControl
+                        iconOnly
                         ariaLabel="Theme"
                         segments={THEMES}
                         value={settings.theme}

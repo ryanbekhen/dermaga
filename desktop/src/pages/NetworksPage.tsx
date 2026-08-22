@@ -66,6 +66,7 @@ export function NetworksPage() {
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
               <Button
+                iconOnly
                 icon={Trash2}
                 busy={busy}
                 busyLabel="Deleting…"
@@ -76,9 +77,13 @@ export function NetworksPage() {
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => creating.show()} className="btn-primary">
-              <Plus size={13} aria-hidden />
-              New network
+            <button
+              onClick={() => creating.show()}
+              className="btn-plain-primary"
+              title="New network"
+              aria-label="New network"
+            >
+              <Plus size={18} aria-hidden />
             </button>
           )
         }

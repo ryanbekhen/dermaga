@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
-  Badge,
+  InUse,
   DataTable,
   Muted,
   NameCell,
@@ -79,9 +79,13 @@ export function VolumesPage() {
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => creating.show()} className="btn-primary">
-              <Plus size={13} aria-hidden />
-              New volume
+            <button
+              onClick={() => creating.show()}
+              className="btn-plain-primary"
+              title="New volume"
+              aria-label="New volume"
+            >
+              <Plus size={18} aria-hidden />
             </button>
           )
         }
@@ -98,7 +102,7 @@ export function VolumesPage() {
         cells={(volume) => [
           <NameCell key="name">
             <span className="truncate text-sm font-semibold">{volume.name}</span>
-            {volume.usedBy.length > 0 && <Badge tone="brand">in use</Badge>}
+            <InUse by={volume.usedBy} />
           </NameCell>,
           <Muted key="driver">{volume.driver || '—'}</Muted>,
           // What it costs over what it may grow to. A volume is sparse, so the

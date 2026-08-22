@@ -1,8 +1,19 @@
 import { useEffect, useRef } from 'react';
-import { AlertTriangle, ArrowDownToLine, Loader2, RefreshCw, Search, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowDownToLine,
+  Loader2,
+  RefreshCw,
+  Search,
+  TriangleAlert,
+  X,
+  Zap,
+  ZapOff,
+} from 'lucide-react';
 import logo from '@assets/logo.png';
 import { ContainerNamesItem } from './ContainerNamesItem';
 import { KernelStatusItem } from './KernelStatusItem';
+import { TaskStatusItem } from './TaskStatusItem';
 import { useFullScreen } from '../hooks/useFullScreen';
 import { useUpdate } from '../hooks/useUpdate';
 import { useUnreadChangelog } from '../store/changelogStore';
@@ -142,6 +153,7 @@ export function TitleBar({ build, system, connection, error }: TitleBarProps) {
           somewhere different depending on whether a scan was running. */}
       <div className="flex shrink-0 items-center gap-1">
         {error && <Problem label={error} />}
+        <TaskStatusItem />
         <KernelStatusItem />
         <ContainerNamesItem />
         <UpdatePill />
@@ -166,24 +178,49 @@ function EngineStatus({
   system: SystemStatus | null;
   connection: ConnectionState;
 }) {
+  // A different glyph for each state, not one glyph in three colours. The
+  // difference that matters here -- the engine being down, which is why
+  // nothing else works -- has to survive being seen quickly, at this size, by
+  // someone who does not separate green from grey.
+  //
+  // The words go into the label and the tooltip rather than onto the bar: they
+  // were the same three words nearly all of the time, and a bar that repeats
+  // "Engine running" all day is a bar that stops being read.
   const state =
     connection === 'disconnected'
       ? {
-          dot: 'bg-amber-500',
+          icon: TriangleAlert,
+          tone: 'text-amber-500',
           label: 'Agent offline',
           title: 'Lost contact with the Dermaga agent',
         }
       : system?.running
-        ? { dot: 'bg-emerald-500', label: 'Engine running', title: system.status }
-        : { dot: 'bg-chrome-faint', label: 'Engine stopped', title: system?.status ?? 'Unknown' };
+        ? {
+            icon: Zap,
+            tone: 'text-emerald-500',
+            label: 'Engine running',
+            title: system.status,
+          }
+        : {
+            icon: ZapOff,
+            tone: 'text-chrome-faint',
+            label: 'Engine stopped',
+            title: system?.status ?? 'Unknown',
+          };
 
   return (
     <div
-      title={state.title}
-      className="flex shrink-0 items-center gap-2 pl-2 text-xs text-chrome-muted"
+      title={`${state.label} — ${state.title}`}
+      aria-label={state.label}
+      role="status"
+      // no-drag, or the tooltip never appears. The bar is the window's drag
+      // handle, and a draggable region swallows hover -- so a title attribute
+      // on a plain div in here is a tooltip nobody can reach. It mattered
+      // little while the words were on the bar; now they are the only place
+      // the words exist.
+      className={`no-drag flex shrink-0 cursor-default items-center pl-2 ${state.tone}`}
     >
-      <span className={`h-1.75 w-1.75 shrink-0 rounded-full ${state.dot}`} aria-hidden />
-      {state.label}
+      <state.icon size={14} aria-hidden />
     </div>
   );
 }

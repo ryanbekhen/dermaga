@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CircleAlert, CircleCheck, ExternalLink } from 'lucide-react';
 import { severityTone } from '../components/PackagesPane';
 import { api } from '../services/api';
+import { useTheme } from '../hooks/useTheme';
 import { openExternal } from '../services/ipc';
 import { readVector } from '../utils/cvss';
 import { formatDuration, shortDigest } from '../utils/format';
@@ -46,6 +47,13 @@ export function findingRoute(): FindingRoute | null {
  * thing and closes when you are done with it.
  */
 export function FindingWindow({ route }: { route: FindingRoute }) {
+  // This window renders instead of App, not inside it -- so everything App
+  // does on the way up, it has to do for itself. The theme was the one that
+  // showed: the class that turns on every `dark:` in the stylesheet is put on
+  // the document root by App, so a window that skipped App had none of them,
+  // and stayed white however the rest of the app was set.
+  useTheme();
+
   const [finding, setFinding] = useState<Finding | null>(null);
   const [missing, setMissing] = useState(false);
 

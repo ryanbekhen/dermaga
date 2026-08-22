@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Hammer, LayoutGrid, Play, Plus, RotateCw, Square, Trash2 } from 'lucide-react';
 import { ContainerForm } from '../components/ContainerForm';
 import { TemplateGallery } from '../components/TemplateGallery';
-import { TaskRows } from '../components/TaskRows';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
@@ -30,7 +29,7 @@ import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../uti
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(120px,1.5fr)' },
   { key: 'image', label: 'Image', width: 'minmax(140px,1.5fr)' },
-  { key: 'status', label: 'Status', width: '112px' },
+  { key: 'status', label: 'Status', width: '112px', align: 'center' },
   { key: 'cpu', label: 'CPU', width: '104px' },
   { key: 'memory', label: 'Memory', width: '128px' },
   { key: 'ports', label: 'Ports', width: 'minmax(130px,1.2fr)' },
@@ -121,28 +120,11 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
         subtitle={`${running.length} of ${mine.length} running · ${allocatedCpus} CPU · ${formatMemory(
           `${Math.round(usedMib)}m`
         )} of ${formatMemory(`${allocatedMib}m`)} memory`}
-        filters={
-          <>
-            <FilterToggle
-              checked={showStopped}
-              onChange={setShowStopped}
-              label="Stopped"
-              icon={Square}
-              title="Show containers that are not running"
-            />
-            <FilterToggle
-              checked={showBuilder}
-              onChange={setShowBuilder}
-              label="Builder"
-              icon={Hammer}
-              title="Show Apple's builder container, which `container build` makes and manages"
-            />
-          </>
-        }
         actions={
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
               <Button
+                iconOnly
                 icon={Play}
                 busy={busy === 'started'}
                 busyLabel="Starting…"
@@ -150,10 +132,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                 onClick={() =>
                   void applyToSelection('started', startable, (c) => api.startContainer(c.id))
                 }
+                className="text-emerald-700 dark:text-emerald-500"
               >
                 Start
               </Button>
               <Button
+                iconOnly
                 icon={Square}
                 busy={busy === 'stopped'}
                 busyLabel="Stopping…"
@@ -161,6 +145,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                 onClick={() =>
                   void applyToSelection('stopped', stoppable, (c) => api.stopContainer(c.id))
                 }
+                className="text-amber-700 dark:text-amber-500"
               >
                 Stop
               </Button>
@@ -169,6 +154,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                   than making somebody open four containers in turn is the
                   whole point of having selected them. */}
               <Button
+                iconOnly
                 icon={RotateCw}
                 busy={busy === 'restarted'}
                 busyLabel="Restarting…"
@@ -183,6 +169,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                 Restart
               </Button>
               <Button
+                iconOnly
                 icon={Trash2}
                 busy={busy === 'removed'}
                 busyLabel="Removing…"
@@ -195,26 +182,50 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             </SelectionActions>
           ) : (
             <>
-              <button onClick={() => setBrowsing(true)} className="btn">
-                <LayoutGrid size={13} aria-hidden />
-                From a template
+              {/* The two filters, beside the actions rather than on a strip of
+                  their own. A whole band of chrome for two switches was a band
+                  the eye had to cross on the way from the heading to the list,
+                  every time, to read the same two words. */}
+              <FilterToggle
+                iconOnly
+                checked={showStopped}
+                onChange={setShowStopped}
+                label="Stopped"
+                icon={Square}
+                title="Show containers that are not running"
+              />
+              <FilterToggle
+                iconOnly
+                checked={showBuilder}
+                onChange={setShowBuilder}
+                label="Builder"
+                icon={Hammer}
+                title="Show Apple's builder container, which `container build` makes and manages"
+              />
+
+              <button
+                onClick={() => setBrowsing(true)}
+                className="btn-plain"
+                title="Start from a template"
+                aria-label="Start from a template"
+              >
+                <LayoutGrid size={16} aria-hidden />
               </button>
               <button
                 onClick={() => {
                   setFromTemplate(null);
                   creating.show();
                 }}
-                className="btn-primary"
+                className="btn-plain-primary"
+                title="New container"
+                aria-label="New container"
               >
-                <Plus size={13} aria-hidden />
-                New container
+                <Plus size={18} aria-hidden />
               </button>
             </>
           )
         }
       />
-
-      <TaskRows kind="container" />
 
       <DataTable
         columns={COLUMNS}

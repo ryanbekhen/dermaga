@@ -27,7 +27,16 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   ariaLabel,
-}: SegmentedControlProps<T>) {
+  iconOnly = false,
+}: SegmentedControlProps<T> & {
+  /**
+   * Draw each segment as its icon alone, with its label as the tooltip.
+   *
+   * For a choice whose options are pictures already -- a sun, a moon, a screen
+   * -- where the word underneath is a caption for something that needs none.
+   */
+  iconOnly?: boolean;
+}) {
   return (
     <div
       role="radiogroup"
@@ -43,14 +52,18 @@ export function SegmentedControl<T extends string>({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(segment)}
-            className={`inline-flex h-full items-center gap-1.5 rounded-lg px-3 text-small transition-colors ${
+            title={iconOnly ? label : undefined}
+            aria-label={iconOnly ? label : undefined}
+            className={`inline-flex h-full items-center gap-1.5 rounded-lg text-small transition-colors ${
+              iconOnly ? 'w-8.5 justify-center' : 'px-3'
+            } ${
               active
                 ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-600/15 dark:text-brand-400'
                 : 'text-ink-600 hover:bg-ink-150 hover:text-ink-800 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100'
             }`}
           >
-            {Icon && <Icon size={13} aria-hidden />}
-            {label}
+            {Icon && <Icon size={iconOnly ? 16 : 13} aria-hidden />}
+            {!iconOnly && label}
           </button>
         );
       })}

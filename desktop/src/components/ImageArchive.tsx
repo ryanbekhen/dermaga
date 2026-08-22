@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Field, Modal } from './form';
-import { runTask } from './TaskRows';
+import { runTask } from '../services/tasks';
 import { pickFile, pickSaveFile } from '../services/ipc';
 
 /**

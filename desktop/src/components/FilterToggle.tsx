@@ -18,13 +18,42 @@ export function FilterToggle({
   label,
   icon: Icon,
   title,
+  iconOnly = false,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   label: string;
   icon?: LucideIcon;
   title?: string;
+  /**
+   * Draw the icon alone, among a header's other icons.
+   *
+   * The tick cannot be the state here -- there is no room beside a glyph for a
+   * second one -- so the icon keeps its own shape and the brand tint says it
+   * is on, which is what every other pressed control in this app does.
+   */
+  iconOnly?: boolean;
 }) {
+  if (iconOnly) {
+    return (
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        title={title ?? label}
+        onClick={() => onChange(!checked)}
+        className={`btn-plain ${
+          checked
+            ? 'bg-brand-50 text-brand-700 dark:bg-brand-600/15 dark:text-brand-400'
+            : 'opacity-60'
+        }`}
+      >
+        {Icon && <Icon size={16} aria-hidden />}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"

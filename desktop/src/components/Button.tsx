@@ -17,6 +17,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   busy?: boolean;
   /** Shown in place of the label while busy, e.g. "Starting…". */
   busyLabel?: string;
+  /**
+   * Draw the icon alone, with the label kept as its tooltip.
+   *
+   * For the rows of verbs that appear beside a selection, or along a detail
+   * page's header, where four or five labelled buttons in a line make every
+   * one of them look as likely as the next.
+   */
+  iconOnly?: boolean;
   children?: ReactNode;
 }
 
@@ -32,8 +40,33 @@ export function Button({
   disabled,
   className = '',
   children,
+  iconOnly = false,
   ...props
 }: ButtonProps) {
+  // Icon-only, and the words are not thrown away -- they become the tooltip
+  // and the accessible name. A glyph with neither is a button only the person
+  // who wrote it can use.
+  if (iconOnly) {
+    const label = typeof children === 'string' ? children : undefined;
+
+    return (
+      <button
+        {...props}
+        disabled={disabled || busy}
+        aria-busy={busy || undefined}
+        title={busy && busyLabel ? busyLabel : label}
+        aria-label={label}
+        className={`btn-plain ${className}`}
+      >
+        {busy ? (
+          <Loader2 size={16} className="animate-spin" aria-hidden />
+        ) : (
+          Icon && <Icon size={16} aria-hidden />
+        )}
+      </button>
+    );
+  }
+
   return (
     <button
       {...props}
@@ -71,12 +104,16 @@ export function IconButton({
       {...props}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={`btn-icon ${className}`}
+      // Bare, like every other icon in a header. It wore a bordered square
+      // until now, which left a row of five where two were boxed and three
+      // were not -- and the boxes fell on whichever ones happened to be built
+      // from this component rather than on anything a reader could name.
+      className={`btn-plain ${className}`}
     >
       {busy ? (
-        <Loader2 size={14} className="animate-spin" aria-hidden />
+        <Loader2 size={16} className="animate-spin" aria-hidden />
       ) : (
-        <Icon size={14} className={iconClassName} aria-hidden />
+        <Icon size={16} className={iconClassName} aria-hidden />
       )}
     </button>
   );

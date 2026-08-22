@@ -5,7 +5,7 @@ import { useToastStore } from '../store/toastStore';
 import type { Machine } from '../types';
 import { Button } from './Button';
 import { Checkbox, Field, Modal } from './form';
-import { runTask } from './TaskRows';
+import { runTask } from '../services/tasks';
 
 const HOME_MOUNTS = ['rw', 'ro', 'none'];
 
@@ -50,7 +50,7 @@ export function CreateMachineDialog({ onClose }: { onClose: () => void }) {
     <Modal
       wide
       title="New machine"
-      subtitle="Creates a Linux VM for containers to run in. Progress appears in the list."
+      subtitle="Creates a Linux VM for containers to run in. Progress appears in the title bar."
       onClose={onClose}
       onSubmit={create}
       footer={

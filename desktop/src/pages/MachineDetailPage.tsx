@@ -1,6 +1,10 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import {
+  Braces,
+  Check,
+  Copy,
   Info,
+  ListTree,
   Play,
   ScrollText,
   Settings2,
@@ -13,9 +17,16 @@ import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MachineSettingsDialog } from '../components/MachineForm';
 import { LogPane } from '../components/LogPane';
-import { StatusPill } from '../components/StatusBadge';
-import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
-import { Badge } from '../components/DataTable';
+import { DefaultStar, StatusPill } from '../components/StatusBadge';
+import {
+  DetailBody,
+  DetailGrid,
+  DetailLayout,
+  DetailPane,
+  RailRow,
+  RailSection,
+} from '../components/DetailLayout';
+import { SegmentedControl } from '../components/SegmentedControl';
 import type { TabDefinition } from '../components/Tabs';
 import { Row, Section } from '../components/DetailRow';
 import { api } from '../services/api';
@@ -30,10 +41,14 @@ const TerminalPane = lazy(() =>
   import('../components/TerminalPane').then((m) => ({ default: m.TerminalPane }))
 );
 
+// The same three words, in the same order, as a container's: a terminal first
+// because that is what a machine is opened for, then what it is, then what it
+// has been saying. "Overview" was this page's own word for what every other
+// detail page calls Inspect.
 const TABS: TabDefinition[] = [
-  { id: 'overview', label: 'Overview', icon: Info },
-  { id: 'logs', label: 'Logs', icon: ScrollText },
   { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
+  { id: 'overview', label: 'Inspect', icon: Info },
+  { id: 'logs', label: 'Logs', icon: ScrollText },
 ];
 
 export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: MachineTab }) {
@@ -90,7 +105,7 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
       badges={
         <>
           <StatusPill status={machine.status} />
-          {machine.default && <Badge tone="brand">default</Badge>}
+          {machine.default && <DefaultStar />}
         </>
       }
       subtitle={detail.image ?? 'container machine'}
@@ -101,8 +116,9 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
         <>
           {running ? (
             <Button
-              variant="secondary"
+              iconOnly
               icon={Square}
+              className="text-amber-700 dark:text-amber-500"
               busy={pending === 'stop'}
               busyLabel="Stopping…"
               disabled={busy}
@@ -114,8 +130,9 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
             </Button>
           ) : (
             <Button
-              variant="primary"
+              iconOnly
               icon={Play}
+              className="text-emerald-700 dark:text-emerald-500"
               busy={pending === 'start'}
               busyLabel="Booting…"
               disabled={busy}
@@ -135,11 +152,21 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
             onClick={() => setConfiguring(true)}
           />
 
+          {/* Lit when this is the default. Disabled was the only difference
+              before, and a bare icon at reduced opacity reads as "not
+              available" rather than as "already true" -- which is the opposite
+              of what it means here. */}
           <IconButton
             icon={Star}
             busy={pending === 'default'}
             disabled={busy || machine.default}
-            title={machine.default ? 'Already the default machine' : 'Make default'}
+            className={
+              machine.default
+                ? 'text-amber-600 disabled:opacity-100 dark:text-amber-500'
+                : undefined
+            }
+            iconClassName={machine.default ? 'fill-current' : undefined}
+            title={machine.default ? 'This is the default machine' : 'Make this the default'}
             aria-label="Make default"
             onClick={() =>
               void run(
@@ -162,70 +189,128 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
         </>
       }
     >
-      {tab === 'overview' && <OverviewTab machine={detail} />}
+      <DetailBody rail={<MachineRail machine={detail} />}>
+        {tab === 'overview' && <InspectTab machine={detail} />}
 
-      {tab === 'logs' && (
-        <DetailPane>
-          <LogPane
-            method="machines.logs"
-            params={{ id: machine.id, tail: logTail, boot: bootLog }}
-            missingHint={
-              bootLog
-                ? 'This machine has not booted yet, so there is no boot log to show. Start it and the log will appear here.'
-                : 'A machine only writes this log while it is running. Start the machine, or switch to the boot log, to see output.'
-            }
-            controls={
-              <label className="flex items-center gap-2 text-xs text-ink-600 dark:text-ink-400">
-                <input
-                  type="checkbox"
-                  checked={bootLog}
-                  onChange={(e) => setBootLog(e.target.checked)}
-                  className="accent-brand-600"
-                />
-                Boot log
-              </label>
-            }
+        {tab === 'logs' && (
+          <DetailPane>
+            <LogPane
+              method="machines.logs"
+              params={{ id: machine.id, tail: logTail, boot: bootLog }}
+              missingHint={
+                bootLog
+                  ? 'This machine has not booted yet, so there is no boot log to show. Start it and the log will appear here.'
+                  : 'A machine only writes this log while it is running. Start the machine, or switch to the boot log, to see output.'
+              }
+              controls={
+                <label className="flex items-center gap-2 text-xs text-ink-600 dark:text-ink-400">
+                  <input
+                    type="checkbox"
+                    checked={bootLog}
+                    onChange={(e) => setBootLog(e.target.checked)}
+                    className="accent-brand-600"
+                  />
+                  Boot log
+                </label>
+              }
+            />
+          </DetailPane>
+        )}
+
+        {tab === 'terminal' && (
+          <DetailPane>
+            <Suspense
+              fallback={
+                <p className="flex flex-1 items-center justify-center p-6 text-sm text-ink-600 dark:text-ink-400">
+                  Loading terminal…
+                </p>
+              }
+            >
+              <TerminalPane target={{ kind: 'machine', id: machine.id }} disabled={false} />
+            </Suspense>
+          </DetailPane>
+        )}
+
+        {configuring && (
+          <MachineSettingsDialog machine={detail} onClose={() => setConfiguring(false)} />
+        )}
+
+        {confirmingDelete && (
+          <ConfirmDialog
+            title={`Delete ${machine.id}?`}
+            body="The VM and its disk are deleted permanently. Containers that ran inside it are gone with it."
+            confirmLabel="Delete"
+            onConfirm={() => {
+              setConfirmingDelete(false);
+              void run('delete', () => api.deleteMachine(machine.id), `Deleted ${machine.id}`).then(
+                back
+              );
+            }}
+            onCancel={() => setConfirmingDelete(false)}
           />
-        </DetailPane>
-      )}
-
-      {tab === 'terminal' && (
-        <DetailPane>
-          <Suspense
-            fallback={
-              <p className="flex flex-1 items-center justify-center p-6 text-sm text-ink-600 dark:text-ink-400">
-                Loading terminal…
-              </p>
-            }
-          >
-            <TerminalPane target={{ kind: 'machine', id: machine.id }} disabled={false} />
-          </Suspense>
-        </DetailPane>
-      )}
-
-      {configuring && (
-        <MachineSettingsDialog machine={detail} onClose={() => setConfiguring(false)} />
-      )}
-
-      {confirmingDelete && (
-        <ConfirmDialog
-          title={`Delete ${machine.id}?`}
-          body="The VM and its disk are deleted permanently. Containers that ran inside it are gone with it."
-          confirmLabel="Delete"
-          onConfirm={() => {
-            setConfirmingDelete(false);
-            void run('delete', () => api.deleteMachine(machine.id), `Deleted ${machine.id}`).then(
-              back
-            );
-          }}
-          onCancel={() => setConfirmingDelete(false)}
-        />
-      )}
+        )}
+      </DetailBody>
     </DetailLayout>
   );
 }
 
-function OverviewTab({ machine }: { machine: Machine }) {
+/**
+ * The Inspect tab: what the machine is, in either of the two ways it is
+ * wanted.
+ *
+ * The same pair a container's Inspect offers -- labelled fields to read, and
+ * the runtime's own JSON to paste into an issue. This page used to offer only
+ * the first, which meant the one page describing the thing every container
+ * runs inside was also the one page you could not copy an answer out of.
+ */
+function InspectTab({ machine }: { machine: Machine }) {
+  const [raw, setRaw] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const json = JSON.stringify(machine, null, 2);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // Clipboard access can be denied; the text is still selectable.
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-3 px-7 pt-4">
+        <SegmentedControl
+          ariaLabel="How to show the configuration"
+          segments={[
+            { value: 'read', label: 'Read', icon: ListTree },
+            { value: 'raw', label: 'Raw', icon: Braces },
+          ]}
+          value={raw ? 'raw' : 'read'}
+          onChange={(value) => setRaw(value === 'raw')}
+        />
+        <div className="flex-1" />
+        <Button iconOnly icon={copied ? Check : Copy} onClick={() => void copy()}>
+          {copied ? 'Copied' : 'Copy JSON'}
+        </Button>
+      </div>
+
+      {raw ? (
+        <div className="flex min-h-0 flex-1 flex-col px-7 pb-4 pt-2.5">
+          <pre className="selectable min-h-0 flex-1 overflow-auto rounded-xl bg-chrome-bg p-4 font-mono text-code leading-[1.7] text-chrome-muted">
+            {json}
+          </pre>
+        </div>
+      ) : (
+        <ReadView machine={machine} />
+      )}
+    </div>
+  );
+}
+
+function ReadView({ machine }: { machine: Machine }) {
   const running = machine.status === 'running';
 
   return (
@@ -266,5 +351,49 @@ function OverviewTab({ machine }: { machine: Machine }) {
         </p>
       </Section>
     </DetailGrid>
+  );
+}
+
+/**
+ * The facts that say which machine this is, kept on screen whichever tab is
+ * open.
+ *
+ * The same rail a container and an image get, and for the same reason: the
+ * terminal tab fills the page, and without this the only thing naming what you
+ * have a shell inside is the heading you scrolled past.
+ */
+function MachineRail({ machine }: { machine: Machine }) {
+  const running = machine.status === 'running';
+
+  return (
+    <>
+      <RailSection title="Allocation">
+        <div className="flex flex-col">
+          <RailRow label="vCPUs" value={machine.cpus} />
+          <RailRow label="Memory" value={formatMemory(machine.memoryAllocation)} />
+          <RailRow label="Disk" value={formatBytes(machine.diskSizeBytes)} />
+        </div>
+      </RailSection>
+
+      <RailSection title="Configuration">
+        <div className="flex flex-col">
+          <RailRow label="Image" value={machine.image} />
+          <RailRow
+            label="Platform"
+            value={
+              machine.os && machine.architecture
+                ? `${machine.os}/${machine.architecture}`
+                : undefined
+            }
+          />
+          <RailRow label="IP address" value={machine.ipAddress} />
+          <RailRow label="User" value={machine.username} />
+          <RailRow label="Home mount" value={machine.homeMount} />
+          <RailRow label="Default" value={machine.default ? 'yes' : 'no'} />
+          <RailRow label="Created" value={`${formatDuration(machine.createdAt)} ago`} />
+          <RailRow label="Uptime" value={running ? formatDuration(machine.startedAt) : '—'} />
+        </div>
+      </RailSection>
+    </>
   );
 }

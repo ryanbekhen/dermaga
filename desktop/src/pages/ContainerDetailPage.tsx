@@ -167,7 +167,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
         <>
           {running ? (
             <Button
-              variant="secondary"
+              iconOnly
               icon={Square}
               busy={pending === 'stop'}
               busyLabel="Stopping…"
@@ -175,6 +175,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
               onClick={() =>
                 void run('stop', () => api.stopContainer(container.id), `Stopped ${container.name}`)
               }
+              className="text-amber-700 dark:text-amber-500"
             >
               Stop
             </Button>
@@ -186,6 +187,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
               when this is the only way out. */}
           {running && (
             <Button
+              iconOnly
               variant="ghost"
               icon={Zap}
               busy={pending === 'kill'}
@@ -195,6 +197,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
               onClick={() =>
                 void run('kill', () => api.killContainer(container.id), `Killed ${container.name}`)
               }
+              className="text-brand-700 dark:text-brand-400"
             >
               Force stop
             </Button>
@@ -202,8 +205,9 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
 
           {!running && (
             <Button
-              variant="primary"
+              iconOnly
               icon={Play}
+              className="text-emerald-700 dark:text-emerald-500"
               busy={pending === 'start'}
               busyLabel="Starting…"
               disabled={busy}
@@ -638,7 +642,7 @@ function InspectTab({ container }: { container: Container }) {
           onChange={(value) => setRaw(value === 'raw')}
         />
         <div className="flex-1" />
-        <Button icon={copied ? Check : Copy} onClick={() => void copy()}>
+        <Button iconOnly icon={copied ? Check : Copy} onClick={() => void copy()}>
           {copied ? 'Copied' : 'Copy JSON'}
         </Button>
       </div>

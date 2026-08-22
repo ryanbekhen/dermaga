@@ -168,6 +168,22 @@
   @apply inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
 }
 
+/* An icon with no chrome around it, for the actions beside a page's main one.
+   Three bordered squares in a row make all three look equally likely; bare,
+   they step back and let the important one lead -- which is the toolbar
+   convention on a Mac.
+
+   Two things it must keep, or a bare glyph stops reading as a control: the hit
+   area of the button it replaced -- the border was what told a hand how big
+   the target was -- and something that happens under the pointer, which is now
+   the only thing saying it can be pressed at all.
+
+   A utility rather than a component class, so `btn-plain-primary` can build on
+   it: @apply reaches utilities and not each other. */
+@utility btn-plain {
+  @apply inline-flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-lg text-ink-600 transition-colors hover:bg-ink-200 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100;
+}
+
 /* The mono caps that label a column, a section or a statistic. One utility
    rather than five classes repeated: it appears on nearly every page, and the
    tracking is what makes it read as a label rather than as shouting. */
@@ -206,6 +222,16 @@
 
   .btn-ghost {
     @apply btn border border-ink-300 bg-white text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200 dark:hover:bg-ink-800;
+  }
+
+  /* The same bare control, for the one action a page exists for. Without a
+     filled square to set it apart, the colour is all that is left to say which
+     of the icons in a header is the one you came for. */
+  .btn-plain-primary {
+    /* No text change on hover in dark mode: the scale jumps 200 to 400, and
+       the step below brand-400 is a pale pink that reads as disabled. The
+       background tint carries it there. */
+    @apply btn-plain text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:text-brand-400 dark:hover:bg-brand-600/15 dark:hover:text-brand-400;
   }
 
   .btn-icon {

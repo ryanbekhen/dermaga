@@ -1,3 +1,4 @@
+import { Star } from 'lucide-react';
 import type { ContainerStatus } from '../types';
 
 /**
@@ -81,4 +82,23 @@ export function StatusPill({ status }: { status: string }) {
   const style = styleFor(status);
 
   return <span className={`pill ${style.tint} ${style.text}`}>{style.label}</span>;
+}
+
+/**
+ * The machine a container lands in when nothing says otherwise.
+ *
+ * The same filled star the detail page's button wears when it is already
+ * true -- so the thing that sets it and the thing that reports it are the
+ * same shape, and learning one teaches the other.
+ */
+export function DefaultStar() {
+  return (
+    <span
+      title="The default machine"
+      aria-label="The default machine"
+      className="shrink-0 text-amber-600 dark:text-amber-500"
+    >
+      <Star size={13} className="fill-current" aria-hidden />
+    </span>
+  );
 }

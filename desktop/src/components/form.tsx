@@ -131,20 +131,25 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-ink-100 shadow-panel dark:bg-ink-950 ${
+        // Its own text colour, not the caller's. A dialog opened from the
+        // title bar was inheriting the chrome's near-white type onto a light
+        // panel, which left the whole thing washed out and barely readable --
+        // and a panel that changes colour depending on which button opened it
+        // is not a panel, it is an accident waiting for the next call site.
+        className={`flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-ink-100 text-ink-900 shadow-panel dark:bg-ink-950 dark:text-ink-100 ${
           wide ? 'max-w-3xl' : 'max-w-xl'
         }`}
       >
-        <div className="flex shrink-0 items-start justify-between gap-5 border-b border-ink-200 bg-white px-6 pb-4 pt-5 dark:border-ink-800 dark:bg-ink-900">
-          <div className="min-w-0">
-            <h2 className="text-title font-semibold">{title}</h2>
-            {subtitle && (
-              <p className="pt-1 text-body text-ink-600 dark:text-ink-400">{subtitle}</p>
-            )}
-          </div>
-          <button onClick={onClose} className="btn-icon h-7.5 w-7.5 shrink-0" aria-label="Close">
-            <X size={15} aria-hidden />
-          </button>
+        {/* No close box in the corner. Every dialog here already carries a
+            Cancel or a Close in its foot, and closes on Escape and on a click
+            outside -- so a cross would be the fourth way out of the same room,
+            sitting where a Mac sheet has never had one. It also read as the
+            opposite of the button beside it: two controls a hand's width
+            apart, one of which discards and one of which does not, and only
+            one of them says which. */}
+        <div className="flex shrink-0 flex-col gap-1 border-b border-ink-200 bg-white px-6 pb-4 pt-5 dark:border-ink-800 dark:bg-ink-900">
+          <h2 className="text-title font-semibold">{title}</h2>
+          {subtitle && <p className="text-body text-ink-600 dark:text-ink-400">{subtitle}</p>}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 py-5">
