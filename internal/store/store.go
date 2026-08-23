@@ -42,6 +42,10 @@ const (
 	// What a finished command printed. A build's output is the only record of
 	// how an image was made, and it used to go when the window did.
 	BucketTasks = "tasks"
+	// Which containers are published to a public hostname, keyed by container
+	// name, plus the Cloudflare account they were made in. The API token is not
+	// here: it is in the login keychain.
+	BucketTunnels = "tunnels"
 )
 
 // Name of the database inside ~/.dermaga.
@@ -87,7 +91,7 @@ func Open() (*Store, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		buckets := []string{
 			BucketScans, BucketTemplates, BucketPending, BucketPorts, BucketContainers,
-			BucketTasks,
+			BucketTasks, BucketTunnels,
 		}
 
 		for _, name := range buckets {

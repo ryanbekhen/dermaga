@@ -30,6 +30,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/templates"
 	"github.com/ryanbekhen/dermaga/internal/terminal"
 	"github.com/ryanbekhen/dermaga/internal/toolchain"
+	"github.com/ryanbekhen/dermaga/internal/tunnels"
 	"github.com/ryanbekhen/dermaga/internal/volumes"
 	"github.com/ryanbekhen/dermaga/internal/watcher"
 )
@@ -68,6 +69,7 @@ type Agent struct {
 	scanner    *scanner.Manager
 	templates  *templates.Manager
 	toolchain  *toolchain.Manager
+	tunnels    *tunnels.Manager
 	settings   *settings.Store
 	watcher    *watcher.Watcher
 	exits      *exitWatch
@@ -111,6 +113,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.system = system.NewManager(runner, logger, changed)
 	agent.toolchain = toolchain.NewManager(runner, logger)
 	agent.registry = registry.NewManager(runner, logger)
+	agent.tunnels = tunnels.NewManager(runner, logger, changed)
 	agent.scanner = scanner.NewManager(runner, logger)
 	agent.templates = templates.NewManager(logger)
 	agent.tasks = tasks.New(logger)
@@ -131,6 +134,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		agent.templates.UseStore(opened)
 		agent.containers.UseStore(opened)
 		agent.tasks.UseStore(opened)
+		agent.tunnels.UseStore(opened)
 
 		// A build from a pasted Dockerfile writes it to a directory of its own
 		// and removes it when the build ends. A build that never ended -- the
@@ -180,11 +184,15 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		Containers: func(ctx context.Context) ([]containers.Container, error) {
 			return agent.containers.List(ctx, true)
 		},
-		Machines:     agent.machines.List,
-		Images:       agent.images.List,
-		Volumes:      agent.volumes.List,
-		Networks:     agent.networks.List,
-		System:       agent.system.Status,
+		Machines: agent.machines.List,
+		Images:   agent.images.List,
+		Volumes:  agent.volumes.List,
+		Networks: agent.networks.List,
+		System:   agent.system.Status,
+		// Read from Dermaga's own records and its running connectors, so it
+		// costs a map lookup rather than a call to the CLI -- and a route going
+		// dark reaches the window the same way every other change does.
+		Tunnels:      agent.tunnels.Tunnels,
 		CLIAvailable: agent.runner.Available,
 		Disk:         agent.system.DiskUsage,
 	}, logger)
@@ -195,6 +203,14 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	// there, not only what this app did.
 	pending.OnChange(func(snapshot watcher.Snapshot) {
 		agent.scanner.Sweep()
+
+		// A container recreated on a new address would otherwise keep a
+		// hostname that resolves and answers nothing. This is the same
+		// snapshot the window is about to be shown, so the route is corrected
+		// before anybody notices it was wrong.
+		go agent.tunnels.Reconcile(
+			context.Background(),
+			targetsOf(snapshot.Containers, snapshot.Machines, snapshot.Networks))
 
 		// A container that stopped without being asked to is worth saying out
 		// loud: the window is often not the thing the user is looking at.
@@ -280,8 +296,14 @@ func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 
 	a.register()
 
+	// Tunnels that were up when Dermaga last stopped come back up, in the
+	// background: each one fetches a token and starts a connector, and none of
+	// that is worth making the window wait for.
+	go a.restoreTunnels(ctx)
+
 	err := a.server.Serve(ctx, in, out)
 	a.streams.closeAll()
+	a.tunnels.Close()
 
 	return err
 }
@@ -317,8 +339,11 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 
 	a.register()
 
+	go a.restoreTunnels(ctx)
+
 	err := a.server.Listen(ctx, socket)
 	a.streams.closeAll()
+	a.tunnels.Close()
 
 	return err
 }
@@ -358,6 +383,7 @@ func (a *Agent) register() {
 	a.registerScanner()
 	a.registerFiles()
 	a.registerRegistry()
+	a.registerTunnels()
 	a.registerContainers()
 	a.registerImages()
 	a.registerVolumes()
@@ -955,9 +981,22 @@ func (a *Agent) registerContainers() {
 
 		a.exits.Expect(args.ID)
 
+		// Read before the removal, while there is still something to read. A
+		// tunnel is keyed by the container's name, and this call carries
+		// whichever of its name and ID the window was holding.
+		var name string
+		if found, err := a.containers.Get(ctx, args.ID); err == nil && found != nil {
+			name = found.Name
+		}
+
 		if err := a.containers.Remove(ctx, args.ID, args.Force); err != nil {
 			return nil, rpc.Fail(err.Error())
 		}
+
+		// The container is gone, so any route to it answers nothing. The
+		// hostname and its DNS record go with it, and the tunnel too if that
+		// was the last route on it.
+		a.tunnels.Forget(ctx, args.ID, name)
 
 		return map[string]any{"id": args.ID}, nil
 	})

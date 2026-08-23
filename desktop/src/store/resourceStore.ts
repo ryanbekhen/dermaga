@@ -1,5 +1,14 @@
 import { create } from 'zustand';
-import type { Container, DiskUsage, Image, Machine, Network, SystemStatus, Volume } from '../types';
+import type {
+  Container,
+  DiskUsage,
+  Image,
+  Machine,
+  Network,
+  SystemStatus,
+  Tunnel,
+  Volume,
+} from '../types';
 
 interface ResourceState {
   containers: Container[];
@@ -7,6 +16,8 @@ interface ResourceState {
   images: Image[];
   volumes: Volume[];
   networks: Network[];
+  /** Every tunnel and the routes on it, pushed with everything else. */
+  tunnels: Tunnel[];
   /** False only until the first snapshot lands. */
   hasLoaded: boolean;
   /**
@@ -25,6 +36,7 @@ interface ResourceState {
   setImages: (images: Image[]) => void;
   setVolumes: (volumes: Volume[]) => void;
   setNetworks: (networks: Network[]) => void;
+  setTunnels: (tunnels: Tunnel[]) => void;
   setHost: (host: {
     system: SystemStatus | null;
     cliAvailable: boolean;
@@ -39,6 +51,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
   images: [],
   volumes: [],
   networks: [],
+  tunnels: [],
   hasLoaded: false,
   system: null,
   cliAvailable: true,
@@ -49,6 +62,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
   setImages: (images) => set({ images }),
   setVolumes: (volumes) => set({ volumes }),
   setNetworks: (networks) => set({ networks }),
+  setTunnels: (tunnels) => set({ tunnels }),
   // Disk is only recomputed by the agent when something changed, so a snapshot
   // that carries none is saying "unchanged", not "gone".
   setHost: ({ system, cliAvailable, disk }) =>

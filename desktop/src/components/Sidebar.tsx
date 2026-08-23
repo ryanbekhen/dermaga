@@ -10,6 +10,7 @@ import {
   Layers,
   Network,
   Server,
+  Globe,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -79,6 +80,12 @@ const NAV: NavGroup[] = [
         owns: ['registries'],
         icon: CloudUpload,
         label: 'Registries',
+      },
+      {
+        target: { name: 'tunnels' },
+        owns: ['tunnels'],
+        icon: Globe,
+        label: 'Tunnels',
       },
       {
         target: { name: 'machines' },

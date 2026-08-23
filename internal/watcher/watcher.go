@@ -17,6 +17,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
 	"github.com/ryanbekhen/dermaga/internal/system"
+	"github.com/ryanbekhen/dermaga/internal/tunnels"
 	"github.com/ryanbekhen/dermaga/internal/volumes"
 )
 
@@ -36,6 +37,9 @@ type Snapshot struct {
 	Images     []images.Image         `json:"images"`
 	Volumes    []volumes.Volume       `json:"volumes"`
 	Networks   []networks.Network     `json:"networks"`
+	// Every tunnel and the routes on it, so the window sees a route go dark the
+	// moment its container does rather than when somebody reopens the page.
+	Tunnels []tunnels.Tunnel `json:"tunnels"`
 	// Whether the services behind the CLI are up, and whether the CLI is even
 	// installed. Carried here rather than asked for by each window on a timer
 	// of its own: it is a fact about the machine, it changes without anybody
@@ -58,6 +62,12 @@ type Sources struct {
 	Networks   func(context.Context) ([]networks.Network, error)
 	// Cheap, so it runs every pass.
 	System func(context.Context) (*system.Status, error)
+	// What this Mac publishes, and what each route is doing. Not a call to the
+	// CLI: it is read from Dermaga's own records and its running connectors, so
+	// it costs nothing to include every pass -- and a connector that fails, or
+	// a container behind a route that stops, is news the same way any other
+	// change is.
+	Tunnels func() []tunnels.Tunnel
 	// Whether the CLI is on this Mac at all. Not a call; a flag to read.
 	CLIAvailable func() bool
 	// Expensive, so it runs only when a pass found something new.
@@ -174,6 +184,10 @@ func (w *Watcher) refresh(ctx context.Context) {
 		snapshot.Volumes = w.latest.Volumes
 		snapshot.Networks = w.latest.Networks
 		w.mu.RUnlock()
+	}
+
+	if w.sources.Tunnels != nil {
+		snapshot.Tunnels = w.sources.Tunnels()
 	}
 
 	if w.sources.System != nil {

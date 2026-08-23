@@ -16,6 +16,7 @@ export type Intent =
   | 'network.attach'
   | 'network.detach'
   | 'machine.create'
+  | 'tunnel.route'
   | 'registry.add';
 
 /**

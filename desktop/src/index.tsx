@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { announceReady } from './services/bridge.wails';
 import { sealWindow } from './services/notABrowser';
 import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { FindingWindow, findingRoute } from './pages/FindingWindow';
 import './index.css';
 
@@ -18,8 +19,14 @@ sealWindow();
 // frame, which is where the CVE is named.
 const finding = findingRoute();
 
+// Inside StrictMode and around everything: a render that throws unmounts the
+// tree, and with nothing to catch it this window has no console to explain
+// itself with -- it is WebKit, not a browser, so a blank window would be the
+// whole of the report.
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>{finding ? <FindingWindow route={finding} /> : <App />}</React.StrictMode>
+  <React.StrictMode>
+    <ErrorBoundary>{finding ? <FindingWindow route={finding} /> : <App />}</ErrorBoundary>
+  </React.StrictMode>
 );
 
 requestAnimationFrame(() => {

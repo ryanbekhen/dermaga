@@ -444,6 +444,108 @@ export interface FileEntry {
 }
 
 /** A registry the user is signed in to. Credentials live with Apple's CLI. */
+/** One domain the stored Cloudflare token can put a DNS record on. */
+export interface Zone {
+  id: string;
+  name: string;
+  /** The account that owns the domain, and the one its tunnel is made in. */
+  account: { id: string; name?: string };
+}
+
+/**
+ * What a route can point at.
+ *
+ * A container is the common one, but not the only thing on this Mac worth a
+ * hostname: the Linux VMs have addresses of their own, and so does macOS, where
+ * a dev server usually runs long before it is in a container at all.
+ */
+export type TunnelKind = 'container' | 'machine' | 'host';
+
+export interface TunnelTarget {
+  kind: TunnelKind;
+  /** Which one. Empty for the host, of which there is only ever one. */
+  name: string;
+  /** Where this Mac reaches it. Empty when it is not running. */
+  address: string;
+  gateway?: string;
+  network?: string;
+  /**
+   * Ports it is known to listen on, as suggestions. Empty for a machine or the
+   * host, which declare nothing — so there the port is typed.
+   */
+  ports: string[];
+}
+
+export type TunnelStatus = 'running' | 'starting' | 'stopped' | 'error';
+
+/** One public hostname, and what answers on it. */
+export interface TunnelRoute {
+  hostname: string;
+  zoneId: string;
+  zoneName: string;
+  subdomain: string;
+  /** What the route was made for; this does not change on its own. */
+  kind: TunnelKind;
+  /** Which one. Empty for the host. */
+  target: string;
+  port: string;
+  /** Where that is right now, re-resolved when the container moves. */
+  address: string;
+  /**
+   * The gateway of the network it sits on, and what that network is called.
+   * Containers on different networks have different gateways, so this is per
+   * route rather than one for the whole picture.
+   */
+  gateway?: string;
+  network?: string;
+  tunnelId: string;
+  accountId: string;
+  dnsRecord?: string;
+  created: string;
+  status: TunnelStatus;
+  error?: string;
+  url?: string;
+  /** Whether the container behind it is running and has an address. */
+  reachable: boolean;
+}
+
+/**
+ * One Cloudflare tunnel: a connector, and the routes it carries.
+ *
+ * One per Cloudflare account, made by Dermaga rather than by the user — a
+ * tunnel belongs to one account, so routes on domains in different accounts
+ * cannot share one.
+ */
+export interface Tunnel {
+  id: string;
+  name: string;
+  accountId: string;
+  accountName?: string;
+  status: TunnelStatus;
+  error?: string;
+  routes: TunnelRoute[];
+}
+
+/** What the window needs to know before it can offer any of this. */
+export interface TunnelsStatus {
+  /** Whether an API token is in the keychain. */
+  connected: boolean;
+  accountId?: string;
+  /**
+   * Set only when the token reaches exactly one account. A token can span
+   * several, and naming one would name the wrong one for most of the domains.
+   */
+  accountName?: string;
+  /** How much the token reaches, said instead when there are several accounts. */
+  domains: number;
+  accounts: number;
+  /** Whether the cloudflared connector is on this Mac. */
+  installed: boolean;
+  brewAvailable: boolean;
+  routes: number;
+  running: number;
+}
+
 export interface RegistryLogin {
   server: string;
   username?: string;
@@ -631,6 +733,7 @@ export type Route =
   | { name: 'networks' }
   | { name: 'network'; network: string }
   | { name: 'registries' }
+  | { name: 'tunnels' }
   | { name: 'machines' }
   | { name: 'machine'; id: string; tab: MachineTab }
   | { name: 'system' }

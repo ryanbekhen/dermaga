@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   Braces,
@@ -49,7 +49,14 @@ import { useLiveUsage } from '../hooks/useLiveUsage';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type { PendingEdit, Container, ContainerSpec, ContainerTab, Port } from '../types';
+import type {
+  PendingEdit,
+  Container,
+  ContainerSpec,
+  ContainerTab,
+  Port,
+  TunnelRoute,
+} from '../types';
 import {
   formatBytes,
   formatDuration,
@@ -114,6 +121,9 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   const [resumed, setResumed] = useState<PendingEdit | null>(null);
   const [loadingSpec, setLoadingSpec] = useState(false);
   const [marking, setMarking] = useState(false);
+  // The public hostnames this container answers on. A container with several
+  // ports has one per port, so this is a list rather than a hostname.
+  const [routes, setRoutes] = useState<TunnelRoute[]>([]);
 
   const back = useUIStore((s) => s.back);
   const setTab = useUIStore((s) => s.setTab);
@@ -131,6 +141,21 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
       .then(setHasShell)
       .catch(() => setHasShell(true));
   }, [container.id, running]);
+
+  // Read-only here: routes are added and removed on the Tunnels page, which is
+  // the one place that knows about the tunnels carrying them.
+  const loadRoutes = useCallback(() => {
+    void api
+      .getTunnels()
+      .then((tunnels) =>
+        setRoutes(
+          tunnels.flatMap((t) => t.routes).filter((r) => r.kind === 'container' && r.target === container.name)
+        )
+      )
+      .catch(() => setRoutes([]));
+  }, [container.name]);
+
+  useEffect(loadRoutes, [loadRoutes]);
 
   const tabs = hasShell === false ? TABS.filter((t) => !NEEDS_SHELL.includes(t.id)) : TABS;
 
@@ -373,7 +398,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
         </>
       }
     >
-      <DetailBody rail={<ContainerRail container={container} />}>
+      <DetailBody rail={<ContainerRail container={container} routes={routes} />}>
         {tab === 'overview' && <InspectTab container={container} />}
 
         {tab === 'usage' && <UsageTab container={container} />}
@@ -648,7 +673,7 @@ function TerminalUser({ value, onChange }: { value: string; onChange: (value: st
  * that nothing was listening on it. They are the context for the other tabs,
  * not a tab.
  */
-function ContainerRail({ container }: { container: Container }) {
+function ContainerRail({ container, routes }: { container: Container; routes?: TunnelRoute[] }) {
   const running = container.status === 'running';
   const cores = container.cpuAllocation ?? 1;
   const listening = listeningOn(container);
@@ -706,6 +731,16 @@ function ContainerRail({ container }: { container: Container }) {
             }
           />
           <RailRow label="Hostname" value={container.hostname} />
+          {/* Where this container answers from outside this Mac. Beside the
+              address it holds inside, because they are the same question asked
+              from two places. One line per port, since each is its own route. */}
+          {(routes ?? []).map((route) => (
+            <RailRow
+              key={route.hostname}
+              label={`Public :${route.port}`}
+              value={route.hostname}
+            />
+          ))}
           <RailRow label="Created" value={`${formatDuration(container.createdAt)} ago`} />
           <RailRow label="Uptime" value={running ? formatDuration(container.startedAt) : '—'} />
         </div>

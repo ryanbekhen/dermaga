@@ -107,7 +107,11 @@ export function SaveImageDialog({
       }
     >
       <Field label="Platform" hint="Only the variants pulled to this Mac can be written out.">
-        <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="input">
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          className="input appearance-none"
+        >
           {platforms.map((option) => (
             <option key={option} value={option}>
               {option}

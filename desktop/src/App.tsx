@@ -3,6 +3,7 @@ import { Hammer } from 'lucide-react';
 import { HelpView } from './components/HelpView';
 import { LicencesPage } from './pages/LicencesPage';
 import { RegistriesPage } from './pages/RegistriesPage';
+import { TunnelsPage } from './pages/TunnelsPage';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
@@ -263,6 +264,7 @@ export function App() {
                 )}
 
                 {route.name === 'registries' && <RegistriesPage />}
+                {route.name === 'tunnels' && <TunnelsPage />}
 
                 {route.name === 'licences' && <LicencesPage />}
               </>

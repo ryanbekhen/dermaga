@@ -49,6 +49,7 @@ internal/containers/ list, lifecycle, spec, live stats
 internal/images/     list, inspect, build, pull, delete, prune
 internal/files/      browse a container's filesystem, copy in and out
 internal/registry/   registry logins, tag and push
+internal/tunnels/    Cloudflare Tunnel: a container on a public hostname
 internal/scanner/    Trivy: install, database, background scans, stored results
 internal/volumes/    ·  internal/networks/  ·  internal/machines/
 internal/system/     services and disk usage
@@ -62,6 +63,64 @@ internal/notify/     "something changed", so domains never import the watcher
 
 A domain package never imports the watcher or the RPC layer; it takes a `notify.Notifier` instead.
 `internal/agent` is the only seam where domains meet transport.
+
+### Tunnels
+
+A container has an address on this Mac and nothing beyond it. `internal/tunnels`
+gives one a public hostname through Cloudflare Tunnel.
+
+What somebody adds is a **route**: a hostname, and what answers behind it. That
+is a kind, a name and a port — usually a container, but the Linux VMs have
+addresses of their own, and so does macOS, where a dev server usually runs long
+before it is in a container at all.
+
+Tunnels are not something they make. A Cloudflare tunnel carries any number of
+routes but belongs to exactly one account, so Dermaga keeps one per account and
+creates it the first time a route needs it — which is why a container with six
+ports is six routes rather than six tunnels, and why routes on domains in
+different accounts land on different tunnels whether anybody asked or not.
+
+```mermaid
+flowchart LR
+    H1["api.example.com"] --> T
+    H2["admin.example.com"] --> T
+    H3["db.other.com"] --> T2
+
+    T["<b>tunnel</b><br/>account A<br/><i>one cloudflared</i>"] --> C1["app:3000"]
+    T --> C2["app:8080"]
+    T2["<b>tunnel</b><br/>account B"] --> C3["postgres:5432"]
+```
+
+Every tunnel is remotely managed (`config_src: "cloudflare"`), so its routing
+lives in the account rather than in a file here. Cloudflare takes the ingress as
+one document — there is no call that adds a single rule — so every change sends
+all of that tunnel's routes, which also keeps the list here and the list there
+from drifting apart.
+
+A route records the container and port it was made for, and separately the
+address that resolves to right now. Containers change address when they are
+recreated, so the second is a fact with a shelf life: `Reconcile` runs from the
+watcher's `OnChange`, re-points anything that moved, and re-sends the ingress.
+The route follows its container without anybody coming back to it.
+
+Two credentials, kept differently. The API token is the user's and can change
+their DNS, so it goes in the login keychain, written through `security -i` so it
+never appears in `ps`, and with `-T /usr/bin/security` so reading it does not
+raise a permission dialog every time. Each tunnel's run token is derivable from
+it, so it is fetched when a connector starts rather than stored at all — and it
+reaches `cloudflared` through `TUNNEL_TOKEN` rather than a command line.
+
+Disconnecting takes the routes down first and forgets the token second. The
+order is the point: the token is the only thing that can reach Cloudflare, so
+forgetting it first would strand every hostname, DNS record and tunnel it made —
+alive in the account, with nothing left here able to remove them.
+
+Connectors are Dermaga's children: `Restore` brings back one per tunnel that has
+routes — at startup, and again when a token is connected — and `Close` takes
+them all down with the agent. Stopping one is a
+`SIGTERM` with a kill behind it, so the edge learns the connector has left
+instead of sending to a socket that is not there. A tunnel whose last route is
+removed is deleted with it.
 
 ### Streams
 
@@ -100,6 +159,8 @@ sequenceDiagram
 | `system.kernelConfigured` `system.installKernel`                                      | The Linux kernel containers run on       |
 | `images.builderStatus` `images.startBuilder`                                          | The buildkit container builds run in     |
 | `volumes.*` `networks.*`                                                              | List, create, delete                     |
+| `tunnels.status/list/connect/disconnect/zones/targets`                                | Cloudflare, and what a route could point at |
+| `tunnels.addRoute/removeRoute` `tunnels.start/stop` `tunnels.install`                 | Routes and connectors; install is a stream |
 | `containers.run`                                                                      | Create and wait, for helper containers   |
 | `machines.list/get/start/stop/delete/setDefault/configure`                            | Machine lifecycle                        |
 | `events.subscribe`                                                                    | Pushes `events.snapshot` on every change |

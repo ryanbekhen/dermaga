@@ -9,6 +9,7 @@ import {
   registryHost,
   resourceName,
   size,
+  subdomain,
   subnet,
   user,
 } from './validate';
@@ -160,5 +161,30 @@ describe('user', () => {
     expect(user('1000:1000')).toBeNull();
     expect(user('')).toBeNull();
     expect(user('1000:1000:1000')).toMatch(/name, a uid, or uid:gid/);
+  });
+});
+
+describe('subdomain', () => {
+  it('accepts an ordinary label', () => {
+    expect(subdomain('api')).toBeNull();
+  });
+
+  // A domain kept for one thing is published on itself, with nothing in front.
+  it('accepts nothing at all', () => {
+    expect(subdomain('')).toBeNull();
+    expect(subdomain('   ')).toBeNull();
+  });
+
+  it('accepts several labels', () => {
+    expect(subdomain('api.staging')).toBeNull();
+  });
+
+  it('refuses what DNS refuses', () => {
+    expect(subdomain('-api')).not.toBeNull();
+    expect(subdomain('api-')).not.toBeNull();
+    expect(subdomain('my api')).not.toBeNull();
+    expect(subdomain('my_api')).not.toBeNull();
+    expect(subdomain('api..staging')).not.toBeNull();
+    expect(subdomain('a'.repeat(64))).not.toBeNull();
   });
 });

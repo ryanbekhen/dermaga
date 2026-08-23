@@ -58,6 +58,15 @@ look inside one even when nothing has it mounted. Open a network and see it draw
 attached, with the address it holds there.
 
 
+**Tunnels** — give a hostname on a domain you own to whatever is running here. Connect a Cloudflare
+account once, then add a route: which of your domains, what to call it there, and what answers — a
+container, one of the Linux machines, or this Mac itself, where your dev server probably already is.
+A container listening on three ports gets three hostnames, not one and a guess. Dermaga makes the
+tunnel, writes the DNS record and runs the connector, and the page draws the whole path each route
+takes — hostname, connector, gateway, port, container — so a broken one shows you where. Recreate a
+container and its routes follow it to the new address on their own. Nothing on this Mac listens for
+the traffic.
+
 **Machines** — create, boot, stop, resize and delete the Linux VMs containers run inside, each with
 a shell of its own.
 
@@ -90,6 +99,11 @@ Dermaga opens no ports. It runs Apple's CLI as you, and the window talks to its 
 in your own home directory. Nothing about your containers, images or scan results leaves this Mac —
 what it fetches is its own updates, the CLI and scanner it installs through Homebrew, and the
 template catalogue.
+
+A tunnel is the one exception, and only the routes you add: a container you publish is reachable
+from the internet until you remove that route. Cloudflare carries the traffic, so nothing here
+starts listening for it. The API token you connect with is kept in this Mac's login keychain, never
+in a file and never on a command line, and Disconnect removes it.
 
 It asks before installing the `container` CLI, a Linux kernel, the optional background service, or
 turning on notifications — in the app, rather than behind your back.

@@ -247,6 +247,19 @@
     @apply btn bg-orange-600 text-white hover:bg-orange-700;
   }
 
+  /* Cloudflare's own orange, for the one button that connects to them.
+     Their colour rather than Dermaga's: the button hands an account over to
+     somebody else, and reading as Dermaga's own primary action is the part
+     worth being clear about. Nowhere else uses it. */
+  .btn-cloudflare {
+    @apply btn text-white;
+    background-color: #f38020;
+  }
+
+  .btn-cloudflare:hover {
+    background-color: #d96c14;
+  }
+
   .btn-ghost {
     @apply btn border border-ink-300 bg-white text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200 dark:hover:bg-ink-800;
   }

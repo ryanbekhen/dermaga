@@ -5,6 +5,7 @@ import {
   Cpu,
   Database,
   Download,
+  Globe,
   FileUp,
   Hammer,
   Layers,
@@ -28,6 +29,7 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusText } from '../components/StatusBadge';
 import { loadImage } from '../components/ImageArchive';
 import { api } from '../services/api';
+import { openExternal } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -57,6 +59,12 @@ const PAGES: { label: string; icon: LucideIcon; route: Route; keywords: string }
     icon: CloudUpload,
     route: { name: 'registries' },
     keywords: 'login credentials',
+  },
+  {
+    label: 'Tunnels',
+    icon: Globe,
+    route: { name: 'tunnels' },
+    keywords: 'cloudflare hostname domain publish public route share',
   },
   { label: 'Machines', icon: Server, route: { name: 'machines' }, keywords: 'vm linux' },
   { label: 'System', icon: Cpu, route: { name: 'system' }, keywords: 'services disk prune' },
@@ -157,6 +165,7 @@ export function SearchResultsPage() {
   const volumes = useResourceStore((s) => s.volumes);
   const networks = useResourceStore((s) => s.networks);
   const machines = useResourceStore((s) => s.machines);
+  const tunnels = useResourceStore((s) => s.tunnels);
 
   const needle = query.trim().toLowerCase();
   const matches = (...fields: (string | undefined)[]) =>
@@ -183,6 +192,12 @@ export function SearchResultsPage() {
       icon: LayoutGrid,
       keywords: 'new gallery catalogue stack',
       run: () => navigateWith({ name: 'containers' }, 'container.template'),
+    },
+    {
+      label: 'Add a route',
+      icon: Globe,
+      keywords: 'tunnel cloudflare publish hostname domain subdomain share expose public',
+      run: () => navigateWith({ name: 'tunnels' }, 'tunnel.route'),
     },
     {
       label: 'Pull image',
@@ -478,6 +493,41 @@ export function SearchResultsPage() {
           </span>
         ),
         open: () => openNetwork(network.name),
+      })),
+    });
+  }
+
+  // The hostnames this Mac answers on. Searched by the name, by what is behind
+  // it, and by the domain -- half the point of a route is that you remember the
+  // hostname and not which container it was.
+  const routeHits = tunnels
+    .flatMap((tunnel) => tunnel.routes)
+    .filter((r) => matches(r.hostname, r.target, r.zoneName, r.port));
+
+  if (routeHits.length > 0) {
+    groups.push({
+      label: 'Tunnels',
+      results: routeHits.map((route) => ({
+        key: route.hostname,
+        icon: Globe,
+        tone: route.status === 'running' ? 'text-emerald-600 dark:text-emerald-500' : 'text-ink-400',
+        title: route.hostname,
+        sub: route.kind === 'host' ? `this Mac:${route.port}` : `${route.target}:${route.port}`,
+        meta: route.zoneName,
+        measure: route.reachable ? 'reachable' : 'unreachable',
+        state: (
+          <span
+            className={`text-tiny font-medium ${
+              route.status === 'running'
+                ? 'text-emerald-700 dark:text-emerald-500'
+                : 'text-ink-500'
+            }`}
+          >
+            {route.status === 'running' ? 'serving' : 'stopped'}
+          </span>
+        ),
+        // Straight to the hostname, which is what somebody who typed it wants.
+        open: () => void openExternal(route.url ?? `https://${route.hostname}`),
       })),
     });
   }

@@ -227,6 +227,32 @@ export function registryHost(value: string): string | null {
   return null;
 }
 
+/**
+ * The label in front of a domain, for a tunnel's hostname.
+ *
+ * Empty is allowed and means the domain itself, which is what somebody with a
+ * domain kept for this wants. Dots are allowed and checked part by part:
+ * "api.staging" under example.com is an ordinary thing to want.
+ */
+export function subdomain(value: string): string | null {
+  const trimmed = value.trim().replace(/^\.+|\.+$/g, '');
+  if (!trimmed) return null;
+
+  if (trimmed.length > 63) return 'A subdomain is at most 63 characters.';
+
+  for (const part of trimmed.split('.')) {
+    if (!part) return 'A subdomain cannot contain an empty part.';
+    if (!/^[a-zA-Z0-9-]+$/.test(part)) {
+      return 'Letters, digits and hyphens only.';
+    }
+    if (part.startsWith('-') || part.endsWith('-')) {
+      return 'A subdomain cannot start or end with a hyphen.';
+    }
+  }
+
+  return null;
+}
+
 /** A user, as the CLI takes it: a name, a uid, or uid:gid. */
 export function user(value: string): string | null {
   const trimmed = value.trim();

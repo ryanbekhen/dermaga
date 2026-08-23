@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { invoke, onNotify } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
-import type { Container, DiskUsage, Image, Machine, Network, SystemStatus, Volume } from '../types';
+import type {
+  Container,
+  DiskUsage,
+  Image,
+  Machine,
+  Network,
+  SystemStatus,
+  Tunnel,
+  Volume,
+} from '../types';
 
 export type ConnectionState = 'connecting' | 'live' | 'disconnected';
 
@@ -12,6 +21,7 @@ interface Snapshot {
   images: Image[];
   volumes: Volume[];
   networks: Network[];
+  tunnels: Tunnel[];
   system?: SystemStatus;
   cliAvailable?: boolean;
   disk?: DiskUsage;
@@ -28,6 +38,7 @@ export function useEventStream() {
   const setImages = useResourceStore((s) => s.setImages);
   const setVolumes = useResourceStore((s) => s.setVolumes);
   const setNetworks = useResourceStore((s) => s.setNetworks);
+  const setTunnels = useResourceStore((s) => s.setTunnels);
   const setHost = useResourceStore((s) => s.setHost);
   const setError = useResourceStore((s) => s.setError);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
@@ -49,6 +60,7 @@ export function useEventStream() {
       setImages(snapshot.images ?? []);
       setVolumes(snapshot.volumes ?? []);
       setNetworks(snapshot.networks ?? []);
+      setTunnels(snapshot.tunnels ?? []);
       // An agent old enough not to carry the host in its snapshot is still a
       // working agent -- someone with the background service installed can be
       // running a copy of Dermaga from before this field existed. Left to the
@@ -81,7 +93,16 @@ export function useEventStream() {
       });
 
     return unsubscribe;
-  }, [setContainers, setMachines, setImages, setVolumes, setNetworks, setHost, setError]);
+  }, [
+    setContainers,
+    setMachines,
+    setImages,
+    setVolumes,
+    setNetworks,
+    setTunnels,
+    setHost,
+    setError,
+  ]);
 
   return connection;
 }

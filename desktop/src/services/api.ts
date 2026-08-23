@@ -23,6 +23,12 @@ import type {
   UsagePoint,
   RegistryLogin,
   ScannerStatus,
+  Tunnel,
+  TunnelKind,
+  TunnelRoute,
+  TunnelTarget,
+  TunnelsStatus,
+  Zone,
   Volume,
   VolumeSpec,
   VolumeState,
@@ -121,6 +127,75 @@ export const api = {
 
   async registryLogout(server: string): Promise<void> {
     await invoke('registry.logout', { server });
+  },
+
+  // --- tunnels ------------------------------------------------------------
+
+  async getTunnelsStatus(): Promise<TunnelsStatus> {
+    return invoke('tunnels.status');
+  },
+
+  /** Every tunnel, and the routes each one carries. */
+  async getTunnels(): Promise<Tunnel[]> {
+    return (await invoke<Tunnel[]>('tunnels.list')) ?? [];
+  },
+
+  /** Verifies the token against Cloudflare before storing it. */
+  async connectCloudflare(token: string): Promise<TunnelsStatus> {
+    return invoke('tunnels.connect', { token });
+  },
+
+  async disconnectCloudflare(): Promise<void> {
+    await invoke('tunnels.disconnect');
+  },
+
+  async getZones(): Promise<Zone[]> {
+    return (await invoke<Zone[]>('tunnels.zones')) ?? [];
+  },
+
+  /**
+   * Everything a route could point at: containers, machines, and this Mac.
+   *
+   * The port list is repaired on the way in. Go marshals an empty slice as
+   * `null`, the type here says array, and nothing in between complains — so a
+   * machine, which declares no ports at all, took the whole window down on
+   * `ports.length`. The agent no longer sends null; this is so an older one
+   * cannot either.
+   */
+  async getTunnelTargets(): Promise<TunnelTarget[]> {
+    const targets = (await invoke<TunnelTarget[]>('tunnels.targets')) ?? [];
+
+    return targets.map((target) => ({ ...target, ports: target.ports ?? [] }));
+  },
+
+  /**
+   * Publishes a container's port on a hostname.
+   *
+   * `replaces` names the route this takes the place of, which is how one is
+   * moved to a different hostname rather than duplicated.
+   */
+  async addRoute(spec: {
+    replaces?: string;
+    zoneId: string;
+    subdomain: string;
+    kind: TunnelKind;
+    target: string;
+    port: string;
+  }): Promise<TunnelRoute> {
+    return invoke('tunnels.addRoute', spec);
+  },
+
+  /** Takes the hostname down and removes its DNS record. */
+  async removeRoute(hostname: string): Promise<void> {
+    await invoke('tunnels.removeRoute', { hostname });
+  },
+
+  async startTunnel(tunnel: string): Promise<void> {
+    await invoke('tunnels.start', { tunnel });
+  },
+
+  async stopTunnel(tunnel: string): Promise<void> {
+    await invoke('tunnels.stop', { tunnel });
   },
 
   /** Gives an image a second reference, usually the one it will be pushed as. */
