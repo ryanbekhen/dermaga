@@ -143,6 +143,11 @@ func Run(version string) error {
 
 		if id, ok := result.Response.UserInfo["containerId"].(string); ok && id != "" {
 			app.OpenContainer(id)
+			return
+		}
+
+		if id, ok := result.Response.UserInfo["taskId"].(string); ok && id != "" {
+			app.OpenTaskOutput(id)
 		}
 	})
 
@@ -308,6 +313,12 @@ func (a *App) onNotify(message Notification) {
 	case "containers.exited":
 		a.notifyExit(message.Params)
 
+	case "stream.end":
+		// Work that carried a name has finished. The agent only names the kind
+		// worth waiting for -- an image built or pulled, a container or a
+		// machine made -- so anything arriving with one is worth saying.
+		a.notifyFinished(message.Params)
+
 	case "events.snapshot":
 		// The menu bar reads the same snapshots the window does, so it stays
 		// right whether or not there is a window to send them to.
@@ -362,6 +373,8 @@ func (a *App) notifyExit(params json.RawMessage) {
 		return
 	}
 
+	// Off means silent, not "quieter": somebody who turned this off does not
+	// want a toast about it either.
 	if !a.bridge.notifyOnExit() {
 		log.Println("[dermaga] exit notification suppressed by settings")
 		return
@@ -372,18 +385,155 @@ func (a *App) notifyExit(params json.RawMessage) {
 		body = "Running " + exit.Image + ". Nothing asked it to stop."
 	}
 
-	log.Println("[dermaga] notifying about", exit.Name)
+	a.announce(announcement{
+		ID:        "exit-" + exit.ID,
+		Title:     exit.Name + " stopped",
+		Body:      body,
+		Failed:    true,
+		Container: exit.ID,
+	})
+}
+
+// announcement is one piece of news, and everything either channel needs to
+// carry it.
+type announcement struct {
+	ID     string
+	Title  string
+	Body   string
+	Failed bool
+	// What pressing it opens -- a container, or what a finished command
+	// printed. One or the other, never both.
+	Container string
+	Task      string
+}
+
+// announce says something once, through whichever channel can reach the reader.
+//
+// Somebody looking at the window does not need macOS to tell them what the
+// window is about to show, and somebody who has gone elsewhere will never see a
+// toast in a corner they are not looking at.
+//
+// Decided here rather than on both sides independently. The window and the page
+// would be answering the same question a few milliseconds apart, and switching
+// away in that gap -- which is exactly what people do while waiting for a build
+// -- would either say it twice or not at all. It was saying it twice.
+func (a *App) announce(news announcement) {
+	if a.windowFocused() {
+		a.emit("dermaga:announce", map[string]any{
+			"id":        news.ID,
+			"title":     news.Title,
+			"body":      news.Body,
+			"failed":    news.Failed,
+			"container": news.Container,
+			"task":      news.Task,
+		})
+
+		return
+	}
+
+	log.Println("[dermaga] notifying about", news.Title)
+
+	data := map[string]any{}
+	if news.Container != "" {
+		data["containerId"] = news.Container
+	}
+	if news.Task != "" {
+		data["taskId"] = news.Task
+	}
 
 	// Notifications fail quietly on macOS -- an app that has not been granted
 	// permission simply never shows one -- so the reason is written down.
 	if err := a.notify.SendNotification(notifications.NotificationOptions{
-		ID:    "exit-" + exit.ID,
-		Title: exit.Name + " stopped",
-		Body:  body,
-		Data:  map[string]any{"containerId": exit.ID},
+		ID:    news.ID,
+		Title: news.Title,
+		Body:  news.Body,
+		Data:  data,
 	}); err != nil {
 		log.Println("[dermaga] could not raise a notification:", err)
 	}
+}
+
+// notifyFinished tells the user that something they started has ended.
+//
+// Raised here rather than in the window's own JavaScript for the same reason
+// the exit notification is: a build takes minutes, and the most likely thing to
+// happen in those minutes is that they close the window and get on with
+// something else. This side is still running, and still listening.
+func (a *App) notifyFinished(params json.RawMessage) {
+	var ended struct {
+		ID    string `json:"id"`
+		Label string `json:"label"`
+		Error string `json:"error"`
+	}
+
+	if err := json.Unmarshal(params, &ended); err != nil || ended.Label == "" {
+		return
+	}
+
+	if !a.bridge.notifyOnFinish() {
+		log.Println("[dermaga] finish notification suppressed by settings")
+		return
+	}
+
+	title := ended.Label + " " + finishedVerb(ended.ID)
+	body := "Ready in Dermaga."
+
+	if ended.Error != "" {
+		title = ended.Label + " failed"
+		// The runtime's own words, cut to something a banner can hold. The
+		// whole of it is kept in the app, which is where somebody goes next.
+		body = firstLine(ended.Error)
+	}
+
+	a.announce(announcement{
+		ID:     "finished-" + ended.ID,
+		Title:  title,
+		Body:   body,
+		Failed: ended.Error != "",
+		// Pressing it opens the output, which for a failure is the whole of
+		// what went wrong -- a banner holds one line, the window holds all of
+		// it.
+		Task: ended.ID,
+	})
+}
+
+// windowFocused reports whether the user is looking at Dermaga.
+//
+// No window at all counts as not looking, which is the case this whole path
+// exists for: the app sits in the menu bar while a build runs and there is
+// nothing on screen to put a toast in.
+func (a *App) windowFocused() bool {
+	window := a.MainWindow()
+
+	return window != nil && window.IsFocused()
+}
+
+// finishedVerb reads the kind out of a stream id -- `build-7`, `pull-2` -- and
+// says what happened to it in a word.
+func finishedVerb(id string) string {
+	kind, _, _ := strings.Cut(id, "-")
+
+	switch kind {
+	case "build":
+		return "built"
+	case "pull":
+		return "pulled"
+	case "machine", "create":
+		return "created"
+	default:
+		return "finished"
+	}
+}
+
+// firstLine is as much of a message as a notification banner can usefully hold.
+func firstLine(message string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(message), "\n")
+
+	if len(line) > 140 {
+		return line[:137] + "…"
+	}
+
+	return line
 }
 
 // --- the menu bar ---------------------------------------------------------
@@ -816,6 +966,25 @@ func (a *App) OpenContainer(id string) {
 	}
 
 	a.bridge.setPendingOpen(id)
+}
+
+// OpenTaskOutput brings the window up on what a finished command printed.
+//
+// The same shape as OpenContainer, and for the same reason: the notification
+// that led here may well have been raised with no window at all -- that is
+// most of the point of it -- so a window that has just been made is told to
+// collect this the moment it can listen.
+func (a *App) OpenTaskOutput(id string) {
+	had := a.MainWindow() != nil
+
+	a.ShowWindow()
+
+	if had {
+		a.emit("dermaga:open-task", id)
+		return
+	}
+
+	a.bridge.setPendingTask(id)
 }
 
 func (a *App) quitAfterOpeningInstaller() {

@@ -33,15 +33,18 @@ type Bridge struct {
 
 	mu       sync.Mutex
 	settings struct {
-		notifyOnExit bool
+		notifyOnExit   bool
+		notifyOnFinish bool
 	}
 	pendingOpen string
+	pendingTask string
 }
 
 // NewBridge wires the bridge to the running app.
 func NewBridge(app *App) *Bridge {
 	bridge := &Bridge{app: app}
 	bridge.settings.notifyOnExit = true
+	bridge.settings.notifyOnFinish = true
 
 	return bridge
 }
@@ -91,9 +94,10 @@ func (b *Bridge) IsFullScreen() bool {
 // SyncSettings keeps this side in step with preferences it has to act on
 // without asking -- such as whether to raise a notification, which arrives at
 // the moment it is needed.
-func (b *Bridge) SyncSettings(notifyOnExit bool) {
+func (b *Bridge) SyncSettings(notifyOnExit, notifyOnFinish bool) {
 	b.mu.Lock()
 	b.settings.notifyOnExit = notifyOnExit
+	b.settings.notifyOnFinish = notifyOnFinish
 	b.mu.Unlock()
 }
 
@@ -102,6 +106,13 @@ func (b *Bridge) notifyOnExit() bool {
 	defer b.mu.Unlock()
 
 	return b.settings.notifyOnExit
+}
+
+func (b *Bridge) notifyOnFinish() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.settings.notifyOnFinish
 }
 
 // RegisterContainerNames tells macOS to route the container domain to the
@@ -225,6 +236,25 @@ func (b *Bridge) TakePendingOpen() string {
 	b.pendingOpen = ""
 
 	return id
+}
+
+// TakePendingTask collects the output a notification asked for before there
+// was a window to show it in.
+func (b *Bridge) TakePendingTask() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	id := b.pendingTask
+	b.pendingTask = ""
+
+	return id
+}
+
+func (b *Bridge) setPendingTask(id string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.pendingTask = id
 }
 
 func (b *Bridge) setPendingOpen(id string) {

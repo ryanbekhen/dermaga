@@ -18,6 +18,7 @@ import type {
   NetworkSpec,
   Settings,
   SystemStatus,
+  TaskRecord,
   ToolchainStatus,
   UsagePoint,
   RegistryLogin,
@@ -272,6 +273,23 @@ export const api = {
    */
   async recreateContainer(id: string): Promise<Container> {
     return invoke('containers.recreate', { id });
+  },
+
+  // --- finished work ------------------------------------------------------
+
+  /** What was kept of commands that have finished, newest first. */
+  async recentTasks(): Promise<TaskRecord[]> {
+    return (await invoke<TaskRecord[]>('tasks.list')) ?? [];
+  },
+
+  /** Hands a finished command's output over to be kept. */
+  async recordTask(record: TaskRecord): Promise<void> {
+    await invoke('tasks.record', record);
+  },
+
+  /** Dismissing it in the window means forgetting it here. */
+  async forgetTask(id: string): Promise<void> {
+    await invoke('tasks.forget', { id });
   },
 
   // --- images -------------------------------------------------------------

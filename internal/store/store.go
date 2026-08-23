@@ -39,6 +39,9 @@ const (
 	// keyed by name. Somewhere for a setting to live that can be changed
 	// without destroying the container to write it down.
 	BucketContainers = "containers"
+	// What a finished command printed. A build's output is the only record of
+	// how an image was made, and it used to go when the window did.
+	BucketTasks = "tasks"
 )
 
 // Name of the database inside ~/.dermaga.
@@ -84,6 +87,7 @@ func Open() (*Store, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		buckets := []string{
 			BucketScans, BucketTemplates, BucketPending, BucketPorts, BucketContainers,
+			BucketTasks,
 		}
 
 		for _, name := range buckets {

@@ -27,18 +27,21 @@ interface Bridge {
   pathForFile?: (file: File) => string;
   onFilesDropped?: (callback: (paths: string[], target: string) => void) => () => void;
   resolveBuildDrop?: (paths: string[]) => Promise<BuildDrop | null>;
-  syncSettings?: (settings: { notifyOnExit: boolean }) => void;
+  syncSettings?: (settings: { notifyOnExit: boolean; notifyOnFinish: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
   openExternal?: (url: string) => Promise<void>;
   openFinding?: (reference: string, id: string) => Promise<void>;
   registerContainerNames?: () => Promise<void>;
   takePendingOpen?: () => Promise<string | null>;
+  takePendingTask?: () => Promise<string | null>;
   serviceStatus?: () => Promise<ServiceStatus>;
   installService?: () => Promise<ServiceStatus>;
   uninstallService?: () => Promise<ServiceStatus>;
   getOpenAtLogin?: () => Promise<boolean>;
   setOpenAtLogin?: (value: boolean) => Promise<boolean>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
+  onOpenTask?: (callback: (id: string) => void) => () => void;
+  onAnnouncement?: (callback: (news: Announcement) => void) => () => void;
   checkUpdate?: () => Promise<UpdateCheck>;
   stageUpdate?: (assetUrl: string, version: string) => Promise<StagedUpdate>;
   installUpdate?: (dmgPath: string) => Promise<void>;
@@ -128,7 +131,7 @@ export async function resolveBuildDrop(paths: string[]): Promise<BuildDrop | nul
 }
 
 /** Keeps the main process in step with preferences it acts on by itself. */
-export function syncSettings(settings: { notifyOnExit: boolean }): void {
+export function syncSettings(settings: { notifyOnExit: boolean; notifyOnFinish: boolean }): void {
   bridge().syncSettings?.(settings);
 }
 
@@ -233,6 +236,39 @@ export function onOpenContainer(callback: (id: string) => void): () => void {
   return bridge().onOpenContainer?.(callback) ?? (() => {});
 }
 
+/**
+ * A finished command whose output somebody asked to see, from the notification
+ * macOS raised about it.
+ */
+export function takePendingTask(): Promise<string | null> {
+  return bridge().takePendingTask?.() ?? Promise.resolve(null);
+}
+
+export function onOpenTask(callback: (id: string) => void): () => void {
+  return bridge().onOpenTask?.(callback) ?? (() => {});
+}
+
+/**
+ * Something Dermaga has to say, arriving because this window has the focus.
+ *
+ * The other side decides which of the two channels a piece of news goes down --
+ * a toast here, or a notification from macOS -- so it is never both and never
+ * neither. This is the half for a reader who is already looking.
+ */
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  failed: boolean;
+  /** What pressing it opens: a container, or a finished command's output. */
+  container?: string;
+  task?: string;
+}
+
+export function onAnnouncement(callback: (news: Announcement) => void): () => void {
+  return bridge().onAnnouncement?.(callback) ?? (() => {});
+}
+
 /** Opens the native folder chooser; null if the user dismissed it. */
 export function pickDirectory(title?: string): Promise<string | null> {
   return bridge().pickDirectory?.(title) ?? Promise.resolve(null);
@@ -278,6 +314,8 @@ export const updates = {
 export interface StreamHandlers {
   onData: (chunk: string) => void;
   onEnd?: (error?: string) => void;
+  /** The agent's name for this run, as soon as it has one. */
+  onStart?: (streamId: string) => void;
 }
 
 /**
@@ -290,6 +328,11 @@ export async function openStream(
   handlers: StreamHandlers
 ): Promise<() => void> {
   const { streamId } = await invoke<{ streamId: string }>(method, params);
+
+  // The agent's own name for this run. Handed back because a notification
+  // raised on the Go side knows only this -- and clicking it has to find the
+  // task the window filed under a name of its own.
+  handlers.onStart?.(streamId);
 
   const unsubscribe = onNotify((message) => {
     const payload = message.params as { id?: string; chunk?: string; error?: string } | undefined;

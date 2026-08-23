@@ -27,6 +27,11 @@ type streams struct {
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
 	sessions map[string]*terminal.Session
+	// What each stream is about, for the few that are worth telling the user
+	// about when they end. Only work with a name somebody would recognise --
+	// an image being built, a machine being made -- has one; following a log
+	// does not, and neither does anything else nobody is waiting on.
+	named    map[string]string
 	sequence atomic.Uint64
 }
 
@@ -35,6 +40,7 @@ func newStreams(server *rpc.Server) *streams {
 		server:   server,
 		cancels:  map[string]context.CancelFunc{},
 		sessions: map[string]*terminal.Session{},
+		named:    map[string]string{},
 	}
 }
 
@@ -60,6 +66,7 @@ func (s *streams) cancel(id string) {
 	session, hasSession := s.sessions[id]
 	delete(s.cancels, id)
 	delete(s.sessions, id)
+	delete(s.named, id)
 	s.mu.Unlock()
 
 	if hasSession {
@@ -102,8 +109,59 @@ func (s *streams) end(id string, err error) {
 		params["error"] = err.Error()
 	}
 
+	// Named work says what it was, so whatever is listening can tell somebody
+	// it has finished -- including when there is no window left to tell.
+	if label := s.takeName(id); label != "" {
+		params["label"] = label
+	}
+
 	s.server.Notify("stream.end", params)
 	s.cancel(id)
+}
+
+// runNamed is runCommand for work worth announcing when it ends.
+//
+// The label is what a person would call it -- `api:dev`, not `build-7` -- and
+// its presence is also the signal: a stream with a name raises a notification
+// when it finishes, one without goes quietly. Following a log should never
+// interrupt anybody, and neither should the dozen small commands the window
+// runs on its own account.
+func (s *streams) runNamed(
+	ctx context.Context,
+	prefix, label string,
+	build func(context.Context) (*exec.Cmd, error),
+) (string, error) {
+	return s.runNamedThen(ctx, prefix, label, build, nil)
+}
+
+// runNamedThen is runNamed with something to clear up afterwards.
+func (s *streams) runNamedThen(
+	ctx context.Context,
+	prefix, label string,
+	build func(context.Context) (*exec.Cmd, error),
+	done func(),
+) (string, error) {
+	id, err := s.runCommandThen(ctx, prefix, build, done)
+	if err != nil || label == "" {
+		return id, err
+	}
+
+	s.mu.Lock()
+	s.named[id] = label
+	s.mu.Unlock()
+
+	return id, nil
+}
+
+// takeName reads a stream's label and forgets it, since a stream ends once.
+func (s *streams) takeName(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	label := s.named[id]
+	delete(s.named, id)
+
+	return label
 }
 
 // runCommand streams a command's output line by line. The CLI writes progress

@@ -6,6 +6,7 @@
  * speaks to the agent. This file is the whole of the connection.
  */
 import { Call, Events, Flags } from '@wailsio/runtime';
+import type { Announcement } from './ipc';
 
 /**
  * Every bridge method is a Go method on one bound service.
@@ -120,7 +121,7 @@ window.dermaga = {
     on<boolean>('dermaga:fullscreen', (value) => callback(Boolean(value))),
 
   syncSettings: (settings) => {
-    void call('SyncSettings', settings.notifyOnExit);
+    void call('SyncSettings', settings.notifyOnExit, settings.notifyOnFinish);
   },
 
   openNotificationSettings: () => call('OpenNotificationSettings'),
@@ -133,6 +134,11 @@ window.dermaga = {
 
   takePendingOpen: async () => orNull(await call<string>('TakePendingOpen')),
   onOpenContainer: (callback) => on<string>('dermaga:open-container', callback),
+
+  takePendingTask: async () => orNull(await call<string>('TakePendingTask')),
+  onOpenTask: (callback) => on<string>('dermaga:open-task', callback),
+  onAnnouncement: (callback) =>
+    on<Announcement>('dermaga:announce', (data) => data && callback(data)),
 
   serviceStatus: () => serviceCall('ServiceStatus'),
   installService: () => serviceCall('InstallService'),

@@ -305,6 +305,9 @@ export interface Settings {
   logTail: number;
   confirmDestructive: boolean;
   notifyOnExit: boolean;
+  /** And when work somebody started finishes: an image built or pulled, a
+   *  container or a machine made. */
+  notifyOnFinish: boolean;
   sidebarCollapsed: boolean;
   /** Where templates are fetched from. Empty means Dermaga's own catalogue. */
   templatesUrl?: string;
@@ -394,6 +397,25 @@ export interface BuildDrop {
   dockerfile?: string;
   /** A tag worth suggesting, from the folder's own name. */
   name?: string;
+}
+
+/**
+ * A command that has finished, and what it printed.
+ *
+ * Kept by the agent so a build's log outlives the window that watched it
+ * arrive. Only finished work: anything still running belongs to the window,
+ * because it is still arriving there.
+ */
+export interface TaskRecord {
+  id: string;
+  /** What the agent called the run, which is the name a notification carries. */
+  streamId?: string;
+  kind: 'image' | 'machine' | 'container';
+  label: string;
+  status: 'done' | 'failed';
+  error?: string;
+  lines: string[];
+  at: string;
 }
 
 /** One live reading of a container's usage. Never stored: see useLiveUsage. */

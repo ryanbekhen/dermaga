@@ -20,7 +20,13 @@ type Settings struct {
 	LogTail            int    `json:"logTail"`
 	ConfirmDestructive bool   `json:"confirmDestructive"`
 	// Whether to raise a macOS notification when a container stops on its own.
-	NotifyOnExit     bool `json:"notifyOnExit"`
+	NotifyOnExit bool `json:"notifyOnExit"`
+	// And when work somebody started finishes: an image built, an image
+	// pulled, a container or a machine created. Separate from the above
+	// because they are opposite kinds of news -- one is something going wrong
+	// while nobody watched, the other is something they asked for being done
+	// -- and somebody can reasonably want one without the other.
+	NotifyOnFinish   bool `json:"notifyOnFinish"`
 	SidebarCollapsed bool `json:"sidebarCollapsed"`
 	// Where the container templates are fetched from. Empty means Dermaga's
 	// own, which is what almost everybody wants -- but a catalogue is a static
@@ -42,6 +48,7 @@ func Defaults() Settings {
 		LogTail:            200,
 		ConfirmDestructive: true,
 		NotifyOnExit:       true,
+		NotifyOnFinish:     true,
 		ShowBuilder:        true,
 	}
 }

@@ -112,6 +112,21 @@ export function SettingsPanel() {
                       />
                     }
                   />
+                  {/* The other half, and deliberately its own switch: one is
+                      something going wrong while nobody watched, the other is
+                      something asked for being done. Somebody can reasonably
+                      want either without the other. */}
+                  <Setting
+                    label="Notify when something finishes"
+                    hint="An image built or pulled, a container or a machine made — and whether it worked. A build takes minutes, which is long enough to have gone somewhere else."
+                    control={
+                      <Switch
+                        checked={settings.notifyOnFinish}
+                        onChange={settings.setNotifyOnFinish}
+                        label="Notify when something finishes"
+                      />
+                    }
+                  />
                 </Group>
               </>
             )}

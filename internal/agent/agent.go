@@ -26,6 +26,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/settings"
 	"github.com/ryanbekhen/dermaga/internal/store"
 	"github.com/ryanbekhen/dermaga/internal/system"
+	"github.com/ryanbekhen/dermaga/internal/tasks"
 	"github.com/ryanbekhen/dermaga/internal/templates"
 	"github.com/ryanbekhen/dermaga/internal/terminal"
 	"github.com/ryanbekhen/dermaga/internal/toolchain"
@@ -70,6 +71,9 @@ type Agent struct {
 	settings   *settings.Store
 	watcher    *watcher.Watcher
 	exits      *exitWatch
+	// What finished commands printed, kept so a build's log outlives the
+	// window that watched it arrive.
+	tasks *tasks.Store
 }
 
 func New(server *rpc.Server, logger *slog.Logger) *Agent {
@@ -109,6 +113,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.registry = registry.NewManager(runner, logger)
 	agent.scanner = scanner.NewManager(runner, logger)
 	agent.templates = templates.NewManager(logger)
+	agent.tasks = tasks.New(logger)
 
 	// Opened before anything reads from it, and forgiving if it cannot be:
 	// none of what it holds is authored by anybody, so the fallback is doing
@@ -125,6 +130,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		agent.scanner.UseStore(opened)
 		agent.templates.UseStore(opened)
 		agent.containers.UseStore(opened)
+		agent.tasks.UseStore(opened)
 
 		// A build from a pasted Dockerfile writes it to a directory of its own
 		// and removes it when the build ends. A build that never ended -- the
@@ -358,6 +364,65 @@ func (a *Agent) register() {
 	a.registerNetworks()
 	a.registerMachines()
 	a.registerStreams()
+	a.registerTasks()
+}
+
+// named picks what to call a piece of work: what the user asked it to be
+// called, or failing that what it was made from. Empty when neither is known,
+// which is how a stream stays quiet.
+func named(name, fallback string) string {
+	if strings.TrimSpace(name) != "" {
+		return name
+	}
+
+	return fallback
+}
+
+// --- finished work ---------------------------------------------------------
+
+// The shelf a command's output is put on once it has finished.
+//
+// The window owns the work while it is running -- the lines are arriving there,
+// and it is the thing drawing them -- and hands the whole of it over at the end.
+// One message rather than a running copy: it is a megabyte at the very worst,
+// once, over a socket on this machine, and it keeps one idea of what a task is
+// instead of two halves that have to be kept in step.
+func (a *Agent) registerTasks() {
+	a.server.Register("tasks.list", func(_ context.Context, _ json.RawMessage) (any, error) {
+		return a.tasks.List(), nil
+	})
+
+	a.server.Register("tasks.record", func(_ context.Context, params json.RawMessage) (any, error) {
+		record, err := decodeParams[tasks.Record](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if record.ID == "" {
+			return nil, rpc.Fail("a finished command needs an id to be remembered by")
+		}
+
+		if err := a.tasks.Put(record); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"id": record.ID}, nil
+	})
+
+	a.server.Register("tasks.forget", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.tasks.Forget(args.ID); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"id": args.ID}, nil
+	})
 }
 
 // --- system ---------------------------------------------------------------
@@ -986,9 +1051,10 @@ func (a *Agent) registerContainers() {
 		// volume has to be made fit to write to, not the New volume dialog.
 		a.prepareVolumes(ctx, spec)
 
-		id, err := a.streams.runCommand(ctx, "create", func(ctx context.Context) (*exec.Cmd, error) {
-			return a.containers.CreateCommand(ctx, spec)
-		})
+		id, err := a.streams.runNamed(ctx, "create", named(spec.Name, spec.Image),
+			func(ctx context.Context) (*exec.Cmd, error) {
+				return a.containers.CreateCommand(ctx, spec)
+			})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
 		}
@@ -1066,9 +1132,10 @@ func (a *Agent) registerImages() {
 			return nil, err
 		}
 
-		id, err := a.streams.runCommand(ctx, "pull", func(ctx context.Context) (*exec.Cmd, error) {
-			return a.images.PullCommand(ctx, args.Reference, args.Platform, args.Scheme), nil
-		})
+		id, err := a.streams.runNamed(ctx, "pull", args.Reference,
+			func(ctx context.Context) (*exec.Cmd, error) {
+				return a.images.PullCommand(ctx, args.Reference, args.Platform, args.Scheme), nil
+			})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
 		}
@@ -1143,13 +1210,14 @@ func (a *Agent) registerImages() {
 		// The directory dies with the build, not with this request: the
 		// request returns the moment the build starts, and the build reads
 		// that directory for as long as it runs.
-		id, err := a.streams.runCommandThen(ctx, "build", func(ctx context.Context) (*exec.Cmd, error) {
-			return a.images.BuildCommand(ctx, opts), nil
-		}, func() {
-			if staged != "" {
-				_ = os.RemoveAll(staged)
-			}
-		})
+		id, err := a.streams.runNamedThen(ctx, "build", named(opts.Tag, opts.Context),
+			func(ctx context.Context) (*exec.Cmd, error) {
+				return a.images.BuildCommand(ctx, opts), nil
+			}, func() {
+				if staged != "" {
+					_ = os.RemoveAll(staged)
+				}
+			})
 		if err != nil {
 			// Nothing was started, so nothing else will clear this up.
 			if staged != "" {
@@ -1507,9 +1575,10 @@ func (a *Agent) registerMachines() {
 			return nil, err
 		}
 
-		id, err := a.streams.runCommand(ctx, "machine", func(ctx context.Context) (*exec.Cmd, error) {
-			return a.machines.CreateCommand(ctx, spec)
-		})
+		id, err := a.streams.runNamed(ctx, "machine", named(spec.Name, spec.Image),
+			func(ctx context.Context) (*exec.Cmd, error) {
+				return a.machines.CreateCommand(ctx, spec)
+			})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())
 		}

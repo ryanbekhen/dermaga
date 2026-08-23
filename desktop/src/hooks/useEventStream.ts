@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { invoke, onNotify } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
-import { useToastStore } from '../store/toastStore';
 import type { Container, DiskUsage, Image, Machine, Network, SystemStatus, Volume } from '../types';
 
 export type ConnectionState = 'connecting' | 'live' | 'disconnected';
@@ -35,17 +34,12 @@ export function useEventStream() {
 
   useEffect(() => {
     const unsubscribe = onNotify((message) => {
-      // macOS announces this too, and makes the sound. This is the version for
-      // someone already looking at the window, where a system notification is
-      // the wrong shape -- and the one that still arrives if macOS is set to
-      // refuse them.
-      if (message.method === 'containers.exited') {
-        const exit = message.params as { name?: string };
-        if (exit?.name) {
-          useToastStore.getState().push(`${exit.name} stopped on its own`, 'error');
-        }
-        return;
-      }
+      // A container stopping is announced once, by the side that knows whether
+      // this window is in front of the reader: a toast if it is, a macOS
+      // notification if it is not. It used to be said here as well, which meant
+      // both at once -- a banner with a sound, over a window already showing
+      // the same sentence.
+      if (message.method === 'containers.exited') return;
 
       if (message.method !== 'events.snapshot') return;
 

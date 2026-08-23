@@ -7,8 +7,16 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
 import { Toasts } from './components/Toasts';
-import { onOpenContainer, syncSettings, takePendingOpen } from './services/ipc';
+import {
+  onOpenContainer,
+  onOpenTask,
+  syncSettings,
+  takePendingOpen,
+  takePendingTask,
+} from './services/ipc';
+import { useTaskStore } from './store/taskStore';
 import { subscribeToScanner } from './store/scannerStore';
+import { restoreTasks, watchAnnouncements } from './services/tasks';
 import { useSettingsStore } from './store/settingsStore';
 import { useEventStream } from './hooks/useEventStream';
 import { useFileDrop } from './hooks/useFileDrop';
@@ -47,14 +55,34 @@ export function App() {
   // The scanner reports itself; this only opens the ear for it.
   useEffect(() => subscribeToScanner(), []);
 
+  // What earlier runs built, and what those builds printed. Kept by the agent,
+  // because the window is the one thing here that does not survive being shut.
+  useEffect(() => void restoreTasks(), []);
+
+  // Anything Dermaga has to say while this window is in front says it here, in
+  // the corner. Out of focus it goes to macOS instead; the other side chooses,
+  // so it is never said twice.
+  useEffect(() => watchAnnouncements(), []);
+
   const route = useUIStore((s) => s.route);
   const globalQuery = useUIStore((s) => s.globalQuery);
   const navigate = useUIStore((s) => s.navigate);
   const openContainer = useUIStore((s) => s.openContainer);
   const notifyOnExit = useSettingsStore((s) => s.notifyOnExit);
+  const notifyOnFinish = useSettingsStore((s) => s.notifyOnFinish);
 
   // Clicking a "container stopped" notification opens that container.
   useEffect(() => onOpenContainer((id) => openContainer(id)), [openContainer]);
+
+  // And clicking one about a finished build opens what it printed -- the same
+  // door the toast in the corner opens, from the other side of the app.
+  useEffect(() => onOpenTask((id) => useTaskStore.getState().inspect(id)), []);
+
+  useEffect(() => {
+    void takePendingTask().then((id) => {
+      if (id) useTaskStore.getState().inspect(id);
+    });
+  }, []);
 
   // And one asked for before this window existed -- the same notification, or
   // the menu bar, with everything closed -- is waiting to be collected.
@@ -66,7 +94,7 @@ export function App() {
 
   // The main process raises notifications itself, so it needs to know when the
   // user has asked it not to.
-  useEffect(() => syncSettings({ notifyOnExit }), [notifyOnExit]);
+  useEffect(() => syncSettings({ notifyOnExit, notifyOnFinish }), [notifyOnExit, notifyOnFinish]);
 
   const containers = useResourceStore((s) => s.containers);
   const machines = useResourceStore((s) => s.machines);

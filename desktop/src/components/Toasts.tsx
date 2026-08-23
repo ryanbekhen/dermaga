@@ -19,10 +19,14 @@ export function Toasts() {
         return (
           <button
             key={toast.id}
-            onClick={() => dismiss(toast.id)}
+            onClick={() => {
+              toast.onClick?.();
+              dismiss(toast.id);
+            }}
+            title={toast.onClick ? 'Open the output' : 'Dismiss'}
             className={`pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-md px-4 py-3 text-left text-sm text-white shadow-panel ${
               toast.tone === 'error' ? 'bg-orange-700' : 'bg-ink-800'
-            }`}
+            } ${toast.onClick ? 'hover:brightness-110' : ''}`}
           >
             <Icon size={16} className="mt-0.5 shrink-0" aria-hidden />
             {/*
@@ -32,7 +36,14 @@ export function Toasts() {
               first it refuses to be narrowed; without the second it refuses to
               be split -- either way it is drawn out past the rounded corner.
             */}
-            <span className="min-w-0 wrap-break-word">{toast.message}</span>
+            <span className="min-w-0 wrap-break-word">
+              {toast.message}
+              {/* Said out loud, because a box that can be pressed and a box
+                  that only goes away look identical at this size. */}
+              {toast.onClick && (
+                <span className="mt-0.5 block text-tiny text-white/70">Click to see why</span>
+              )}
+            </span>
           </button>
         );
       })}
