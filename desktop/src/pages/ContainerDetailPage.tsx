@@ -13,6 +13,7 @@ import {
   Info,
   Pencil,
   Play,
+  Power,
   RotateCw,
   ScrollText,
   Square,
@@ -112,6 +113,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   // An edit that did not finish last time, offered back rather than retyped.
   const [resumed, setResumed] = useState<PendingEdit | null>(null);
   const [loadingSpec, setLoadingSpec] = useState(false);
+  const [marking, setMarking] = useState(false);
 
   const back = useUIStore((s) => s.back);
   const setTab = useUIStore((s) => s.setTab);
@@ -291,6 +293,49 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
             }
           />
 
+          {/* A write, not a recreate. This was a label until 1.11.0, and a
+              label can only be set by `container run` -- so the only way to
+              tick it was to destroy the container and make another. It is a
+              record Dermaga keeps now, which is what makes it a button here
+              rather than a checkbox buried in a form that rebuilds. */}
+          <IconButton
+            icon={Power}
+            busy={marking}
+            disabled={busy}
+            className={
+              container.autoBoot
+                ? 'text-emerald-700 dark:text-emerald-500'
+                : 'text-ink-500 dark:text-ink-500'
+            }
+            title={
+              container.autoBoot
+                ? 'Starts with Dermaga — press to stop'
+                : 'Start this container when Dermaga starts'
+            }
+            aria-label={
+              container.autoBoot ? 'Stop starting with Dermaga' : 'Start with Dermaga'
+            }
+            onClick={() => {
+              setMarking(true);
+              void api
+                .setAutoBoot(container.id, !container.autoBoot)
+                .then(() =>
+                  pushToast(
+                    container.autoBoot
+                      ? `${container.name} no longer starts with Dermaga`
+                      : `${container.name} will start with Dermaga`
+                  )
+                )
+                .catch((err: unknown) =>
+                  pushToast(
+                    err instanceof Error ? err.message : 'Could not change that',
+                    'error'
+                  )
+                )
+                .finally(() => setMarking(false));
+            }}
+          />
+
           <IconButton
             icon={Pencil}
             busy={loadingSpec}
@@ -363,6 +408,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
         <ContainerForm
           editing={container.id}
           initial={editing}
+          startsWithDermaga={container.autoBoot}
           resumed={resumed ?? undefined}
           onDiscardResumed={() => {
             void api.discardPendingEdit(container.id).catch(() => {
@@ -891,10 +937,7 @@ function ConfigurationView({ container }: { container: Container }) {
       )}
 
       <Section title="Runtime options" plain>
-        <Row
-          label="Starts with Dermaga"
-          value={container.labels['dermaga.autoboot'] === 'true' ? 'yes' : 'no'}
-        />
+        <Row label="Starts with Dermaga" value={container.autoBoot ? 'yes' : 'no'} />
         <Flags
           flags={[
             { label: 'init', on: Boolean(container.useInit) },

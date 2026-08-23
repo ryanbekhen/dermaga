@@ -10,6 +10,10 @@ background service is on. It is not a restart policy: nothing watches a containe
 because without the service there is nothing running to watch it, and a promise that only half holds
 is worse than none.
 
+Marking one is a write and nothing else. It used to be a label, which only `container run` can set —
+so turning it on rebuilt the container and took its filesystem with it. Dermaga keeps the mark itself
+now, against the container's name, and the button on a container's page changes it in place.
+
 ## Browsing a container needs a shell in it
 
 Apple's CLI cannot read a container's filesystem, so Dermaga runs `ls` inside the container and reads

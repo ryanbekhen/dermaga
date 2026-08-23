@@ -247,6 +247,16 @@ export const api = {
     await invoke('containers.remove', { id, force });
   },
 
+  /**
+   * Marks a container to start when Dermaga does, or stops marking it.
+   *
+   * A write, not a recreate: what used to be a label on the container is a
+   * record Dermaga keeps, so this costs nothing and the container never stops.
+   */
+  async setAutoBoot(id: string, autoBoot: boolean): Promise<void> {
+    await invoke('containers.setAutoBoot', { id, autoBoot });
+  },
+
   /** Applies a new spec by recreating the container; named volumes survive. */
   async updateContainer(id: string, spec: ContainerSpec): Promise<Container> {
     return invoke('containers.update', { id, spec });

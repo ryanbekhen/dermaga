@@ -857,6 +857,28 @@ func (a *Agent) registerContainers() {
 		return a.containers.Kill(ctx, args.ID)
 	})
 
+	// Marking a container to start with Dermaga, which used to mean recreating
+	// it: the mark was a label, and a label can only be written by
+	// `container run`. It is a record of Dermaga's own now, so it is a write.
+	a.server.Register("containers.setAutoBoot", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID       string `json:"id"`
+			AutoBoot bool   `json:"autoBoot"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		settings := a.containers.Settings(args.ID)
+		settings.AutoBoot = args.AutoBoot
+
+		if err := a.containers.SetSettings(args.ID, settings); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"id": args.ID, "autoBoot": args.AutoBoot}, nil
+	})
+
 	a.server.Register("containers.remove", func(ctx context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			ID    string `json:"id"`

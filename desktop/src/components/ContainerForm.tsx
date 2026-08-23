@@ -40,6 +40,11 @@ interface ContainerFormProps {
   resumed?: PendingEdit;
   /** Throws the unfinished edit away and closes; the container is untouched. */
   onDiscardResumed?: () => void;
+  /**
+   * Whether the container starts with Dermaga, which is not part of the spec:
+   * it is a record Dermaga keeps rather than anything the runtime knows.
+   */
+  startsWithDermaga?: boolean;
   onClose: () => void;
 }
 
@@ -53,24 +58,23 @@ const EMPTY: Partial<ContainerSpec> = {
   mounts: [],
 };
 
-/** Marks a container to be started when Dermaga starts; the agent reads it. */
+/**
+ * How starting with Dermaga was marked up to 1.11.0, and how a template can
+ * still ask for it.
+ *
+ * NOTE: TEMPORARY — remove with the label fallback in the agent, in 1.15.0.
+ * It is only read here now: the setting is a record Dermaga keeps, because a
+ * label can only be written by `container run` and turning this on used to
+ * cost the container its filesystem.
+ */
 const AUTO_BOOT_LABEL = 'dermaga.autoboot';
-
-/** Labels with the mark set, or without it when it is not wanted. */
-function withAutoBoot(labels: Record<string, string> | undefined, wanted: boolean) {
-  const next = { ...(labels ?? {}) };
-
-  if (wanted) next[AUTO_BOOT_LABEL] = 'true';
-  else delete next[AUTO_BOOT_LABEL];
-
-  return Object.keys(next).length > 0 ? next : undefined;
-}
 
 export function ContainerForm({
   editing,
   initial,
   resumed,
   onDiscardResumed,
+  startsWithDermaga,
   onClose,
 }: ContainerFormProps) {
   const images = useResourceStore((s) => s.images);
@@ -91,9 +95,10 @@ export function ContainerForm({
   const [readOnly, setReadOnly] = useState(base.readOnly ?? false);
   const [init, setInit] = useState(base.init ?? false);
   const [removeOnExit, setRemoveOnExit] = useState(base.removeOnExit ?? false);
-  // Kept as a label on the container, so it travels with the thing it
-  // describes rather than living in a file of ours.
-  const [autoBoot, setAutoBoot] = useState(base.labels?.[AUTO_BOOT_LABEL] === 'true');
+  // What the container is set to now, handed in by whoever opened the form; a
+  // template may ask for it with the old label instead.
+  const wasAutoBoot = startsWithDermaga ?? base.labels?.[AUTO_BOOT_LABEL] === 'true';
+  const [autoBoot, setAutoBoot] = useState(wasAutoBoot);
 
   // Held as text: it is what people paste in, and what they read back.
   const [envText, setEnvText] = useState(formatEnv(base.env ?? []));
@@ -170,7 +175,7 @@ export function ContainerForm({
     readOnly,
     init,
     removeOnExit,
-    labels: withAutoBoot(base.labels, autoBoot),
+    labels: base.labels,
   });
 
   // A row nobody filled in is not a mistake -- it is a row that was added and
@@ -213,6 +218,12 @@ export function ContainerForm({
     ports: portProblem(),
     mounts: mountProblem(),
     env: envTextOf(envText),
+    // The record is kept against the container's name, so there has to be one.
+    // Left blank, the CLI invents a name this side never learns.
+    autoBoot:
+      autoBoot && !name.trim()
+        ? 'Starting with Dermaga needs a name — the record is kept against it.'
+        : null,
   });
 
   // The dialog closes immediately and the work reports itself in the list, so
@@ -224,6 +235,16 @@ export function ContainerForm({
 
     onClose();
 
+    // Kept against the name rather than sent with the spec, because the
+    // runtime has nowhere to put it. Written before the container exists on
+    // purpose: it is only a name in a table, the container is a second away,
+    // and a create that fails leaves a record the next startup sweeps up.
+    if (autoBoot !== wasAutoBoot && spec.name) {
+      void api.setAutoBoot(spec.name, autoBoot).catch(() => {
+        pushToast(`Could not record whether ${spec.name} starts with Dermaga`, 'error');
+      });
+    }
+
     if (!editing) {
       // `container run` reports its own steps -- fetching, unpacking, starting
       // -- so the row shows real progress rather than an endless spinner.
@@ -233,9 +254,8 @@ export function ContainerForm({
         label,
         method: 'containers.create',
         params: spec,
-        onDone: (failed) => {
-          if (!failed) pushToast(`Created ${label}`);
-        },
+        // Nothing to say here: finishing is announced once, from the side that
+        // knows whether this window is in front of the user or behind them.
       });
       return;
     }
@@ -379,11 +399,18 @@ export function ContainerForm({
         </Field>
 
         <div className="flex flex-col justify-end gap-2 pb-1">
-          <Checkbox
-            checked={autoBoot}
-            onChange={setAutoBoot}
-            label="Start this container when Dermaga starts"
-          />
+          <div className="flex flex-col gap-1" data-field="autoBoot">
+            <Checkbox
+              checked={autoBoot}
+              onChange={setAutoBoot}
+              label="Start this container when Dermaga starts"
+            />
+            {form.problem('autoBoot') && (
+              <p className="text-tiny font-medium text-orange-700 dark:text-orange-500">
+                {form.problem('autoBoot')}
+              </p>
+            )}
+          </div>
           <Checkbox checked={init} onChange={setInit} label="Run an init process" />
           <Checkbox checked={readOnly} onChange={setReadOnly} label="Read-only root filesystem" />
           <Checkbox

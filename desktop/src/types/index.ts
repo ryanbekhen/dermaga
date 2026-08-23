@@ -65,6 +65,15 @@ export interface Container {
    */
   imageDigest?: string;
   imageMoved?: boolean;
+  /**
+   * Whether Dermaga starts this container when it starts.
+   *
+   * Kept by Dermaga rather than by the runtime, which has nowhere for it. It
+   * was a label until 1.11.0, and a label can only be written by
+   * `container run` — so turning this on meant recreating the container, which
+   * is a filesystem lost for the sake of a tick.
+   */
+  autoBoot?: boolean;
   status: ContainerStatus;
   state: string;
   createdAt: string;

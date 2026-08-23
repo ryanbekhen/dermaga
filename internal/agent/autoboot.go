@@ -7,21 +7,16 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/containers"
 )
 
-// AutoBootLabel marks a container to be started when Dermaga starts.
+// WantsAutoBoot reports whether a container is marked to start with Dermaga.
 //
-// On the container itself rather than in a list of our own: it travels with the
-// container, `container inspect` shows it, and one deleted from a terminal
-// leaves nothing behind to reconcile.
-const AutoBootLabel = "dermaga.autoboot"
-
-// WantsAutoBoot reads the label, tolerating the shapes people actually write.
+// It used to be a label on the container, which travelled with it and showed up
+// in `container inspect` -- but a label can only be written by `container run`,
+// so changing one meant recreating the container. Ticking a box should not cost
+// a container its filesystem. It is a record of Dermaga's own now, and the
+// listing carries the answer; the old label is still read for containers that
+// have one. See internal/containers/settings.go.
 func WantsAutoBoot(c containers.Container) bool {
-	switch c.Labels[AutoBootLabel] {
-	case "true", "yes", "1":
-		return true
-	default:
-		return false
-	}
+	return c.AutoBoot
 }
 
 // toBoot picks the containers that should be started: marked, and not already
@@ -66,6 +61,12 @@ func (a *Agent) autoBoot(ctx context.Context) {
 		a.logger.Warn("Could not read the containers to auto-boot", "error", err)
 		return
 	}
+
+	// The whole list, once, which is what deciding a record is dead needs: a
+	// container deleted from a terminal never passed through this process, and
+	// what Dermaga kept about it would otherwise sit waiting for a container of
+	// the same name to arrive and inherit it.
+	a.containers.PruneSettings(list)
 
 	wanted := toBoot(list)
 	if len(wanted) == 0 {

@@ -61,6 +61,9 @@ type Container struct {
 	// looks unchanged -- so this is the difference, made visible.
 	ImageDigest string `json:"imageDigest,omitempty"`
 	ImageMoved  bool   `json:"imageMoved,omitempty"`
+	// Whether Dermaga starts this container when it starts. Kept by Dermaga
+	// rather than by the runtime, which has nowhere for it -- see settings.go.
+	AutoBoot bool `json:"autoBoot"`
 	// The ports the image says it listens on, e.g. "80/tcp". Read from the
 	// image rather than the container: the runtime reports what a container
 	// publishes to the host and nothing about what it listens on, so a
@@ -251,17 +254,22 @@ type Manager struct {
 	portsMu sync.RWMutex
 	ports   map[string][]string
 	db      *store.Store
+
+	// What Dermaga keeps about each container, keyed by name. See settings.go.
+	settingsMu sync.RWMutex
+	settings   map[string]Settings
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
 	return &Manager{
-		runner:  runner,
-		logger:  logger,
-		stats:   NewStatsSampler(runner, logger),
-		changed: changed,
-		blobs:   oci.Open(),
-		ports:   map[string][]string{},
-		pending: NewPendingStore(logger),
+		runner:   runner,
+		logger:   logger,
+		stats:    NewStatsSampler(runner, logger),
+		changed:  changed,
+		blobs:    oci.Open(),
+		ports:    map[string][]string{},
+		settings: map[string]Settings{},
+		pending:  NewPendingStore(logger),
 	}
 }
 
@@ -305,6 +313,13 @@ func (cm *Manager) UseStore(db *store.Store) {
 	cm.ports = remembered
 	cm.db = db
 	cm.portsMu.Unlock()
+
+	settings := cm.loadSettings(db)
+
+	cm.settingsMu.Lock()
+	cm.settings = settings
+	cm.db = db
+	cm.settingsMu.Unlock()
 }
 
 func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
@@ -327,6 +342,7 @@ func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
 
 	cm.stats.Apply(containers)
 	cm.applyExposedPorts(containers)
+	cm.applySettings(containers)
 
 	return containers, nil
 }
@@ -345,6 +361,56 @@ func (cm *Manager) applyExposedPorts(containers []Container) {
 		}
 
 		containers[i].ExposedPorts = cm.portsOf(digest, containers[i].Platform)
+	}
+}
+
+// applySettings marks each container with what Dermaga keeps about it.
+//
+// NOTE: TEMPORARY — drop the label half of this in 1.15.0.
+//
+// `dermaga.autoboot` is how this was recorded up to 1.11.0, and containers
+// carrying one are still out there: a label cannot be removed without
+// recreating the container, so they keep it for as long as they live. Reading
+// it is what carries those containers across, and it is also what lets someone
+// mark a container from a terminal with `--label dermaga.autoboot=true`.
+//
+// The record wins wherever there is one, so nothing is ever decided by two
+// sources at once. Turning the setting off writes a record saying so, which is
+// exactly the case a label alone could not express.
+//
+// 1.15.0 is four releases out. By then a container old enough to have been
+// created before this changed has almost certainly been recreated at least
+// once -- and anybody it has not been is one tick away from being recorded
+// properly.
+func (cm *Manager) applySettings(containers []Container) {
+	cm.settingsMu.RLock()
+	defer cm.settingsMu.RUnlock()
+
+	for i := range containers {
+		settings, recorded := cm.settings[containers[i].Name]
+		if !recorded {
+			settings, recorded = cm.settings[containers[i].ID]
+		}
+
+		if recorded {
+			containers[i].AutoBoot = settings.AutoBoot
+			continue
+		}
+
+		containers[i].AutoBoot = wantsAutoBootLabel(containers[i].Labels)
+	}
+}
+
+// wantsAutoBootLabel reads the label Dermaga used to write, tolerating the
+// shapes people actually type.
+//
+// NOTE: TEMPORARY — goes with applySettings' label fallback in 1.15.0.
+func wantsAutoBootLabel(labels map[string]string) bool {
+	switch labels["dermaga.autoboot"] {
+	case "true", "yes", "1":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -751,6 +817,7 @@ func (cm *Manager) Remove(ctx context.Context, id string, force bool) error {
 		// The listing is still announced: if the container was gone but this
 		// process still had it, the view was wrong until now.
 		if cli.IsNotFound(err) {
+			cm.forgetSettings(id)
 			cm.changed.Changed()
 
 			return nil
@@ -761,6 +828,9 @@ func (cm *Manager) Remove(ctx context.Context, id string, force bool) error {
 		return err
 	}
 
+	// The name is free again, and the next container to take it is not this
+	// one. See settings.go on why the record is keyed by name.
+	cm.forgetSettings(id)
 	cm.changed.Changed()
 
 	return nil

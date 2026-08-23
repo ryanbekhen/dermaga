@@ -6,38 +6,20 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/containers"
 )
 
-func labelled(id, state string, labels map[string]string) containers.Container {
-	return containers.Container{ID: id, Name: id, Status: state, Labels: labels}
-}
-
-// The label is free text, written by hand as often as by the form.
-func TestWantsAutoBoot(t *testing.T) {
-	cases := map[string]bool{
-		"true": true, "yes": true, "1": true,
-		"false": false, "": false, "maybe": false,
-	}
-
-	for value, want := range cases {
-		got := WantsAutoBoot(labelled("c", "stopped", map[string]string{AutoBootLabel: value}))
-		if got != want {
-			t.Errorf("WantsAutoBoot(%q) = %v, want %v", value, got, want)
-		}
-	}
-
-	if WantsAutoBoot(labelled("c", "stopped", nil)) {
-		t.Error("a container with no labels wants nothing")
-	}
+// marked builds a container as the listing hands one over: the answer to
+// "does this start with Dermaga" is already on it, worked out from the record
+// Dermaga keeps and, for older containers, from the label they still carry.
+func marked(id, state string, autoBoot bool) containers.Container {
+	return containers.Container{ID: id, Name: id, Status: state, AutoBoot: autoBoot}
 }
 
 // Auto boot starts what is marked and down. Starting what is already running
 // would be a pointless call, and starting the unmarked would be a surprise.
 func TestToBoot(t *testing.T) {
-	on := map[string]string{AutoBootLabel: "true"}
-
 	picked := toBoot([]containers.Container{
-		labelled("marked-down", "stopped", on),
-		labelled("marked-up", "running", on),
-		labelled("plain-down", "stopped", nil),
+		marked("marked-down", "stopped", true),
+		marked("marked-up", "running", true),
+		marked("plain-down", "stopped", false),
 	})
 
 	if len(picked) != 1 || picked[0].ID != "marked-down" {

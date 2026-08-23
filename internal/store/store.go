@@ -35,6 +35,10 @@ const (
 	// image itself; kept here because a container can outlive the image it was
 	// made from, and then there is nowhere left to read it.
 	BucketPorts = "ports"
+	// What Dermaga keeps about a container that the runtime has no place for,
+	// keyed by name. Somewhere for a setting to live that can be changed
+	// without destroying the container to write it down.
+	BucketContainers = "containers"
 )
 
 // Name of the database inside ~/.dermaga.
@@ -78,7 +82,11 @@ func Open() (*Store, error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{BucketScans, BucketTemplates, BucketPending, BucketPorts} {
+		buckets := []string{
+			BucketScans, BucketTemplates, BucketPending, BucketPorts, BucketContainers,
+		}
+
+		for _, name := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(name)); err != nil {
 				return err
 			}

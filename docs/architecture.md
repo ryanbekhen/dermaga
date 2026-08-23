@@ -31,14 +31,20 @@ stats sample, needed to turn cumulative CPU time into a percentage, the last sna
 when something actually changed, and which containers you stopped on purpose, so that *unless
 stopped* can mean what it says after a restart.
 
-Restart policies live on the containers themselves, as a `dermaga.restart` label. Nothing in Dermaga
-has to be kept in step with what the CLI already knows.
+What Dermaga keeps *about* a container — today, whether it starts when Dermaga starts — is a record
+in its own database, keyed by the container's name. It was a label on the container, which is the
+better place for it in every way but one: a label can only be written by `container run`, so changing
+it meant recreating the container, and ticking a box cost that container its filesystem. The record
+is dropped when Dermaga deletes the container, and anything left over is swept up at startup, when
+the whole list is in hand. Containers marked before 1.11.0 still carry the old `dermaga.autoboot`
+label and it is still read; that fallback goes in 1.15.0.
 
 ### Go packages
 
 ```
 cmd/dermaga-agent/   entrypoint: JSON-RPC on stdio
 internal/cli/        runs `container`; the only package that touches os/exec
+internal/oci/        reads the runtime's content store for what the CLI leaves out
 internal/containers/ list, lifecycle, spec, live stats
 internal/images/     list, inspect, build, pull, delete, prune
 internal/files/      browse a container's filesystem, copy in and out

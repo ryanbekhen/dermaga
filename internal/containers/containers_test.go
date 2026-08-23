@@ -378,3 +378,97 @@ func writeBlob(t *testing.T, root, content string) string {
 
 	return "sha256:" + name
 }
+
+// The record wins, and the label still carries the containers made before there
+// was one.
+//
+// NOTE: TEMPORARY — the label half of this goes in 1.15.0, with the fallback
+// it tests.
+func TestWhatDermagaKeepsBeatsTheLabelItUsedToWrite(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	db, err := store.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	cm := NewManager(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), notify.Nop)
+	cm.UseStore(db)
+
+	if err := cm.SetSettings("recorded-off", Settings{AutoBoot: false}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cm.SetSettings("recorded-on", Settings{AutoBoot: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	list := []Container{
+		// Made before this changed: the label is all it has, and it is enough.
+		{Name: "labelled", Labels: map[string]string{"dermaga.autoboot": "true"}},
+		// Turned off since. A label alone could never say this: it cannot be
+		// removed without recreating the container.
+		{Name: "recorded-off", Labels: map[string]string{"dermaga.autoboot": "true"}},
+		{Name: "recorded-on", Labels: map[string]string{}},
+		{Name: "plain", Labels: map[string]string{}},
+	}
+
+	cm.applySettings(list)
+
+	for _, want := range []struct {
+		name     string
+		autoBoot bool
+	}{
+		{"labelled", true},
+		{"recorded-off", false},
+		{"recorded-on", true},
+		{"plain", false},
+	} {
+		for _, got := range list {
+			if got.Name == want.name && got.AutoBoot != want.autoBoot {
+				t.Errorf("%s: autoBoot = %v, want %v", want.name, got.AutoBoot, want.autoBoot)
+			}
+		}
+	}
+}
+
+// A name freed and taken again must not inherit what was kept about the last
+// container to hold it.
+func TestARecordDoesNotOutliveTheContainerItIsAbout(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	db, err := store.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	cm := NewManager(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), notify.Nop)
+	cm.UseStore(db)
+
+	if err := cm.SetSettings("api", Settings{AutoBoot: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cm.SetSettings("worker", Settings{AutoBoot: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	// `worker` was deleted from a terminal, so nothing in this process saw it
+	// go. Startup is where that is noticed.
+	cm.PruneSettings([]Container{{Name: "api", ID: "api"}})
+
+	if !cm.Settings("api").AutoBoot {
+		t.Error("pruned a record whose container is still here")
+	}
+	if cm.Settings("worker").AutoBoot {
+		t.Error("kept a record for a container that has gone")
+	}
+
+	// And it is gone from the database too, not just from this process.
+	var raw Settings
+	if found, _ := db.Get(store.BucketContainers, "worker", &raw); found {
+		t.Error("the record was left on disk")
+	}
+}
