@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Hammer, LayoutGrid, Play, Plus, RotateCw, Square, Trash2 } from 'lucide-react';
+import {
+  CircleFadingArrowUp,
+  Hammer,
+  LayoutGrid,
+  Play,
+  Plus,
+  RotateCw,
+  Square,
+  Trash2,
+} from 'lucide-react';
 import { ContainerForm } from '../components/ContainerForm';
 import { TemplateGallery } from '../components/TemplateGallery';
 import { Button } from '../components/Button';
@@ -7,6 +16,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
+import { recreateContainer } from '../services/tasks';
 import { StatusPill } from '../components/StatusBadge';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -56,7 +66,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   // Holds the verb of the running bulk action, so its button can spin.
   const [busy, setBusy] = useState<string | null>(null);
+  // The container whose image has moved on and is being asked about, and the
+  // one already on its way back.
+  const [confirmingRecreate, setConfirmingRecreate] = useState<Container | null>(null);
+  const [recreating, setRecreating] = useState<string | null>(null);
   const pushToast = useToastStore((s) => s.push);
+  const confirmDestructive = useSettingsStore((s) => s.confirmDestructive);
 
   // What this page is about. Apple's builder is infrastructure rather than
   // somebody's container, so switching it off takes it out of the counting as
@@ -110,6 +125,20 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
       pushToast(`Could not ${verb} ${failed.join(', ')}`, 'error');
     } else {
       pushToast(`${targets.length} container${targets.length === 1 ? '' : 's'} ${verb}`);
+    }
+  };
+
+  // Reported through the task strip, not through this row: recreating deletes
+  // the container and makes another, so the row it was started from is off
+  // screen for a second or two and a spinner drawn on it would go with it.
+  const recreate = async (container: Container) => {
+    setConfirmingRecreate(null);
+    setRecreating(container.id);
+
+    try {
+      await recreateContainer(container);
+    } finally {
+      setRecreating(null);
     }
   };
 
@@ -248,7 +277,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             <NameCell key="name">
               <span className="truncate text-body font-medium">{container.name}</span>
             </NameCell>,
-            <Muted key="image">{shortImage(container.image)}</Muted>,
+            <ImageCell key="image" container={container} />,
             <StatusCell
               key="status"
               status={container.status}
@@ -272,6 +301,26 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             />,
           ];
         }}
+        // Only on the rows that need it, and there without being hovered for:
+        // this is the answer to something the row has just said out loud, and
+        // an answer nobody can see until they wave at it is not offered.
+        actions={(container) =>
+          container.imageMoved ? (
+            <Button
+              iconOnly
+              icon={CircleFadingArrowUp}
+              busy={recreating === container.id}
+              busyLabel="Recreating…"
+              disabled={Boolean(busy) || recreating !== null}
+              className="text-amber-700 dark:text-amber-500"
+              onClick={() =>
+                confirmDestructive ? setConfirmingRecreate(container) : void recreate(container)
+              }
+            >
+              Recreate on the newer image
+            </Button>
+          ) : null
+        }
       />
 
       {/* Creating does not navigate: the new container appears in this list,
@@ -301,6 +350,16 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
         />
       )}
 
+      {confirmingRecreate && (
+        <ConfirmDialog
+          title={`Recreate ${confirmingRecreate.name}?`}
+          body={`${shortImage(confirmingRecreate.image)} has been built again since this container started. It is stopped, deleted and run again from what that tag points at now — same name, ports, volumes and environment. Named volumes survive; anything written to the container filesystem does not.`}
+          confirmLabel="Recreate"
+          onConfirm={() => void recreate(confirmingRecreate)}
+          onCancel={() => setConfirmingRecreate(null)}
+        />
+      )}
+
       {confirmingRemove && (
         <ConfirmDialog
           title={`Remove ${chosen.length} container${chosen.length === 1 ? '' : 's'}?`}
@@ -316,6 +375,32 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
         />
       )}
     </div>
+  );
+}
+
+/**
+ * What the container is made of, and whether that is still what its name means.
+ *
+ * The second line appears only once the tag has been built again since this
+ * container started -- which, on an edit, build, run loop, is most of the day.
+ * It waits on the row rather than announcing itself: a build takes minutes, and
+ * something that opens itself over whatever you moved on to is the same
+ * interruption as a caret jumping while you type.
+ */
+function ImageCell({ container }: { container: Container }) {
+  if (!container.imageMoved) return <Muted>{shortImage(container.image)}</Muted>;
+
+  return (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="block truncate text-small text-ink-600 dark:text-ink-400">
+        {shortImage(container.image)}
+      </span>
+      {/* Amber rather than red: nothing here is broken, and nothing is
+          waiting on an answer. It is only out of date. */}
+      <span className="truncate text-tiny font-medium text-amber-600 dark:text-amber-500">
+        image moved on
+      </span>
+    </span>
   );
 }
 

@@ -11,7 +11,10 @@ const listFixture = `[
     "configuration": {
       "creationDate": "2026-08-17T07:12:13Z",
       "id": "postgres",
-      "image": {"reference": "docker.io/library/postgres:18.6"},
+      "image": {
+        "descriptor": {"digest": "sha256:4d1f5a", "mediaType": "application/vnd.oci.image.index.v1+json"},
+        "reference": "docker.io/library/postgres:18.6"
+      },
       "initProcess": {"environment": ["POSTGRES_USER=postgres"]},
       "labels": {"app": "db"},
       "mounts": [
@@ -68,6 +71,12 @@ func TestParseContainerList(t *testing.T) {
 	if pg.Image != "docker.io/library/postgres:18.6" {
 		t.Errorf("image = %q", pg.Image)
 	}
+	// Which image the reference meant at creation. The runtime reports it under
+	// the descriptor and nowhere else, and without it there is nothing to
+	// notice a rebuilt tag against.
+	if pg.ImageDigest != "sha256:4d1f5a" {
+		t.Errorf("image digest = %q", pg.ImageDigest)
+	}
 	if pg.Status != "running" || pg.State != "running" {
 		t.Errorf("status/state = %q/%q", pg.Status, pg.State)
 	}
@@ -113,6 +122,11 @@ func TestParseContainerList(t *testing.T) {
 	// A container with no network still needs a usable name.
 	if worker.Name != "worker" {
 		t.Errorf("worker name = %q", worker.Name)
+	}
+	// Nothing is invented for a listing that carries no descriptor: an unknown
+	// digest is compared against nothing, which is what an older CLI gets.
+	if worker.ImageDigest != "" {
+		t.Errorf("invented an image digest: %q", worker.ImageDigest)
 	}
 	// JSON encoding relies on these being non-nil so the UI never sees null.
 	if worker.Ports == nil || worker.Mounts == nil || worker.Labels == nil {

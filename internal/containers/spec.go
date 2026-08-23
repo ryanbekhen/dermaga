@@ -404,3 +404,23 @@ func (cm *Manager) Update(ctx context.Context, id string, spec ContainerSpec) (*
 
 	return cm.Get(ctx, spec.Name)
 }
+
+// Recreate makes a container again from the configuration it already has.
+//
+// One thing changes, and it is the one thing nobody can change by hand: the
+// image. `container run api:dev` resolves the tag at the moment it runs, so a
+// container whose tag has been built again comes back on what that tag means
+// now -- with the same name, ports, volumes and environment it had a moment
+// ago, which is the part people were reconstructing from memory.
+//
+// Everything else here is Update's, including the parts that matter when it
+// goes wrong: the configuration is written down before anything is destroyed,
+// and a new container that will not start puts the previous one back.
+func (cm *Manager) Recreate(ctx context.Context, id string) (*Container, error) {
+	existing, err := cm.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return cm.Update(ctx, id, SpecOf(existing))
+}

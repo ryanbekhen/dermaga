@@ -1,5 +1,9 @@
+import { api } from './api';
 import { openStream } from './ipc';
 import { useTaskStore, type TaskKind } from '../store/taskStore';
+import { useToastStore } from '../store/toastStore';
+import type { Container } from '../types';
+import { shortImage } from '../utils/format';
 
 // Anchored deliberately: "ERROR:" or "Error:" as a word, buildkit's own
 // "failed to solve", or a line that begins with either. Anything laxer matches
@@ -98,5 +102,34 @@ export async function runTask({
     closers.delete(id);
     fail(id, err instanceof Error ? err.message : 'Could not reach the Dermaga agent');
     onDone?.(true);
+  }
+}
+
+/**
+ * The container again, on the image its tag means now.
+ *
+ * A task rather than a spinner on whatever was clicked: recreating deletes the
+ * container and makes another, so for a second or two the row -- or the whole
+ * detail page -- that started this is not on screen to spin. The task strip
+ * outlives both, which is also where a failure has somewhere to be read.
+ *
+ * The stores are reached through getState rather than through hooks, because
+ * this is called from an event handler and not from a render.
+ */
+export async function recreateContainer(container: Container) {
+  const id = `container:${container.name}`;
+  const { start, fail, finish } = useTaskStore.getState();
+  const toast = useToastStore.getState().push;
+
+  start({ id, kind: 'container', label: container.name, step: 'Recreating…' });
+
+  try {
+    await api.recreateContainer(container.id);
+    toast(`Recreated ${container.name} on the newer ${shortImage(container.image)}`);
+    finish(id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : `Could not recreate ${container.name}`;
+    fail(id, message);
+    toast(message, 'error');
   }
 }

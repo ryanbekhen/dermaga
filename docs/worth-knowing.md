@@ -53,6 +53,19 @@ with the new spec. Named volumes survive; the container filesystem does not, and
 before you commit. If the new spec fails to start, the previous container is restored — and what you
 typed is kept, so a failed edit can be picked up where it left off rather than typed again.
 
+## A container knows when its image moved on
+
+Build an image again and its tag points somewhere else, while the container made from it carries on
+running the bytes it was made from under a name that now means something else. Nothing in the runtime
+says so. Dermaga compares the digest the container was created from with the digest its reference
+resolves to now, marks the row **image moved on**, and offers Recreate — the container's own
+configuration, run again on what the tag means today, with the same name, ports, volumes and
+environment.
+
+Nothing pops up and nothing recreates itself: a build takes minutes, and the marker waits on the row
+until you come to it. An image that is no longer on this Mac is never marked, because there would be
+nothing to recreate it from.
+
 ## Deleting an image removes every tag pointing at it
 
 References that share a digest are one image, and removing a single tag would leave the bytes on disk

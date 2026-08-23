@@ -252,6 +252,18 @@ export const api = {
     return invoke('containers.update', { id, spec });
   },
 
+  /**
+   * Makes the container again from the configuration it already has, on
+   * whatever its image tag points at now.
+   *
+   * For a container whose image has been built again since it started: the
+   * spec is the container's own, so ports, volumes, environment and name come
+   * back as they were and only the image underneath is new.
+   */
+  async recreateContainer(id: string): Promise<Container> {
+    return invoke('containers.recreate', { id });
+  },
+
   // --- images -------------------------------------------------------------
 
   async getImages(): Promise<Image[]> {

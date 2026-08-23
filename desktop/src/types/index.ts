@@ -54,6 +54,17 @@ export interface Container {
   user?: string;
   name: string;
   image: string;
+  /**
+   * The image the container is actually made of, and whether the tag it was
+   * created from still points at it.
+   *
+   * A container is a copy of an image taken at one moment. Build that image
+   * again and the tag moves on; the container carries on running the bytes it
+   * was made from, under a name that now means something else. Recreating it
+   * is what closes the gap.
+   */
+  imageDigest?: string;
+  imageMoved?: boolean;
   status: ContainerStatus;
   state: string;
   createdAt: string;

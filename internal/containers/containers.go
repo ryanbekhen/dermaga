@@ -51,6 +51,16 @@ type Container struct {
 	SSH              bool               `json:"ssh"`
 	ReadOnlyRoot     bool               `json:"readOnlyRoot"`
 	UseInit          bool               `json:"useInit"`
+	// The image this container is actually made of, and whether the tag it was
+	// created from still points at it.
+	//
+	// A container is a copy of an image taken at one moment. Build the image
+	// again and the tag moves; the container carries on running the bytes it
+	// was made from, under a name that now means something else. Nothing in
+	// the runtime says so -- `container list` reports the reference, which
+	// looks unchanged -- so this is the difference, made visible.
+	ImageDigest string `json:"imageDigest,omitempty"`
+	ImageMoved  bool   `json:"imageMoved,omitempty"`
 	// The ports the image says it listens on, e.g. "80/tcp". Read from the
 	// image rather than the container: the runtime reports what a container
 	// publishes to the host and nothing about what it listens on, so a
@@ -140,6 +150,12 @@ type cliContainer struct {
 		Labels       map[string]string `json:"labels"`
 		Image        struct {
 			Reference string `json:"reference"`
+			// What that reference resolved to at creation. The listing carries
+			// it under the descriptor and nowhere else -- the sibling `digest`
+			// the runtime also reports is always null.
+			Descriptor struct {
+				Digest string `json:"digest"`
+			} `json:"descriptor"`
 		} `json:"image"`
 		InitProcess struct {
 			Environment      []string `json:"environment"`
@@ -214,12 +230,20 @@ type Manager struct {
 	// take the user's changes with it.
 	pending *PendingStore
 
-	// What each image says it exposes, keyed by the reference the container
-	// was created from. Cached without expiry on purpose: an image's config is
-	// part of the image, so for a given reference this answer only changes if
-	// the reference is repointed -- and then the container listing carries the
-	// new reference and asks again under that key. A miss costs one inspect,
-	// once, and the listing is pushed every few seconds.
+	// What each image says it exposes, keyed by the reference the container was
+	// created from *and* the digest that reference resolved to. Cached without
+	// expiry on purpose: an image's config is part of the image, so for a given
+	// digest this answer cannot change. A miss costs one inspect, once, and the
+	// listing is pushed every few seconds.
+	//
+	// The reference alone used to be the key, which is the same key for two
+	// different images once a tag has been built again: a container created
+	// before the rebuild kept reporting whatever the old image declared, for as
+	// long as this process ran. Recreating it moves it to a key of its own.
+	//
+	// Rebuilt from what each pass actually looked up rather than added to, so a
+	// morning of rebuilds leaves it the size of the container list instead of
+	// the size of the day.
 	exposedMu sync.RWMutex
 	exposed   map[string][]string
 }
@@ -280,26 +304,43 @@ func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
 // inspected now will not inspect any better on the next listing a second from
 // now, and retrying would mean a failed CLI call per container per push.
 func (cm *Manager) applyExposedPorts(ctx context.Context, containers []Container) {
+	fresh := make(map[string][]string, len(containers))
+
 	for i := range containers {
 		image := containers[i].Image
 		if image == "" {
 			continue
 		}
 
+		key := image + "@" + containers[i].ImageDigest
+
+		// Twins first: most of a listing is containers sharing a handful of
+		// images, and this pass has usually answered for them already.
+		if ports, answered := fresh[key]; answered {
+			containers[i].ExposedPorts = ports
+			continue
+		}
+
 		cm.exposedMu.RLock()
-		ports, known := cm.exposed[image]
+		ports, known := cm.exposed[key]
 		cm.exposedMu.RUnlock()
 
 		if !known {
+			// By reference, because the digest a container was made from may
+			// no longer be reachable by any name -- an image built twice keeps
+			// only the second under the tag. What the tag holds now is the
+			// closest thing there is, and it is exactly right again the moment
+			// the container is recreated from it.
 			ports = cm.readExposedPorts(ctx, image)
-
-			cm.exposedMu.Lock()
-			cm.exposed[image] = ports
-			cm.exposedMu.Unlock()
 		}
 
+		fresh[key] = ports
 		containers[i].ExposedPorts = ports
 	}
+
+	cm.exposedMu.Lock()
+	cm.exposed = fresh
+	cm.exposedMu.Unlock()
 }
 
 // readExposedPorts asks the image what it declares. Every variant of a
@@ -486,6 +527,7 @@ func toContainer(r cliContainer) Container {
 		ID:               r.ID,
 		Name:             name,
 		Image:            cfg.Image.Reference,
+		ImageDigest:      cfg.Image.Descriptor.Digest,
 		Status:           state,
 		State:            state,
 		CreatedAt:        cfg.CreationDate,

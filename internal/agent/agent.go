@@ -929,6 +929,28 @@ func (a *Agent) registerContainers() {
 		return container, nil
 	})
 
+	// The same container, made again from what its tag means now. Offered when
+	// a build has moved that tag on: the alternative is remembering the spec,
+	// deleting by hand and typing it back in, every time.
+	a.server.Register("containers.recreate", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		// It stops as part of the job, which is not something to be told about.
+		a.exits.Expect(args.ID)
+
+		container, err := a.containers.Recreate(ctx, args.ID)
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return container, nil
+	})
+
 	// Creating streams: `container run` reports fetching, unpacking and
 	// starting as it goes, and the UI shows those steps.
 	a.server.Register("containers.create", func(ctx context.Context, params json.RawMessage) (any, error) {

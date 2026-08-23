@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -156,6 +157,7 @@ func (w *Watcher) refresh(ctx context.Context) {
 		networkList := collect(ctx, w.sources.Networks, w.logger, "networks")
 
 		annotateUsage(containerList, volumeList, networkList)
+		annotateImageDrift(containerList, imageList)
 
 		snapshot.Containers = containerList
 		snapshot.Machines = machineList
@@ -239,6 +241,53 @@ func (w *Watcher) refresh(ctx context.Context) {
 		default:
 			// Subscriber is behind; it will get the next update.
 		}
+	}
+}
+
+// annotateImageDrift marks the containers whose image has been built again
+// since they were created.
+//
+// A container is a copy of an image taken at one moment: `container run
+// api:dev` resolves that tag then and there, and the container keeps those
+// bytes for as long as it exists. Build api:dev again and the tag moves on,
+// while the container -- same name, same reference on screen -- carries on
+// running the old one. That is the ordinary shape of an edit, build, run loop,
+// and the runtime says nothing about it at all.
+//
+// The comparison is the one the image scanner already makes to decide a stored
+// report has gone stale: what the reference resolved to, against what it
+// resolves to now.
+func annotateImageDrift(containerList []containers.Container, imageList []images.Image) {
+	current := make(map[string]string, len(imageList))
+	for _, image := range imageList {
+		current[image.Reference] = strings.TrimPrefix(image.Digest, "sha256:")
+	}
+
+	for i := range containerList {
+		// Apple's builder is nobody's container: `container build` makes it and
+		// `container builder` replaces it, so a newer one is not an invitation
+		// to recreate anything. Its image is not in the listing either, so this
+		// only says out loud what the next check would have decided anyway.
+		if containers.IsBuilder(containerList[i]) {
+			continue
+		}
+
+		made := strings.TrimPrefix(containerList[i].ImageDigest, "sha256:")
+		if made == "" {
+			continue
+		}
+
+		// An image the listing does not have has not moved on -- it is gone, or
+		// it was never local, and recreating from it would pull or fail rather
+		// than pick up a build. A marker that cannot keep its promise is worse
+		// than none, so nothing is claimed. The same goes for a failed image
+		// listing, which arrives here as no images at all.
+		now, listed := current[containerList[i].Image]
+		if !listed || now == "" {
+			continue
+		}
+
+		containerList[i].ImageMoved = now != made
 	}
 }
 

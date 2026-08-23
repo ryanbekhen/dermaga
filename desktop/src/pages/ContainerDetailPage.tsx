@@ -4,6 +4,7 @@ import {
   Braces,
   Check,
   ChevronDown,
+  CircleFadingArrowUp,
   ChevronRight,
   Copy,
   ExternalLink,
@@ -40,6 +41,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Facts, Flags, Row, Section } from '../components/DetailRow';
 import { ContainerForm } from '../components/ContainerForm';
 import { api } from '../services/api';
+import { recreateContainer } from '../services/tasks';
 import { openExternal } from '../services/ipc';
 import { useLiveUsage } from '../hooks/useLiveUsage';
 import { useSettingsStore } from '../store/settingsStore';
@@ -101,6 +103,10 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   // do not flicker away and back on every visit.
   const [hasShell, setHasShell] = useState<boolean | undefined>(undefined);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+  // Offered only while the image this container was made from is no longer
+  // what its tag points at.
+  const [confirmingRecreate, setConfirmingRecreate] = useState(false);
+  const [recreating, setRecreating] = useState(false);
   const [editing, setEditing] = useState<ContainerSpec | null>(null);
   // An edit that did not finish last time, offered back rather than retyped.
   const [resumed, setResumed] = useState<PendingEdit | null>(null);
@@ -143,6 +149,21 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
     }
   };
 
+  // Reported through the task strip rather than on this page: recreating
+  // deletes the container, and for the second or two it takes there is no
+  // container for this page to be about -- it is replaced by a spinner, and
+  // anything drawn here would go with it.
+  const recreate = async () => {
+    setConfirmingRecreate(false);
+    setRecreating(true);
+
+    try {
+      await recreateContainer(container);
+    } finally {
+      setRecreating(false);
+    }
+  };
+
   const remove = () => {
     setConfirmingRemove(false);
     void run(
@@ -158,7 +179,18 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
       onBack={back}
       backTo="Containers"
       title={container.name}
-      badges={<StatusPill status={container.status} />}
+      badges={
+        <>
+          <StatusPill status={container.status} />
+          {/* The one fact about this container the runtime does not report:
+              what it is made of is no longer what its name means. */}
+          {container.imageMoved && (
+            <span className="pill bg-amber-500/12 text-amber-600 dark:text-amber-500">
+              image moved on
+            </span>
+          )}
+        </>
+      }
       subtitle={shortImage(container.image)}
       tabs={tabs}
       activeTab={tab}
@@ -220,6 +252,23 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
               }
             >
               Start
+            </Button>
+          )}
+
+          {/* Beside Restart, and above it in the order, because when a tag has
+              moved this is what somebody came here to press: a restart puts
+              the same image back. */}
+          {container.imageMoved && (
+            <Button
+              iconOnly
+              icon={CircleFadingArrowUp}
+              busy={recreating}
+              busyLabel="Recreating…"
+              disabled={busy || recreating}
+              className="text-amber-700 dark:text-amber-500"
+              onClick={() => (confirmDestructive ? setConfirmingRecreate(true) : void recreate())}
+            >
+              Recreate on the newer image
             </Button>
           )}
 
@@ -326,6 +375,16 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
             setEditing(null);
             setResumed(null);
           }}
+        />
+      )}
+
+      {confirmingRecreate && (
+        <ConfirmDialog
+          title={`Recreate ${container.name}?`}
+          body={`${shortImage(container.image)} has been built again since this container started. It is stopped, deleted and run again from what that tag points at now — same name, ports, volumes and environment. Named volumes survive; anything written to the container filesystem does not.`}
+          confirmLabel="Recreate"
+          onConfirm={() => void recreate()}
+          onCancel={() => setConfirmingRecreate(false)}
         />
       )}
 
