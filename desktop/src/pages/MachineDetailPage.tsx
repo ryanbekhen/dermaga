@@ -17,7 +17,7 @@ import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MachineSettingsDialog } from '../components/MachineForm';
 import { LogPane } from '../components/LogPane';
-import { DefaultStar, StatusPill } from '../components/StatusBadge';
+import { DefaultStar, StatusText } from '../components/StatusBadge';
 import {
   DetailBody,
   DetailGrid,
@@ -41,13 +41,21 @@ const TerminalPane = lazy(() =>
   import('../components/TerminalPane').then((m) => ({ default: m.TerminalPane }))
 );
 
-// The same three words, in the same order, as a container's: a terminal first
-// because that is what a machine is opened for, then what it is, then what it
-// has been saying. "Overview" was this page's own word for what every other
-// detail page calls Inspect.
+// Inspect first, because that is where this page opens: `openMachine` lands on
+// it, and it was the second tab -- so the strip's first word and the page under
+// it disagreed, and ⌘1 moved you somewhere you had not been.
+//
+// A terminal led, on the reasoning that it is what a machine is opened for. A
+// container's does lead with what you came to look at, which is why the two
+// pages differ here: a machine is a thing you check on -- how much it has been
+// given, where it is, whether it is up -- far more often than a thing you type
+// into, and opening a shell in one is a deliberate act that can afford a click.
+//
+// "Overview" was this page's own word for what every other detail page calls
+// Inspect; the id is unchanged, since that is what a route carries.
 const TABS: TabDefinition[] = [
-  { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'overview', label: 'Inspect', icon: Info },
+  { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'logs', label: 'Logs', icon: ScrollText },
 ];
 
@@ -104,7 +112,7 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
       title={machine.id}
       badges={
         <>
-          <StatusPill status={machine.status} />
+          <StatusText status={machine.status} />
           {machine.default && <DefaultStar />}
         </>
       }

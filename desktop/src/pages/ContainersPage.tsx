@@ -19,7 +19,7 @@ import { openExternal } from '../services/ipc';
 import { isWeb, portNumber, reachableAt, urlFor } from '../utils/endpoint';
 import { useToastStore } from '../store/toastStore';
 import { recreateContainer } from '../services/tasks';
-import { StatusPill } from '../components/StatusBadge';
+import { StatusText } from '../components/StatusBadge';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { isBuilder } from '../utils/builder';
@@ -47,7 +47,7 @@ import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../uti
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(160px,2fr)' },
   { key: 'image', label: 'Image', width: 'minmax(140px,1.5fr)' },
-  { key: 'status', label: 'Status', width: '112px', align: 'center' },
+  { key: 'status', label: 'Status', width: '112px' },
   { key: 'cpu', label: 'CPU', width: '104px' },
   { key: 'memory', label: 'Memory', width: '128px' },
 ];
@@ -418,18 +418,19 @@ function ImageCell({ container }: { container: Container }) {
 /**
  * What the container is doing, and for how long.
  *
- * The uptime rides under the pill rather than in a column of its own: it is
+ * The uptime rides under the status rather than in a column of its own: it is
  * only ever asked about a container that is up, so a column for it is blank on
- * every row that is not -- and it answers the same question the pill does.
+ * every row that is not -- and it answers the same question the status does.
  */
 function StatusCell({ status, since }: { status: string; since: string | null }) {
   return (
-    // The group is only as wide as its widest part and sits at the column's
-    // left edge; inside it, the uptime is centred under the pill. Aligned left
-    // instead, "up 6h 34m" started a few pixels inside the pill's rounded end
-    // and read as a second, smaller thing rather than as a note about it.
-    <span className="flex w-fit min-w-0 flex-col items-center gap-1">
-      <StatusPill status={status} />
+    // Both lines start at the column's left edge, under the heading, like every
+    // other column here. The uptime used to be centred under the status, which
+    // was worth doing while the status was a rounded capsule -- text aligned to
+    // its left edge started a few pixels inside the curve and read as a second,
+    // separate thing. A word has no curve, so the two simply stack.
+    <span className="flex min-w-0 flex-col items-start gap-1">
+      <StatusText status={status} />
       {since && <span className="truncate font-mono text-tiny text-ink-500">up {since}</span>}
     </span>
   );

@@ -5,7 +5,7 @@ import { CommandProgress, useCommandProgress } from '../components/CommandProgre
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LogPane } from '../components/LogPane';
 import { Row, Section } from '../components/DetailRow';
-import { StatusPill } from '../components/StatusBadge';
+import { StatusText } from '../components/StatusBadge';
 import { StatTile } from '../components/StatTile';
 import { DetailLayout, DetailPane, DetailScroll, DetailSections } from '../components/DetailLayout';
 import type { TabDefinition } from '../components/Tabs';
@@ -116,7 +116,7 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
   return (
     <DetailLayout
       title="System"
-      badges={<StatusPill status={running ? 'running' : 'stopped'} />}
+      badges={<StatusText status={running ? 'running' : 'stopped'} />}
       subtitle={
         <>
           The launchd services behind the <code className="font-mono">container</code> CLI

@@ -119,7 +119,7 @@ export function RegistriesPage() {
                     <p className="truncate text-sm font-semibold">{hostLabel(login.server)}</p>
                     <p className="truncate font-mono text-tiny text-ink-500">{login.server}</p>
                   </div>
-                  <span className="pill bg-emerald-600/10 text-emerald-700 dark:text-emerald-500">
+                  <span className="text-tiny font-medium text-emerald-700 dark:text-emerald-500">
                     signed in
                   </span>
                 </div>

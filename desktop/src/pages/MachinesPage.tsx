@@ -4,7 +4,7 @@ import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateMachineDialog } from '../components/MachineForm';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
-import { DefaultStar, StatusPill } from '../components/StatusBadge';
+import { DefaultStar, StatusText } from '../components/StatusBadge';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
@@ -20,7 +20,7 @@ import { formatBytes, formatDuration, formatMemory } from '../utils/format';
 // an eye down a column here has to learn something else.
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: 'minmax(140px,1.6fr)' },
-  { key: 'status', label: 'Status', width: '112px', align: 'center' },
+  { key: 'status', label: 'Status', width: '112px' },
   { key: 'cpus', label: 'vCPUs', width: '72px' },
   { key: 'memory', label: 'Memory', width: '104px' },
   { key: 'disk', label: 'Disk', width: '104px' },
@@ -188,8 +188,8 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
             <span className="truncate text-body font-medium">{machine.id}</span>
             {machine.default && <DefaultStar />}
           </NameCell>,
-          <span key="status" className="flex flex-col items-center gap-0.5">
-            <StatusPill status={machine.status} />
+          <span key="status" className="flex min-w-0 flex-col items-start gap-0.5">
+            <StatusText status={machine.status} />
             {machine.status === 'running' && (
               <span className="font-mono text-tiny text-ink-500">
                 up {formatDuration(machine.startedAt)}

@@ -74,7 +74,7 @@
      body above, and Tailwind v4's preflight sets it on `button` -- both on the
      grounds that a native Mac control does not show a hand. That is true of a
      Mac, and it was wrong here: nearly every surface in this app is a row, a
-     pill, a segment or a chip drawn from scratch, none of which look like
+     row, a segment or a chip drawn from scratch, none of which look like
      controls at rest, so with no cursor to say otherwise the whole app read as
      something to look at rather than something to use.
 
@@ -267,10 +267,6 @@
 
   /* A status, said in a word on a tint of its own colour. Rounded to the full
      height so it never reads as a button somebody could press. */
-  .pill {
-    @apply inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-tiny font-medium;
-  }
-
   .input {
     @apply h-7 rounded-md border border-ink-300 bg-white px-2.5 text-xs text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100;
   }

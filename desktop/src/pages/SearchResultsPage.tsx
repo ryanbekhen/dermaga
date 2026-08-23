@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
-import { StatusPill } from '../components/StatusBadge';
+import { StatusText } from '../components/StatusBadge';
 import { loadImage } from '../components/ImageArchive';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
@@ -86,7 +86,8 @@ interface Result {
   sub: string;
   meta: string;
   measure: string;
-  pill: ReactNode;
+  /** What state the thing is in, as a word in a colour. */
+  state: ReactNode;
   open?: () => void;
 }
 
@@ -365,7 +366,7 @@ export function SearchResultsPage() {
         sub: '',
         meta: '',
         measure: '',
-        pill: null,
+        state: null,
         open: verb.run,
       })),
     });
@@ -393,7 +394,7 @@ export function SearchResultsPage() {
           container.status === 'running' && container.memoryUsage
             ? formatMemory(container.memoryUsage)
             : '—',
-        pill: <StatusPill status={container.status} />,
+        state: <StatusText status={container.status} />,
         open: () => openContainer(container.id),
       })),
     });
@@ -414,12 +415,10 @@ export function SearchResultsPage() {
           sub: image.digest,
           meta: image.platforms.join(', ') || '—',
           measure: formatBytes(image.sizeInBytes),
-          pill: (
+          state: (
             <span
-              className={`pill ${
-                inUse
-                  ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-500'
-                  : 'bg-ink-500/10 text-ink-600 dark:text-ink-400'
+              className={`text-tiny font-medium ${
+                inUse ? 'text-emerald-700 dark:text-emerald-500' : 'text-ink-500'
               }`}
             >
               {inUse ? 'in use' : 'unused'}
@@ -443,12 +442,10 @@ export function SearchResultsPage() {
         sub: volume.source,
         meta: `driver ${volume.driver}`,
         measure: formatBytes(volume.usedBytes),
-        pill: (
+        state: (
           <span
-            className={`pill ${
-              volume.usedBy.length > 0
-                ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-500'
-                : 'bg-ink-500/10 text-ink-600 dark:text-ink-400'
+            className={`text-tiny font-medium ${
+              volume.usedBy.length > 0 ? 'text-emerald-700 dark:text-emerald-500' : 'text-ink-500'
             }`}
           >
             {volume.usedBy.length > 0 ? `${volume.usedBy.length} using` : 'unused'}
@@ -471,12 +468,10 @@ export function SearchResultsPage() {
         sub: network.ipv4Subnet ?? '—',
         meta: `${network.mode}${network.builtin ? ' · built in' : ''}`,
         measure: `${network.usedBy.length} attached`,
-        pill: (
+        state: (
           <span
-            className={`pill ${
-              network.usedBy.length > 0
-                ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-500'
-                : 'bg-ink-500/10 text-ink-600 dark:text-ink-400'
+            className={`text-tiny font-medium ${
+              network.usedBy.length > 0 ? 'text-emerald-700 dark:text-emerald-500' : 'text-ink-500'
             }`}
           >
             {network.usedBy.length > 0 ? 'active' : 'idle'}
@@ -500,7 +495,7 @@ export function SearchResultsPage() {
         sub: machine.ipAddress ?? '—',
         meta: `${machine.cpus} vCPU · ${formatMemory(machine.memoryAllocation)}`,
         measure: formatBytes(machine.diskSizeBytes),
-        pill: <StatusPill status={machine.status} />,
+        state: <StatusText status={machine.status} />,
         open: () => openMachine(machine.id),
       })),
     });
@@ -518,7 +513,7 @@ export function SearchResultsPage() {
         sub: '',
         meta: '',
         measure: '',
-        pill: null,
+        state: null,
         open: () => navigate(page.route),
       })),
     });
@@ -665,7 +660,7 @@ export function SearchResultsPage() {
                             {result.meta}
                           </span>
                           <span className="truncate font-mono text-xs">{result.measure}</span>
-                          {result.pill}
+                          {result.state}
                         </button>
                       </li>
                     );

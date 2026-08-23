@@ -85,73 +85,82 @@ export function TitleBar({ build, system, connection, error }: TitleBarProps) {
   }, [setQuery]);
 
   return (
-    <header className="drag flex h-13 shrink-0 items-center gap-4 border-b border-black/50 bg-chrome-bg px-4 text-chrome-text">
-      {/* The traffic lights are drawn by macOS over this corner, so the row
-          starts to the right of them. Fullscreen takes them away. */}
-      <div
-        className={`shrink-0 transition-[width] duration-200 ease-out ${
-          fullScreen ? 'w-0' : 'w-15.5'
-        }`}
-      />
+    // A grid of three, and the outer two are the same width by definition --
+    // which is what keeps the search box in the middle of the *window* rather
+    // than in the middle of whatever is left over. Laid out in a row it drifted
+    // every time either side changed: a build finishing put an icon on the
+    // right, and the field somebody was typing into moved under their hands.
+    //
+    // The middle track is capped at the field's own width and can shrink below
+    // it; the sides truncate rather than push, because nothing in them is worth
+    // moving the one thing you aim at with a keyboard shortcut.
+    <header className="drag grid h-13 shrink-0 grid-cols-[1fr_minmax(0,26.25rem)_1fr] items-center gap-4 border-b border-black/50 bg-chrome-bg px-4 text-chrome-text">
+      <div className="flex min-w-0 items-center gap-4">
+        {/* The traffic lights are drawn by macOS over this corner, so the row
+            starts to the right of them. Fullscreen takes them away. */}
+        <div
+          className={`shrink-0 transition-[width] duration-200 ease-out ${
+            fullScreen ? 'w-0' : 'w-15.5'
+          }`}
+        />
 
-      <div className="flex shrink-0 items-center gap-2.5">
-        <img src={logo} alt="" className="h-5.5 w-5.5 object-contain" />
-        <span className="text-sm font-semibold tracking-[-0.1px]">Dermaga</span>
-        {build?.version && (
-          // The stamp doubles as the way into the notes. It is the only place
-          // the version is written now, so the question it prompts -- what
-          // changed? -- is answered by pressing the thing that prompted it.
-          <button
-            onClick={() => navigate({ name: 'changelog' })}
-            title={`${buildTitle(build)}\nClick to see what changed`}
-            className="no-drag relative rounded-md bg-chrome-raised px-1.5 py-0.5 font-mono text-tiny text-chrome-dim transition-colors hover:text-chrome-text"
-          >
-            v{build.version}
-            {hasUnread && (
-              <span
-                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-brand-500 ring-2 ring-chrome-bg"
-                aria-hidden
-              />
-            )}
-          </button>
-        )}
-      </div>
-
-      <div className="flex min-w-0 flex-1 justify-center">
-        {/* Searching from up here asks every kind of resource at once, so it
-            cannot belong to a page: the answer is a page of its own, and the
-            box that asked for it has to stay put while you read it. */}
-        <div className="no-drag flex h-7.5 w-full max-w-105 items-center gap-2 rounded-lg border border-chrome-line bg-chrome-raised px-2.5 focus-within:border-chrome-faint">
-          <Search size={13} className="shrink-0 text-chrome-faint" aria-hidden />
-          <input
-            ref={field}
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search containers, images, volumes…"
-            aria-label="Search everything"
-            className="min-w-0 flex-1 bg-transparent text-small text-chrome-text outline-hidden placeholder:text-chrome-faint focus-visible:ring-0"
-          />
-          {!query && <span className="shrink-0 font-mono text-tiny text-chrome-faint">⌘K</span>}
-          {query && (
+        <div className="flex min-w-0 items-center gap-2.5">
+          <img src={logo} alt="" className="h-5.5 w-5.5 object-contain" />
+          <span className="text-sm font-semibold tracking-[-0.1px]">Dermaga</span>
+          {build?.version && (
+            // The stamp doubles as the way into the notes. It is the only place
+            // the version is written now, so the question it prompts -- what
+            // changed? -- is answered by pressing the thing that prompted it.
             <button
-              onClick={() => {
-                setQuery('');
-                field.current?.focus();
-              }}
-              aria-label="Clear search"
-              className="shrink-0 text-chrome-faint transition-colors hover:text-chrome-text"
+              onClick={() => navigate({ name: 'changelog' })}
+              title={`${buildTitle(build)}\nClick to see what changed`}
+              className="no-drag relative rounded-md bg-chrome-raised px-1.5 py-0.5 font-mono text-tiny text-chrome-dim transition-colors hover:text-chrome-text"
             >
-              <X size={13} aria-hidden />
+              v{build.version}
+              {hasUnread && (
+                <span
+                  className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-brand-500 ring-2 ring-chrome-bg"
+                  aria-hidden
+                />
+              )}
             </button>
           )}
         </div>
       </div>
 
+      {/* Searching from up here asks every kind of resource at once, so it
+          cannot belong to a page: the answer is a page of its own, and the box
+          that asked for it has to stay put while you read it. */}
+      <div className="no-drag flex h-7.5 w-full items-center gap-2 rounded-lg border border-chrome-line bg-chrome-raised px-2.5 focus-within:border-chrome-faint">
+        <Search size={13} className="shrink-0 text-chrome-faint" aria-hidden />
+        <input
+          ref={field}
+          type="text"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search containers, images, volumes…"
+          aria-label="Search everything"
+          className="min-w-0 flex-1 bg-transparent text-small text-chrome-text outline-hidden placeholder:text-chrome-faint focus-visible:ring-0"
+        />
+        {!query && <span className="shrink-0 font-mono text-tiny text-chrome-faint">⌘K</span>}
+        {query && (
+          <button
+            onClick={() => {
+              setQuery('');
+              field.current?.focus();
+            }}
+            aria-label="Clear search"
+            className="shrink-0 text-chrome-faint transition-colors hover:text-chrome-text"
+          >
+            <X size={13} aria-hidden />
+          </button>
+        )}
+      </div>
+
       {/* Right to left: the things that are only sometimes there, then the
           light that is always there. Ordering it the other way put the engine
           somewhere different depending on whether a scan was running. */}
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex min-w-0 items-center justify-end gap-1">
         {error && <Problem label={error} />}
         <TaskStatusItem />
         <KernelStatusItem />
@@ -306,7 +315,7 @@ function UpdatePill() {
   );
 }
 
-/** The full build stamp, for the version pill's tooltip. */
+/** The full build stamp, for the version stamp's tooltip. */
 function buildTitle(build: BuildInfo): string {
   const parts = [`Dermaga ${build.version}`];
   if (build.commit && build.commit !== 'unknown') parts.push(`commit ${build.commit}`);

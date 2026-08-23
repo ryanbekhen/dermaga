@@ -24,7 +24,7 @@ import {
 import { FileBrowser } from '../components/FileBrowser';
 import { LogPane } from '../components/LogPane';
 import { LiveChart, type Trace } from '../components/LiveChart';
-import { StatusPill } from '../components/StatusBadge';
+import { StatusText } from '../components/StatusBadge';
 import {
   DetailBody,
   DetailGrid,
@@ -184,11 +184,11 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
       title={container.name}
       badges={
         <>
-          <StatusPill status={container.status} />
+          <StatusText status={container.status} />
           {/* The one fact about this container the runtime does not report:
               what it is made of is no longer what its name means. */}
           {container.imageMoved && (
-            <span className="pill bg-amber-500/12 text-amber-600 dark:text-amber-500">
+            <span className="text-tiny font-medium text-amber-600 dark:text-amber-500">
               image moved on
             </span>
           )}

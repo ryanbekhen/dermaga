@@ -16,7 +16,7 @@ interface TabsProps {
 /**
  * The panes of one thing, picked between.
  *
- * Underlined rather than the pills the filter strip uses, and the difference is
+ * Underlined rather than the filled shapes the filter strip uses, and the difference is
  * the question each answers. A filter narrows what is in front of you and can
  * be combined with the next one along; a tab replaces the whole pane. The rule
  * under the strip is what a tab is attached to, so the selected one reads as
