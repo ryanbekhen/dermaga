@@ -29,6 +29,8 @@ interface NavEntry {
   owns: Route['name'][];
   icon: LucideIcon;
   label: string;
+  /** Shown instead of a count, for a page that is still finding its feet. */
+  beta?: boolean;
   /** Which store the count beside it comes from, where there is one. */
   count?: 'containers' | 'images' | 'volumes' | 'networks' | 'machines';
 }
@@ -86,6 +88,7 @@ const NAV: NavGroup[] = [
         owns: ['tunnels'],
         icon: Globe,
         label: 'Tunnels',
+        beta: true,
       },
       {
         target: { name: 'machines' },
@@ -121,7 +124,7 @@ export function Sidebar({ version }: { version?: string }) {
   const hasUnread = useUnreadChangelog(version);
   const counts = useCounts();
 
-  const item = ({ target, owns, icon: Icon, label, count }: NavEntry) => {
+  const item = ({ target, owns, icon: Icon, label, count, beta }: NavEntry) => {
     const active = owns.includes(route.name);
     // A menu entry says the notes exist; the dot says there are some the user
     // has not read. It clears the moment the page is opened.
@@ -171,6 +174,18 @@ export function Sidebar({ version }: { version?: string }) {
             className={`shrink-0 font-mono text-tiny ${active ? 'opacity-80' : 'text-chrome-faint'}`}
           >
             {total}
+          </span>
+        )}
+
+        {/* In the same place a count would be, because it answers the same
+            question: what is this page, before you open it. */}
+        {!collapsed && beta && (
+          <span
+            className={`shrink-0 rounded text-tiny font-medium ${
+              active ? 'opacity-80' : 'text-chrome-faint'
+            }`}
+          >
+            beta
           </span>
         )}
       </button>

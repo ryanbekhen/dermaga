@@ -103,6 +103,15 @@ export function TunnelsPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Tunnels"
+        // Said out loud rather than left to be discovered. This is the one
+        // feature that reaches outside this Mac and makes changes in somebody
+        // else's account, and it is new -- so it says so, on the page and in
+        // the sidebar, until it has been used enough to stop.
+        badges={
+          <span className="rounded-md border border-brand-200 bg-brand-50 px-1.5 py-0.5 text-tiny font-medium text-brand-700 dark:border-brand-600/40 dark:bg-brand-600/15 dark:text-brand-400">
+            Beta
+          </span>
+        }
         subtitle={
           !connected
             ? 'Publish a container on a hostname of your own'
