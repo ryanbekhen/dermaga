@@ -453,6 +453,14 @@ export interface Finding {
   id: string;
   package: string;
   installed?: string;
+  /**
+   * How many places in the image it was found in.
+   *
+   * Trivy reads the same library out of every binary built with it, so a flaw
+   * in Go's standard library comes back once per Go binary. One problem in
+   * twenty places, not twenty problems.
+   */
+  places?: number;
   /** Empty when upstream has no fix yet, which is worth showing as such. */
   fixed?: string;
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
@@ -506,6 +514,14 @@ export interface ImageLayer {
 export interface ImagePackage {
   name: string;
   version?: string;
+  /**
+   * How many places in the image it was read out of.
+   *
+   * Go's standard library is inside every binary built with it, and each
+   * binary is a thing Trivy reads — so it came back as one row per binary,
+   * every one of them identical.
+   */
+  places?: number;
   /**
    * How much room it takes once unpacked. Only OS packages have one — apk and
    * dpkg record it, while a Go module or an npm dependency is compiled or

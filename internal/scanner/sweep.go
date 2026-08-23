@@ -228,6 +228,12 @@ const maxReportAge = 12 * time.Hour
 func (m *Manager) outdatedResult(report Report) bool {
 	status := m.Status()
 
+	// Written in a shape whose numbers cannot be compared with today's. See
+	// reportFormat.
+	if report.Format != reportFormat {
+		return true
+	}
+
 	if report.DatabaseUpdatedAt != "" && status.DatabaseUpdatedAt != "" &&
 		report.DatabaseUpdatedAt != status.DatabaseUpdatedAt {
 		return true

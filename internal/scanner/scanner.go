@@ -92,6 +92,14 @@ type Finding struct {
 	ID        string `json:"id"`
 	Package   string `json:"package"`
 	Installed string `json:"installed,omitempty"`
+	// How many places in the image it was found in.
+	//
+	// Trivy reports one result per thing it read, and the same library is read
+	// out of every binary that was built with it -- so a flaw in Go's standard
+	// library comes back once per Go binary in the image. Twenty identical
+	// lines is not twenty problems: it is one problem, in twenty places, and
+	// the number is the only part of the repetition worth keeping.
+	Places int `json:"places,omitempty"`
 	// Empty when upstream has not fixed it yet, which is worth showing.
 	Fixed    string `json:"fixed,omitempty"`
 	Severity string `json:"severity"`
@@ -164,9 +172,15 @@ type Package struct {
 	Version string `json:"version,omitempty"`
 	// The ecosystem Trivy read it from: "alpine", "npm", "gobinary".
 	Type string `json:"type,omitempty"`
-	// What was read to find it -- a package database, a lockfile path.
+	// What was read to find it -- a package database, a lockfile path. The
+	// first one, where the same package was read out of several.
 	Source   string   `json:"source,omitempty"`
 	Licenses []string `json:"licenses,omitempty"`
+	// How many places in the image it was read out of, for the same reason a
+	// finding has one: Go's standard library is inside every binary built with
+	// it, and each is a thing Trivy read. Six identical rows in the list is not
+	// six copies of a library to deal with.
+	Places int `json:"places,omitempty"`
 	// How much room it takes once unpacked. Only OS packages have one: apk and
 	// dpkg record it, and a Go module or an npm dependency is compiled or
 	// bundled into something else and has no size of its own. Zero means "not
@@ -175,8 +189,30 @@ type Package struct {
 }
 
 // Report is one scan of one image.
+// reportFormat is the shape of a stored result.
+//
+// Bumped when what a report *means* changes, rather than when a field is added
+// -- an older report with a missing field can be read; one whose numbers were
+// counted differently cannot be compared with a new one. Raising it makes every
+// stored result stale, and the sweep rescans them in the background over the
+// next few minutes, which is the same thing that happens when Trivy publishes a
+// database.
+//
+// 2: findings are counted once per image, with a `places` count, where they
+// used to be repeated once per binary they were read out of.
+//
+// 3: packages likewise. The two went in separately, and a report written
+// between them has deduplicated findings hanging off a package list that still
+// repeats -- which on a Go image is six identical rows, each showing the same
+// flaws. Raising it again is what sweeps those away rather than leaving them
+// until each report ages out on its own.
+const reportFormat = 3
+
 type Report struct {
 	Reference string `json:"reference"`
+	// The shape this was written in. Absent means 1, which is every report
+	// stored before this existed.
+	Format int `json:"format,omitempty"`
 	// The database this result was produced against. When Trivy publishes a
 	// new one the result is out of date by definition -- the whole point of a
 	// vulnerability database is that yesterday's answer is not today's.
@@ -726,6 +762,7 @@ func parseReport(reference string, out []byte) (Report, error) {
 
 	report := Report{
 		Reference: reference,
+		Format:    reportFormat,
 		ScannedAt: time.Now().UTC().Format(time.RFC3339),
 		Summary:   map[string]int{},
 		Findings:  []Finding{},
@@ -738,6 +775,17 @@ func parseReport(reference string, out []byte) (Report, error) {
 	}
 
 	report.Targets = len(raw.Results)
+
+	// Where each distinct flaw was first recorded, so the ones that follow can
+	// be counted onto it rather than listed again. Across every result, not
+	// within one: the repetition is between binaries, which is what a result
+	// is here.
+	at := map[string]int{}
+
+	// And the same for what is installed. A package read out of twenty binaries
+	// was twenty rows in the list, each with the same name, the same version
+	// and the same findings hanging off it.
+	held := map[string]int{}
 
 	for _, result := range raw.Results {
 		// Trivy reports one result per thing it analysed -- the OS package
@@ -754,16 +802,35 @@ func parseReport(reference string, out []byte) (Report, error) {
 				continue
 			}
 
+			key := pkg.Name + "\x00" + pkg.Version + "\x00" + result.Type
+			if seen, found := held[key]; found {
+				report.Packages[seen].Places++
+				continue
+			}
+
+			held[key] = len(report.Packages)
+
 			report.Packages = append(report.Packages, Package{
 				Name:     pkg.Name,
 				Version:  pkg.Version,
 				Type:     result.Type,
 				Source:   source,
 				Licenses: pkg.Licenses,
+				Places:   1,
 			})
 		}
 
 		for _, v := range result.Vulnerabilities {
+			// The same flaw, in the same version of the same package, read out
+			// of another binary. One more place, not one more problem -- and
+			// counting it again is what made an image of Go binaries report
+			// nine hundred findings where there were forty-five.
+			key := v.VulnerabilityID + "\x00" + v.PkgName + "\x00" + v.InstalledVersion
+			if seen, found := at[key]; found {
+				report.Findings[seen].Places++
+				continue
+			}
+
 			report.Summary[v.Severity]++
 			// Sorted, so the panel that shows them is stable between scans --
 			// a Go map is walked in a different order every time.
@@ -795,10 +862,13 @@ func parseReport(reference string, out []byte) (Report, error) {
 				}
 			}
 
+			at[key] = len(report.Findings)
+
 			report.Findings = append(report.Findings, Finding{
 				ID:           v.VulnerabilityID,
 				Package:      v.PkgName,
 				Installed:    v.InstalledVersion,
+				Places:       1,
 				Fixed:        v.FixedVersion,
 				Status:       v.Status,
 				Severity:     v.Severity,

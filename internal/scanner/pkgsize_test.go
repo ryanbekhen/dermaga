@@ -1,6 +1,9 @@
 package scanner
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // The shape apk actually writes, taken from alpine:3.20's own database: records
 // separated by a blank line, "S:" the download size and "I:" the installed one.
@@ -173,5 +176,173 @@ func TestParseReportKeepsEverythingAboutAFinding(t *testing.T) {
 	}
 	if f.Ratings[0].Source != "nvd" || f.Ratings[1].Source != "redhat" {
 		t.Errorf("ratings out of order: %v", f.Ratings)
+	}
+}
+
+// One flaw in twenty places is one flaw.
+//
+// Trivy reports a result per thing it read, and the same library is read out of
+// every binary built with it -- so a flaw in Go's standard library came back
+// once per Go binary. An image of Go binaries reported nine hundred findings
+// where there were forty-five, listed as identical rows nobody could use, and
+// the severity counts were nine hundred too.
+func TestAFlawFoundInSeveralBinariesIsCountedOnce(t *testing.T) {
+	out := []byte(`{
+      "Results": [
+        {
+          "Target": "usr/local/go/bin/go",
+          "Type": "gobinary",
+          "Vulnerabilities": [
+            {"VulnerabilityID": "CVE-2025-61729", "PkgName": "stdlib", "InstalledVersion": "1.23.12", "Severity": "HIGH"},
+            {"VulnerabilityID": "CVE-2025-68121", "PkgName": "stdlib", "InstalledVersion": "1.23.12", "Severity": "LOW"}
+          ]
+        },
+        {
+          "Target": "usr/local/go/pkg/tool/linux_arm64/compile",
+          "Type": "gobinary",
+          "Vulnerabilities": [
+            {"VulnerabilityID": "CVE-2025-61729", "PkgName": "stdlib", "InstalledVersion": "1.23.12", "Severity": "HIGH"}
+          ]
+        },
+        {
+          "Target": "usr/bin/other",
+          "Type": "gobinary",
+          "Vulnerabilities": [
+            {"VulnerabilityID": "CVE-2025-61729", "PkgName": "stdlib", "InstalledVersion": "1.23.12", "Severity": "HIGH"}
+          ]
+        }
+      ]
+    }`)
+
+	report, err := parseReport("golang:1.23-alpine", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(report.Findings) != 2 {
+		t.Fatalf("got %d findings, want 2 distinct", len(report.Findings))
+	}
+
+	places := map[string]int{}
+	for _, finding := range report.Findings {
+		places[finding.ID] = finding.Places
+	}
+
+	if places["CVE-2025-61729"] != 3 {
+		t.Errorf("places = %d, want the three binaries it was read out of", places["CVE-2025-61729"])
+	}
+	// One place is still worth recording; the window shows it only above one.
+	if places["CVE-2025-68121"] != 1 {
+		t.Errorf("a flaw in one binary has %d places", places["CVE-2025-68121"])
+	}
+
+	if report.Summary["HIGH"] != 1 || report.Summary["LOW"] != 1 {
+		t.Errorf("summary = %v, want one of each", report.Summary)
+	}
+}
+
+// A different version of the same package is a different flaw to fix, even
+// under the same CVE -- two Pythons in an image, patched to different levels.
+func TestTheSameFlawInTwoVersionsStaysTwoFindings(t *testing.T) {
+	out := []byte(`{
+      "Results": [
+        {
+          "Target": "python",
+          "Type": "python-pkg",
+          "Vulnerabilities": [
+            {"VulnerabilityID": "CVE-2025-47273", "PkgName": "setuptools", "InstalledVersion": "70.3.0", "Severity": "HIGH"},
+            {"VulnerabilityID": "CVE-2025-47273", "PkgName": "setuptools", "InstalledVersion": "84.0.0", "Severity": "HIGH"}
+          ]
+        }
+      ]
+    }`)
+
+	report, err := parseReport("app:latest", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(report.Findings) != 2 {
+		t.Fatalf("got %d findings, want one per version", len(report.Findings))
+	}
+	if report.Summary["HIGH"] != 2 {
+		t.Errorf("summary = %v, want both counted", report.Summary)
+	}
+}
+
+// Raising the format is how every stored result is made stale at once, which is
+// what a change to the way findings are counted needs.
+func TestAReportInAnOlderShapeIsOutOfDate(t *testing.T) {
+	m := &Manager{}
+
+	if !m.outdatedResult(Report{ScannedAt: time.Now().UTC().Format(time.RFC3339)}) {
+		t.Error("a report with no format was trusted; nothing before this had one")
+	}
+
+	fresh := Report{Format: reportFormat, ScannedAt: time.Now().UTC().Format(time.RFC3339)}
+	if m.outdatedResult(fresh) {
+		t.Error("a report in today's shape was thrown away")
+	}
+}
+
+// The same library, read out of every binary built with it, is one thing
+// installed -- not six. It was six rows in the list, each with the same name,
+// the same version and the same findings hanging off it.
+func TestAPackageReadOutOfSeveralBinariesIsOneRow(t *testing.T) {
+	out := []byte(`{
+      "Results": [
+        {"Target": "usr/local/go/bin/go", "Type": "gobinary",
+         "Packages": [{"Name": "stdlib", "Version": "1.23.12"}]},
+        {"Target": "usr/local/go/pkg/tool/linux_arm64/compile", "Type": "gobinary",
+         "Packages": [{"Name": "stdlib", "Version": "1.23.12"}]},
+        {"Target": "usr/bin/other", "Type": "gobinary",
+         "Packages": [{"Name": "stdlib", "Version": "1.23.12"}, {"Name": "golang.org/x/net", "Version": "0.30.0"}]}
+      ]
+    }`)
+
+	report, err := parseReport("golang:1.23-alpine", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(report.Packages) != 2 {
+		t.Fatalf("got %d packages, want stdlib and x/net", len(report.Packages))
+	}
+
+	for _, pkg := range report.Packages {
+		switch pkg.Name {
+		case "stdlib":
+			if pkg.Places != 3 {
+				t.Errorf("stdlib places = %d, want the three binaries", pkg.Places)
+			}
+			// The first one it was read out of, so the row can still say where.
+			if pkg.Source != "usr/local/go/bin/go" {
+				t.Errorf("stdlib source = %q", pkg.Source)
+			}
+		case "golang.org/x/net":
+			if pkg.Places != 1 {
+				t.Errorf("x/net places = %d, want one", pkg.Places)
+			}
+		}
+	}
+}
+
+// Two versions of the same package are two things to deal with, and stay two
+// rows -- the same rule the findings follow.
+func TestTwoVersionsOfAPackageStayApart(t *testing.T) {
+	out := []byte(`{
+      "Results": [
+        {"Target": "python", "Type": "python-pkg",
+         "Packages": [{"Name": "setuptools", "Version": "70.3.0"}, {"Name": "setuptools", "Version": "84.0.0"}]}
+      ]
+    }`)
+
+	report, err := parseReport("app:latest", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(report.Packages) != 2 {
+		t.Fatalf("got %d packages, want one per version", len(report.Packages))
 	}
 }

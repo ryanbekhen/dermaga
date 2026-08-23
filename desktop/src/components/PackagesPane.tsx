@@ -16,7 +16,7 @@ import { useImageScan } from '../hooks/useImageScan';
 import { useScannerStore } from '../store/scannerStore';
 import { openFindingWindow } from '../services/ipc';
 import { formatBytes, formatDuration } from '../utils/format';
-import type { Finding, ImagePackage } from '../types';
+import type { Finding, ImagePackage, VulnerabilityReport } from '../types';
 
 // Worst first everywhere: a list sorted any other way buries the line that
 // decides whether this image ships.
@@ -97,12 +97,81 @@ const COLUMNS: Column[] = [
 ];
 
 /** A package, with whatever is known against it. */
-interface Row {
+export interface Row {
   pkg: ImagePackage;
   findings: Finding[];
   counts: Record<string, number>;
   /** Rank of its worst finding; ORDER.length for a package with none. */
   worst: number;
+}
+
+/**
+ * One row per package, with the findings that are actually about it.
+ *
+ * A function of its own, and exported, because what goes with what turns on
+ * two things that are easy to get wrong and invisible until an image happens
+ * to carry the same package twice.
+ */
+export function buildRows(report: VulnerabilityReport | undefined): Row[] {
+  const findings = report?.findings ?? [];
+
+  // Held against the package *and the version it was found in*. An image can
+  // carry the same package twice -- two Pythons, a vendored copy beside the
+  // system one -- and by name alone each row was handed every finding for
+  // that name: setuptools 84.0.0 listed a flaw fixed in 83.0.0, sitting
+  // directly under the 70.3.0 it was actually about.
+  const held = new Map<string, Finding[]>();
+  for (const finding of findings) {
+    const key = versioned(finding.package, finding.installed);
+    const at = held.get(key);
+    if (at) at.push(finding);
+    else held.set(key, [finding]);
+  }
+
+  // Reports written before Dermaga asked Trivy for the whole inventory have
+  // findings and no package list. Rather than an empty tab, the packages
+  // those findings name are the inventory -- thinner, but the rows the
+  // reader came for are all there.
+  const packages: ImagePackage[] = report?.packages?.length
+    ? report.packages
+    : [
+        ...new Map(
+          findings.map((finding) => [
+            versioned(finding.package, finding.installed),
+            { name: finding.package, version: finding.installed },
+          ])
+        ).values(),
+      ].sort((a, b) => a.name.localeCompare(b.name));
+
+  // A finding whose version matches nothing in the inventory would otherwise
+  // disappear -- the scanner and the package database can spell a version
+  // differently, and a finding nobody can see is worse than one shown beside
+  // a version it might not be about. Those go to the rows with the name,
+  // which is what every finding used to do.
+  const claimed = new Set(packages.map((pkg) => versioned(pkg.name, pkg.version)));
+  const orphans = new Map<string, Finding[]>();
+  for (const [key, group] of held) {
+    if (claimed.has(key)) continue;
+
+    const name = group[0].package;
+    orphans.set(name, [...(orphans.get(name) ?? []), ...group]);
+  }
+
+  return packages.map((pkg) => {
+    const exact = held.get(versioned(pkg.name, pkg.version));
+    const mine = (exact ?? orphans.get(pkg.name) ?? [])
+      .slice()
+      .sort(
+        (a, b) => ORDER.indexOf(a.severity as Severity) - ORDER.indexOf(b.severity as Severity)
+      );
+
+    const counts: Record<string, number> = {};
+    for (const finding of mine) counts[finding.severity] = (counts[finding.severity] ?? 0) + 1;
+
+    const worst = mine.length ? Math.min(...mine.map((f) => rank(f.severity))) : ORDER.length;
+
+    return { pkg, findings: mine, counts, worst };
+  });
 }
 
 /**
@@ -158,42 +227,7 @@ export function PackagesPane({
     void openFindingWindow(reference, finding.id);
   };
 
-  const rows = useMemo<Row[]>(() => {
-    const findings = report?.findings ?? [];
-
-    const held = new Map<string, Finding[]>();
-    for (const finding of findings) {
-      const at = held.get(finding.package);
-      if (at) at.push(finding);
-      else held.set(finding.package, [finding]);
-    }
-
-    // Reports written before Dermaga asked Trivy for the whole inventory have
-    // findings and no package list. Rather than an empty tab, the packages
-    // those findings name are the inventory -- thinner, but the rows the
-    // reader came for are all there.
-    const packages: ImagePackage[] = report?.packages?.length
-      ? report.packages
-      : [...held.keys()].sort().map((name) => ({
-          name,
-          version: held.get(name)?.[0]?.installed,
-        }));
-
-    return packages.map((pkg) => {
-      const mine = (held.get(pkg.name) ?? [])
-        .slice()
-        .sort(
-          (a, b) => ORDER.indexOf(a.severity as Severity) - ORDER.indexOf(b.severity as Severity)
-        );
-
-      const counts: Record<string, number> = {};
-      for (const finding of mine) counts[finding.severity] = (counts[finding.severity] ?? 0) + 1;
-
-      const worst = mine.length ? Math.min(...mine.map((f) => rank(f.severity))) : ORDER.length;
-
-      return { pkg, findings: mine, counts, worst };
-    });
-  }, [report]);
+  const rows = useMemo(() => buildRows(report), [report]);
 
   const needle = filter.trim().toLowerCase();
 
@@ -206,7 +240,7 @@ export function PackagesPane({
 
     const hit = new Set<string>();
     for (const row of rows) {
-      if (row.findings.some((f) => f.id.toLowerCase().includes(needle))) hit.add(row.pkg.name);
+      if (row.findings.some((f) => f.id.toLowerCase().includes(needle))) hit.add(identify(row.pkg));
     }
 
     return hit;
@@ -219,7 +253,7 @@ export function PackagesPane({
       .filter(
         (row) =>
           !needle ||
-          matchedByFinding.has(row.pkg.name) ||
+          matchedByFinding.has(identify(row.pkg)) ||
           row.pkg.name.toLowerCase().includes(needle) ||
           (row.pkg.version ?? '').toLowerCase().includes(needle) ||
           (row.pkg.type ?? '').toLowerCase().includes(needle)
@@ -332,21 +366,21 @@ export function PackagesPane({
       <DataTable
         columns={COLUMNS}
         rows={visible}
-        rowKey={(row) => row.pkg.name}
+        rowKey={(row) => identify(row.pkg)}
         empty="No package matches that."
         onOpen={(row) => {
           // A row held open by the search stays open: closing it would hide
           // the thing that was searched for and leave the row as the only
           // answer, which is not one.
-          if (row.findings.length === 0 || matchedByFinding.has(row.pkg.name)) return;
-          toggle(row.pkg.name, opened, setOpened);
+          if (row.findings.length === 0 || matchedByFinding.has(identify(row.pkg))) return;
+          toggle(identify(row.pkg), opened, setOpened);
         }}
         below={(row) => {
           if (row.findings.length === 0) return null;
 
           // Searching a CVE id opens the package it is in, showing that
           // finding rather than the other eleven it happens to sit beside.
-          if (matchedByFinding.has(row.pkg.name)) {
+          if (matchedByFinding.has(identify(row.pkg))) {
             return (
               <FindingList
                 findings={row.findings.filter((f) => f.id.toLowerCase().includes(needle))}
@@ -355,7 +389,7 @@ export function PackagesPane({
             );
           }
 
-          return opened.has(row.pkg.name) ? (
+          return opened.has(identify(row.pkg)) ? (
             <FindingList findings={row.findings} onOpen={openFinding} />
           ) : null;
         }}
@@ -369,7 +403,9 @@ export function PackagesPane({
                 size={13}
                 aria-hidden
                 className={`shrink-0 text-ink-400 transition-transform ${
-                  opened.has(row.pkg.name) || matchedByFinding.has(row.pkg.name) ? 'rotate-90' : ''
+                  opened.has(identify(row.pkg)) || matchedByFinding.has(identify(row.pkg))
+                    ? 'rotate-90'
+                    : ''
                 }`}
               />
             ) : (
@@ -381,6 +417,12 @@ export function PackagesPane({
             >
               {row.pkg.name}
             </span>
+            {/* Read out of several things in the image -- every Go binary
+                carries the standard library. One row with a count, where it
+                used to be a row each. */}
+            {(row.pkg.places ?? 1) > 1 && (
+              <span className="shrink-0 text-tiny text-ink-500">×{row.pkg.places}</span>
+            )}
           </span>,
           // Blank where there is nothing against the package: five empty
           // segments repeated down four hundred rows would be a bar chart of
@@ -408,6 +450,28 @@ export function PackagesPane({
       />
     </DetailPane>
   );
+}
+
+/** A package and the version of it, as one key. */
+function versioned(name: string, version?: string): string {
+  return `${name}\u0000${version ?? ''}`;
+}
+
+/**
+ * What tells one row from another.
+ *
+ * Not the name. An image can hold the same package twice -- two Pythons, two
+ * site-packages, a vendored copy beside the system one -- and the rows differ
+ * only in their version or in the file they were read from. Keyed by name
+ * alone they were one row as far as this pane was concerned: opening either
+ * opened both, and React was handed two children with the same key, which is
+ * how it decides which DOM node belongs to which row.
+ *
+ * A separator no version or path contains, so two fields cannot run together
+ * into the same string as some other pair.
+ */
+function identify(pkg: ImagePackage): string {
+  return [pkg.name, pkg.version ?? '', pkg.type ?? '', pkg.source ?? ''].join('\u0000');
 }
 
 function toggle(
@@ -461,16 +525,34 @@ function FindingList({
               <span className="w-36 shrink-0 truncate font-mono text-code font-medium">
                 {finding.id}
               </span>
+              {/* Where a flaw was read out of more than one thing in the image.
+                  It used to be a row each -- twenty identical lines for one
+                  problem -- and the count is the only part of that repetition
+                  worth keeping. */}
+              <span className="w-16 shrink-0 text-tiny text-ink-500">
+                {(finding.places ?? 1) > 1 ? `${finding.places} places` : ''}
+              </span>
               {/* What to do about it, next to the name rather than at the far
                   end. It is the only reason to read a row of these rather
                   than open one, and the far end is the first thing to leave
-                  the screen when the window narrows. */}
+                  the screen when the window narrows.
+                  
+                  As wide as it needs, up to a limit. It was a fixed 112px, and
+                  a version that does not fit in it is the one thing on the row
+                  nobody can guess: `→ 1.24.13, 1.25…` is not a version, it is a
+                  riddle. Several are ordinary -- Go's standard library is fixed
+                  in every release line still supported -- so the space comes
+                  out of the description beside it, which is prose and can lose
+                  a few words without losing its point. */}
               {finding.fixed ? (
-                <span className="w-28 shrink-0 truncate font-mono text-tiny text-emerald-700 dark:text-emerald-500">
+                <span
+                  title={`Fixed in ${finding.fixed}`}
+                  className="min-w-28 max-w-64 shrink-0 truncate font-mono text-tiny text-emerald-700 dark:text-emerald-500"
+                >
                   → {finding.fixed}
                 </span>
               ) : (
-                <span className="w-28 shrink-0 text-tiny text-ink-500">no fix yet</span>
+                <span className="min-w-28 shrink-0 text-tiny text-ink-500">no fix yet</span>
               )}
               <span className="min-w-0 flex-1 truncate text-small text-ink-600 dark:text-ink-400">
                 {finding.title || '—'}
