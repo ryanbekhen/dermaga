@@ -124,7 +124,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 
 		agent.scanner.UseStore(opened)
 		agent.templates.UseStore(opened)
-		agent.containers.UsePendingStore(opened)
+		agent.containers.UseStore(opened)
 
 		// A build from a pasted Dockerfile writes it to a directory of its own
 		// and removes it when the build ends. A build that never ended -- the

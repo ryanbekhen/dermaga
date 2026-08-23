@@ -43,6 +43,7 @@ import { ContainerForm } from '../components/ContainerForm';
 import { api } from '../services/api';
 import { recreateContainer } from '../services/tasks';
 import { openExternal } from '../services/ipc';
+import { isWeb, portNumber, reachableAt, urlFor } from '../utils/endpoint';
 import { useLiveUsage } from '../hooks/useLiveUsage';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
@@ -604,6 +605,7 @@ function TerminalUser({ value, onChange }: { value: string; onChange: (value: st
 function ContainerRail({ container }: { container: Container }) {
   const running = container.status === 'running';
   const cores = container.cpuAllocation ?? 1;
+  const listening = listeningOn(container);
   const rx = container.networkRxPerSec ?? 0;
   const tx = container.networkTxPerSec ?? 0;
 
@@ -643,12 +645,18 @@ function ContainerRail({ container }: { container: Container }) {
           <RailRow label="IP address" value={container.interfaces?.[0]?.ipv4Address} />
           <RailRow
             label="Ports"
+            // Publishing is not the only way to reach a container here: it has
+            // an address of its own, so what its image listens on is an answer
+            // to the same question. "none published" was the whole of it, and
+            // it read as "nowhere to go".
             value={
               container.ports.length > 0
                 ? container.ports
                     .map((port) => `${port.host}→${port.container}/${port.protocol}`)
                     .join(', ')
-                : 'none published'
+                : listening.length > 0
+                  ? listening.map((port) => portNumber(port)).join(', ')
+                  : 'none published'
             }
           />
           <RailRow label="Hostname" value={container.hostname} />
@@ -766,6 +774,7 @@ function ConfigurationView({ container }: { container: Container }) {
   const openNetwork = useUIStore((s) => s.openNetwork);
   const [showEnv, setShowEnv] = useState(false);
   const running = container.status === 'running';
+  const listening = listeningOn(container);
   const dns = container.dns;
   const hasDns =
     (dns?.nameservers.length ?? 0) > 0 ||
@@ -852,6 +861,17 @@ function ConfigurationView({ container }: { container: Container }) {
               port={port}
               running={running}
             />
+          ))}
+        </Section>
+      )}
+
+      {/* What the image says it listens on and nothing published. Not a lesser
+          kind of port on this runtime: the container has an address of its own,
+          so these are reachable exactly as they stand. */}
+      {listening.length > 0 && (
+        <Section title="Listening" plain>
+          {listening.map((port) => (
+            <ListeningRow key={port} port={port} host={running ? reachableAt(container) : null} />
           ))}
         </Section>
       )}
@@ -949,6 +969,46 @@ function ConfigurationView({ container }: { container: Container }) {
     </DetailGrid>
   );
 }
+/**
+ * The ports an image declares that nothing was published for.
+ *
+ * A container that publishes 8080→80 is already answered for by the row above;
+ * listing 80 again underneath would be the same port twice, described two ways.
+ */
+function listeningOn(container: Container): string[] {
+  const published = new Set(container.ports.map((port) => port.container));
+
+  return (container.exposedPorts ?? []).filter((port) => !published.has(portNumber(port)));
+}
+
+/** One port the image listens on, at the container's own address. */
+function ListeningRow({ port, host }: { port: string; host: string | null }) {
+  const url = host && isWeb(port) ? urlFor(host, port) : null;
+
+  return (
+    <div className="row">
+      <span className="row-key">{port.split('/')[1] ?? 'tcp'}</span>
+      <span className="row-value flex items-center justify-end gap-2 font-mono">
+        {host ? `${host}:${portNumber(port)}` : portNumber(port)}
+        {url && (
+          <a
+            href={url}
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternal(url);
+            }}
+            title={`Open ${url}`}
+            className="btn-icon border-transparent"
+            aria-label={`Open ${url} in your browser`}
+          >
+            <ExternalLink size={13} aria-hidden />
+          </a>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function PortRow({ port, running }: { port: Port; running: boolean }) {
   const hostPort = port.host.includes(':') ? port.host.split(':').pop() : port.host;
   const openable = running && port.protocol.toLowerCase() === 'tcp' && Boolean(hostPort);

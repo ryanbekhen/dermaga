@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
+	"github.com/ryanbekhen/dermaga/internal/oci"
 )
 
 // Manager owns every image operation.
@@ -19,10 +19,13 @@ type Manager struct {
 	runner  *cli.Runner
 	logger  *slog.Logger
 	changed notify.Notifier
+	// Where the half of an image's config the CLI does not report is read
+	// from. See internal/oci.
+	blobs *oci.Store
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
-	return &Manager{runner: runner, logger: logger, changed: changed}
+	return &Manager{runner: runner, logger: logger, changed: changed, blobs: oci.Open()}
 }
 
 // Image is the flattened view of `container image list --format json`.
@@ -96,13 +99,15 @@ type cliImageVariant struct {
 		OS           string `json:"os"`
 		Created      string `json:"created"`
 		Config       struct {
-			Cmd          []string          `json:"Cmd"`
-			Entrypoint   []string          `json:"Entrypoint"`
-			Env          []string          `json:"Env"`
-			WorkingDir   string            `json:"WorkingDir"`
-			User         string            `json:"User"`
-			Labels       map[string]string `json:"Labels"`
-			ExposedPorts map[string]any    `json:"ExposedPorts"`
+			Cmd        []string          `json:"Cmd"`
+			Entrypoint []string          `json:"Entrypoint"`
+			Env        []string          `json:"Env"`
+			WorkingDir string            `json:"WorkingDir"`
+			User       string            `json:"User"`
+			Labels     map[string]string `json:"Labels"`
+			// No ExposedPorts: the CLI reports a config without them, which is
+			// the whole reason internal/oci exists. A field here would only be
+			// a promise this struct cannot keep.
 		} `json:"config"`
 		RootFS struct {
 			DiffIDs []string `json:"diff_ids"`
@@ -215,11 +220,14 @@ func (m *Manager) Inspect(ctx context.Context, reference string) (*ImageDetail, 
 
 	variants := make([]ImageVariant, 0, len(r.Variants))
 	for _, v := range r.Variants {
-		ports := make([]string, 0, len(v.Config.Config.ExposedPorts))
-		for port := range v.Config.Config.ExposedPorts {
-			ports = append(ports, port)
+		// Read beside the CLI's answer rather than from it: `image inspect`
+		// reports a config with the ports left out, so this page said every
+		// image listens on nothing. The manifest digest is the variant's own,
+		// which is the exact config to ask.
+		ports := m.blobs.ExposedPorts(v.Digest, v.platformOf())
+		if ports == nil {
+			ports = cli.OrEmpty(nil)
 		}
-		sort.Strings(ports)
 
 		history := make([]ImageHistory, 0, len(v.Config.History))
 		for _, h := range v.Config.History {

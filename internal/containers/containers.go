@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
+	"github.com/ryanbekhen/dermaga/internal/oci"
 	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
@@ -230,22 +230,27 @@ type Manager struct {
 	// take the user's changes with it.
 	pending *PendingStore
 
-	// What each image says it exposes, keyed by the reference the container was
-	// created from *and* the digest that reference resolved to. Cached without
-	// expiry on purpose: an image's config is part of the image, so for a given
-	// digest this answer cannot change. A miss costs one inspect, once, and the
-	// listing is pushed every few seconds.
+	// Where the ports an image listens on are read from. Not the CLI: it drops
+	// that half of the config, and this is a few file reads against the digest
+	// the container already carries.
+	blobs *oci.Store
+
+	// And what was read, remembered.
 	//
-	// The reference alone used to be the key, which is the same key for two
-	// different images once a tag has been built again: a container created
-	// before the rebuild kept reporting whatever the old image declared, for as
-	// long as this process ran. Recreating it moves it to a key of its own.
+	// A container outlives its image: delete the image of something still
+	// running and its blobs go with it, and what the window reports would fall
+	// from "6379" to nothing while the container carries on listening on 6379.
 	//
-	// Rebuilt from what each pass actually looked up rather than added to, so a
-	// morning of rebuilds leaves it the size of the container list instead of
-	// the size of the day.
-	exposedMu sync.RWMutex
-	exposed   map[string][]string
+	// Safe to keep for ever because of what the key is. A digest names exact
+	// bytes, and the config inside them cannot change -- so an answer recorded
+	// against one is not a cached answer that might go stale, it is the answer.
+	// Nothing invalidates it, and there is nothing to invalidate.
+	//
+	// In memory and written through to the database, so closing the app does
+	// not forget. Without a database it still works, and forgets on quit.
+	portsMu sync.RWMutex
+	ports   map[string][]string
+	db      *store.Store
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
@@ -254,7 +259,8 @@ func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier
 		logger:  logger,
 		stats:   NewStatsSampler(runner, logger),
 		changed: changed,
-		exposed: map[string][]string{},
+		blobs:   oci.Open(),
+		ports:   map[string][]string{},
 		pending: NewPendingStore(logger),
 	}
 }
@@ -269,9 +275,36 @@ func (cm *Manager) Stats() *StatsSampler {
 	return cm.stats
 }
 
-// UsePendingStore hands the unfinished-edit store somewhere to keep them.
-func (cm *Manager) UsePendingStore(db *store.Store) {
+// UseStore hands over the database, and reads back what was kept in it.
+//
+// Called once, before anything is served. Everything here works without it --
+// an edit is no worse off than it was before any of this existed, and the
+// ports are read from the images themselves while those are still there.
+func (cm *Manager) UseStore(db *store.Store) {
 	cm.pending.UseStore(db)
+
+	remembered := map[string][]string{}
+
+	err := db.All(store.BucketPorts, func(digest string, raw []byte) error {
+		var ports []string
+		if err := json.Unmarshal(raw, &ports); err != nil {
+			// One unreadable record is one image whose ports have to be read
+			// again, not a reason to abandon the rest.
+			return nil
+		}
+
+		remembered[digest] = ports
+
+		return nil
+	})
+	if err != nil {
+		cm.logger.Warn("Could not read what images listen on", "error", err)
+	}
+
+	cm.portsMu.Lock()
+	cm.ports = remembered
+	cm.db = db
+	cm.portsMu.Unlock()
 }
 
 func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
@@ -293,100 +326,71 @@ func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
 	}
 
 	cm.stats.Apply(containers)
-	cm.applyExposedPorts(ctx, containers)
+	cm.applyExposedPorts(containers)
 
 	return containers, nil
 }
 
-// applyExposedPorts fills in each container's listening ports from its image.
+// applyExposedPorts fills in each container's listening ports from the image it
+// was made of.
 //
-// Failures are cached as "nothing", not retried: an image that cannot be
-// inspected now will not inspect any better on the next listing a second from
-// now, and retrying would mean a failed CLI call per container per push.
-func (cm *Manager) applyExposedPorts(ctx context.Context, containers []Container) {
-	fresh := make(map[string][]string, len(containers))
-
+// By digest, which is the exact image this container is running rather than
+// whatever its tag means now: a tag built again since does not change what is
+// inside a container that already exists.
+func (cm *Manager) applyExposedPorts(containers []Container) {
 	for i := range containers {
-		image := containers[i].Image
-		if image == "" {
+		digest := containers[i].ImageDigest
+		if digest == "" {
 			continue
 		}
 
-		key := image + "@" + containers[i].ImageDigest
-
-		// Twins first: most of a listing is containers sharing a handful of
-		// images, and this pass has usually answered for them already.
-		if ports, answered := fresh[key]; answered {
-			containers[i].ExposedPorts = ports
-			continue
-		}
-
-		cm.exposedMu.RLock()
-		ports, known := cm.exposed[key]
-		cm.exposedMu.RUnlock()
-
-		if !known {
-			// By reference, because the digest a container was made from may
-			// no longer be reachable by any name -- an image built twice keeps
-			// only the second under the tag. What the tag holds now is the
-			// closest thing there is, and it is exactly right again the moment
-			// the container is recreated from it.
-			ports = cm.readExposedPorts(ctx, image)
-		}
-
-		fresh[key] = ports
-		containers[i].ExposedPorts = ports
+		containers[i].ExposedPorts = cm.portsOf(digest, containers[i].Platform)
 	}
-
-	cm.exposedMu.Lock()
-	cm.exposed = fresh
-	cm.exposedMu.Unlock()
 }
 
-// readExposedPorts asks the image what it declares. Every variant of a
-// multi-platform image declares the same ports in practice, so the first is
-// taken rather than the one matching the container's platform -- which the
-// listing does not always report.
-func (cm *Manager) readExposedPorts(ctx context.Context, image string) []string {
-	output, err := cm.runner.Run(ctx, "image", "inspect", image)
-	if err != nil {
-		cm.logger.Debug("could not read exposed ports", "image", image, "error", err)
-		return nil
+// portsOf asks the image, and remembers the answer.
+//
+// The image first, always: it is the only authority, and reading it is three
+// files the operating system is already holding. What is remembered answers
+// only when the image cannot -- when it has been deleted out from under a
+// container that is still running on it.
+//
+// An image that declares nothing is remembered as nothing, so the two cases
+// that look alike here -- "declares no ports" and "no longer on this Mac" --
+// come to the same answer, which is the right one for both.
+func (cm *Manager) portsOf(digest, platform string) []string {
+	cm.portsMu.RLock()
+	remembered, known := cm.ports[digest]
+	cm.portsMu.RUnlock()
+
+	if known {
+		return remembered
 	}
 
-	var raw []struct {
-		Variants []struct {
-			Config struct {
-				Config struct {
-					ExposedPorts map[string]any `json:"ExposedPorts"`
-				} `json:"config"`
-			} `json:"config"`
-		} `json:"variants"`
+	ports := cm.blobs.ExposedPorts(digest, platform)
+	cm.remember(digest, ports)
+
+	return ports
+}
+
+// remember keeps what an image declares, in memory and on disk.
+//
+// Written once per digest and never again: the bytes a digest names cannot
+// change, so neither can this. That is also what keeps a listing every two
+// seconds from being a write every two seconds.
+func (cm *Manager) remember(digest string, ports []string) {
+	cm.portsMu.Lock()
+	cm.ports[digest] = ports
+	db := cm.db
+	cm.portsMu.Unlock()
+
+	if db == nil {
+		return
 	}
 
-	if err := json.Unmarshal(output, &raw); err != nil {
-		cm.logger.Debug("could not parse exposed ports", "image", image, "error", err)
-		return nil
+	if err := cm.db.Put(store.BucketPorts, digest, ports); err != nil {
+		cm.logger.Debug("Could not keep what an image listens on", "digest", digest, "error", err)
 	}
-
-	for _, entry := range raw {
-		for _, variant := range entry.Variants {
-			declared := variant.Config.Config.ExposedPorts
-			if len(declared) == 0 {
-				continue
-			}
-
-			ports := make([]string, 0, len(declared))
-			for port := range declared {
-				ports = append(ports, port)
-			}
-			sort.Strings(ports)
-
-			return ports
-		}
-	}
-
-	return nil
 }
 
 func parseContainerList(output []byte) ([]Container, error) {
@@ -756,6 +760,7 @@ func (cm *Manager) Remove(ctx context.Context, id string, force bool) error {
 
 		return err
 	}
+
 	cm.changed.Changed()
 
 	return nil

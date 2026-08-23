@@ -1,8 +1,18 @@
 package containers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ryanbekhen/dermaga/internal/notify"
+	"github.com/ryanbekhen/dermaga/internal/oci"
+	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
 // Trimmed from real `container list --all --format json` output (CLI 1.2.2).
@@ -300,4 +310,71 @@ func TestAContainerIsNamedWithoutItsDomain(t *testing.T) {
 			t.Errorf("firstLabel(%q) = %q, want %q", hostname, got, want)
 		}
 	}
+}
+
+// A container outlives its image: delete the image of something still running
+// and the blobs go with it. What the window reports about it should not fall
+// from "6379" to nothing while the container carries on listening on 6379.
+func TestWhatAnImageListensOnOutlivesTheImage(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	db, err := store.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	blobs := t.TempDir()
+	config := writeBlob(t, blobs, `{"config":{"ExposedPorts":{"6379/tcp":{}}}}`)
+	manifest := writeBlob(t, blobs, `{"config":{"digest":"`+config+`"}}`)
+
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	// While the image is there, it is the authority and the answer is kept.
+	first := NewManager(nil, quiet, notify.Nop)
+	first.blobs = oci.OpenAt(blobs)
+	first.UseStore(db)
+
+	list := []Container{{ImageDigest: manifest}}
+	first.applyExposedPorts(list)
+
+	if len(list[0].ExposedPorts) != 1 || list[0].ExposedPorts[0] != "6379/tcp" {
+		t.Fatalf("read from the image = %v", list[0].ExposedPorts)
+	}
+
+	// The image is deleted. A manager with nothing left to read still answers,
+	// because what it read was written down.
+	second := NewManager(nil, quiet, notify.Nop)
+	second.blobs = oci.OpenAt(t.TempDir())
+	second.UseStore(db)
+
+	after := []Container{{ImageDigest: manifest}}
+	second.applyExposedPorts(after)
+
+	if len(after[0].ExposedPorts) != 1 || after[0].ExposedPorts[0] != "6379/tcp" {
+		t.Errorf("remembered = %v, want the ports to survive the image", after[0].ExposedPorts)
+	}
+
+	// And an image nobody ever read is still simply unknown.
+	unknown := []Container{{ImageDigest: "sha256:" + strings.Repeat("b", 64)}}
+	second.applyExposedPorts(unknown)
+
+	if unknown[0].ExposedPorts != nil {
+		t.Errorf("invented ports for an image never seen: %v", unknown[0].ExposedPorts)
+	}
+}
+
+// writeBlob puts one blob in a content store under its own digest.
+func writeBlob(t *testing.T, root, content string) string {
+	t.Helper()
+
+	sum := sha256.Sum256([]byte(content))
+	name := hex.EncodeToString(sum[:])
+
+	if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	return "sha256:" + name
 }

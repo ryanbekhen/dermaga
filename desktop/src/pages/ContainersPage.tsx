@@ -15,6 +15,8 @@ import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
 import { api } from '../services/api';
+import { openExternal } from '../services/ipc';
+import { isWeb, portNumber, reachableAt, urlFor } from '../utils/endpoint';
 import { useToastStore } from '../store/toastStore';
 import { recreateContainer } from '../services/tasks';
 import { StatusPill } from '../components/StatusBadge';
@@ -25,24 +27,29 @@ import { PageHeader } from '../components/PageHeader';
 import { FilterToggle } from '../components/FilterToggle';
 import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
-import type { ContainerSpec, Container, Port } from '../types';
+import type { ContainerSpec, Container } from '../types';
 import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../utils/format';
 
-// The six things worth knowing about a container without opening it: what it
-// is, what it came from, whether it is up, what it is spending, and how to
-// reach it.
+// What is worth knowing about a container without opening it: what it is and
+// where it answers, what it came from, whether it is up, and what it is
+// spending.
 //
-// Platform used to have a column of its own and said "linux/arm64" on every
-// row of every Mac sold since 2020 -- a column that never varies is a column
-// nobody reads. It is on the detail page, where the rare machine running
-// something else will say so.
+// Where it answers used to be a column of its own, and it was the wrong shape
+// for one: an address is not a measurement to be scanned down a column, it is
+// part of what the thing *is* -- the second half of its name. Under the name is
+// also where the eye already is when it has found the row it wanted, which is
+// the moment somebody wants to click through to it.
+//
+// Platform used to have a column too, and said "linux/arm64" on every row of
+// every Mac sold since 2020 -- a column that never varies is a column nobody
+// reads. It is on the detail page, where the rare machine running something
+// else will say so.
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'Name', width: 'minmax(120px,1.5fr)' },
+  { key: 'name', label: 'Name', width: 'minmax(160px,2fr)' },
   { key: 'image', label: 'Image', width: 'minmax(140px,1.5fr)' },
   { key: 'status', label: 'Status', width: '112px', align: 'center' },
   { key: 'cpu', label: 'CPU', width: '104px' },
   { key: 'memory', label: 'Memory', width: '128px' },
-  { key: 'ports', label: 'Ports', width: 'minmax(130px,1.2fr)' },
 ];
 
 export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) {
@@ -266,16 +273,19 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
         loading={!hasLoaded}
         cells={(container) => {
           const isRunning = container.status === 'running';
-          const address = container.interfaces?.[0]?.ipv4Address;
           const cpu = isRunning ? (container.cpuUsage ?? 0) : 0;
 
           return [
-            // Just the name. Apple's runtime gives a container one identifier
-            // and its name is it, so the id underneath was the line above it in
-            // a lighter grey -- and the dot in front of it was the Status
-            // column said again, a hundred pixels to the left.
+            // The name, and under it somewhere to go. The id is not repeated:
+            // Apple's runtime gives a container one identifier and its name is
+            // it, so the line underneath was the line above it in a lighter
+            // grey -- and the dot in front of it was the Status column said
+            // again, a hundred pixels to the left.
             <NameCell key="name">
-              <span className="truncate text-body font-medium">{container.name}</span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-body font-medium">{container.name}</span>
+                <Endpoint container={container} />
+              </span>
             </NameCell>,
             <ImageCell key="image" container={container} />,
             <StatusCell
@@ -292,12 +302,6 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
               key="memory"
               value={isRunning && container.memoryUsage ? formatMemory(container.memoryUsage) : '—'}
               of={formatMemory(container.memoryAllocation)}
-            />,
-            <PortsCell
-              key="ports"
-              ports={container.ports}
-              exposed={container.exposedPorts}
-              address={address}
             />,
           ];
         }}
@@ -432,73 +436,85 @@ function StatusCell({ status, since }: { status: string; since: string | null })
 }
 
 /**
- * Somewhere you can actually type into a browser.
+ * Where a container answers, under its name.
  *
- * Published ports are shown as the mapping the runtime made. Everything else
- * gets its own address and the port its image says it listens on, which on
+ * One line, and the first endpoint. A row is a thing you are scanning past, and
+ * the question it has to answer is "is this the one" -- not "which of its four
+ * ports". The rest are on its own page, spelled out and each openable.
+ *
+ * Published ports are reached here on this Mac. Everything else is reached at
+ * the container's own name and the port its image says it listens on, which on
  * this runtime is a real endpoint: every container has an address of its own,
- * so `192.168.64.18:80` reaches an unpublished nginx exactly as it stands.
+ * so an unpublished nginx answers on `whoami.internal:80` exactly as it stands.
  *
- * The address alone used to be shown instead, and it answered half a question.
- * Knowing where something is without knowing what to knock on is not much use,
- * and the port was on screen nowhere at all for a container that publishes
- * nothing -- which, on a runtime that gives every container an address, is
- * most of them.
+ * That second half only started working when the ports stopped coming from
+ * `container image inspect`, which reports a config with them left out -- so
+ * every container looked like one that listens on nothing.
  */
-function PortsCell({
-  ports,
-  exposed,
-  address,
-}: {
-  ports: Port[];
-  exposed?: string[];
-  address?: string;
-}) {
-  if (ports.length === 0) {
-    const listening = (exposed ?? []).map((port) => port.split('/')[0]);
+function Endpoint({ container }: { container: Container }) {
+  const endpoints = endpointsOf(container);
+  const first = endpoints[0];
 
-    if (address && listening.length > 0) {
-      return (
-        <span
-          className="flex min-w-0 flex-col gap-0.5"
-          title={(exposed ?? []).map((port) => `${address}:${port}`).join('\n')}
-        >
-          {listening.slice(0, 2).map((port) => (
-            <span key={port} className="truncate font-mono text-code">
-              {address}:{port}
-            </span>
-          ))}
-          {listening.length > 2 && (
-            <span className="truncate text-tiny text-ink-500">and {listening.length - 2} more</span>
-          )}
-        </span>
-      );
-    }
+  // Nothing to say rather than an em dash: this line is a note under a name,
+  // and a placeholder under every quiet container is a column of dashes down
+  // the busiest part of the page.
+  if (!first) return null;
 
-    return <Muted mono>{address ?? '—'}</Muted>;
+  const rest = endpoints.length - 1;
+  const label = rest > 0 ? `${first.label} +${rest}` : first.label;
+  const title = endpoints.map((endpoint) => endpoint.title).join('\n');
+
+  if (!first.url) {
+    return (
+      <span className="truncate font-mono text-tiny text-ink-500" title={title}>
+        {label}
+      </span>
+    );
   }
 
-  // More than two and the row would grow a paragraph; the rest are counted and
-  // spelled out in full on the detail page.
-  const shown = ports.slice(0, 2);
-  const rest = ports.length - shown.length;
-
   return (
-    <span
-      className="flex min-w-0 flex-col gap-0.5"
-      title={ports.map((port) => `${port.host} → ${port.container}/${port.protocol}`).join('\n')}
+    <a
+      href={first.url}
+      // The row underneath opens the container; this leaves the app.
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openExternal(first.url as string);
+      }}
+      title={`Open ${first.url}${rest > 0 ? `\n\n${title}` : ''}`}
+      className="w-fit max-w-full truncate font-mono text-tiny text-brand-700 hover:underline dark:text-brand-400"
     >
-      {shown.map((port) => (
-        <span
-          key={`${port.protocol}-${port.host}-${port.container}`}
-          className="truncate font-mono text-code"
-        >
-          {port.host} → {port.container}
-        </span>
-      ))}
-      {rest > 0 && <span className="truncate text-tiny text-ink-500">and {rest} more</span>}
-    </span>
+      {label}
+    </a>
   );
+}
+
+/**
+ * What a container answers on, published or not.
+ *
+ * A published port is reached here, on this Mac; anything else is reached at
+ * the container itself. Only while it is running: an address belongs to a
+ * container that is up, and a link to a stopped one is a link to nothing.
+ */
+function endpointsOf(container: Container): { label: string; title: string; url: string | null }[] {
+  const running = container.status === 'running';
+
+  if (container.ports.length > 0) {
+    return container.ports.map((port) => ({
+      label: `${port.host} → ${port.container}`,
+      title: `${port.host} → ${port.container}/${port.protocol}`,
+      url:
+        running && port.protocol.toLowerCase() === 'tcp' ? `http://localhost:${port.host}` : null,
+    }));
+  }
+
+  const host = running ? reachableAt(container) : null;
+
+  return (container.exposedPorts ?? []).map((port) => ({
+    label: host ? `${host}:${portNumber(port)}` : port,
+    title: host ? `${host}:${port}` : port,
+    url: host && isWeb(port) ? urlFor(host, port) : null,
+  }));
 }
 
 /**

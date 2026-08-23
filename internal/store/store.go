@@ -31,6 +31,10 @@ const (
 	BucketScans     = "scans"
 	BucketTemplates = "templates"
 	BucketPending   = "pending"
+	// What each image declares it listens on, keyed by digest. Read from the
+	// image itself; kept here because a container can outlive the image it was
+	// made from, and then there is nowhere left to read it.
+	BucketPorts = "ports"
 )
 
 // Name of the database inside ~/.dermaga.
@@ -74,7 +78,7 @@ func Open() (*Store, error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{BucketScans, BucketTemplates, BucketPending} {
+		for _, name := range []string{BucketScans, BucketTemplates, BucketPending, BucketPorts} {
 			if _, err := tx.CreateBucketIfNotExists([]byte(name)); err != nil {
 				return err
 			}
