@@ -7,10 +7,25 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
-## [v1.11.0] — 2026-08-23
+## [v1.11.0] — 2026-08-24
 
 ### Added
 
+- **A hostname of your own, for anything running here.** Apple's runtime gives a container an address
+  on this Mac and nothing beyond it, so showing somebody what you are working on meant the Cloudflare
+  dashboard in one window, a terminal in another, and a config file in between. Connect a Cloudflare
+  account once and add a route: which of your domains, what to call it there, and what answers — a
+  container, one of the Linux machines, or this Mac itself, where a dev server usually is long before
+  it is in a container. A container listening on three ports gets three hostnames rather than one and
+  a guess. Dermaga makes the tunnel, writes the DNS record and runs the connector; you never touch
+  `cloudflared` and never log in to it. The page draws the whole path each route takes — hostname,
+  connector, the network's gateway, the port, the container — because that is what breaks, and a list
+  of hostnames would not show where; hovering anything lights its path end to end. Recreate a
+  container and its routes follow it to the new address on their own. The API token lives in this
+  Mac's login keychain, never in a file and never on a command line, and disconnecting takes every
+  route down before it forgets the token — the token is the only thing that can reach Cloudflare, so
+  forgetting it first would strand every hostname it made. Marked **beta**: it is the one feature
+  here that makes changes in somebody else's account.
 - **A container knows when its image moved on.** Edit the code, press `Build`, and the container
   carries on running the build before it. Nothing said so: the row still reads `api:dev`, because the
   reference has not changed — only what it points at has. Putting the new build in meant opening
@@ -26,6 +41,46 @@ change means to someone using Dermaga, not for how much code moved.
   in and the caret in the Tag field, on a name taken from the folder and selected so typing replaces
   it. A folder with a Dockerfile in it is the same drag. `Dockerfile.dev` and `dev.Dockerfile` are
   recognised as well, and anything that is not a build says so rather than opening a form about it.
+- **The port a container listens on, and somewhere to click it.** Every container on this runtime has
+  an address of its own, so a port it listens on is reachable whether or not anything was published
+  to the host — which is most of them. The window could not say what that port was: `container image
+  inspect` reports an image's command, entrypoint, environment and working directory and drops the
+  rest, so a redis that has said `EXPOSE 6379` since it was built looked like an image listening on
+  nothing. It is read from the image itself now, and kept, so a container outlives the image it was
+  made from and still knows. Several addresses are a count rather than a wall: press it for a menu of
+  them, press one to open it. One address is still a link, because it is the whole thing and it fits.
+- **Forms say what is wrong before the runtime does.** A form refused work in two ways and neither
+  explained itself: the button went grey until every required field had something in it, and anything
+  the runtime would reject was found out by asking the runtime — you filled it in, pressed Create,
+  and a red toast came back with the dialog and everything in it already gone. Each rule answers with
+  the sentence to show rather than with true or false, so "must be at least 200m" is what you get.
+- **What finished work printed, kept.** A build's output was the only record of how an image was
+  made, and it lived in the window's memory and nowhere else: closing Dermaga threw away the log of
+  everything it had built. The last ten are kept now. A build that succeeded is also no longer
+  reported as failed — the window used to search the output for the word `ERROR`, which apt, npm, pip
+  and every compiler print while succeeding.
+
+### Changed
+
+- **What Dermaga keeps about a container now lives in its own database.** Marking a container to
+  start with Dermaga destroyed it. The mark was a `dermaga.autoboot` label, and a label can only be
+  written by `container run` — so ticking a box meant stop, delete, run again, and a container's
+  filesystem is lost in that. It is a record of Dermaga's own now, and the tick is a write. Containers
+  marked before this still carry the old label and it is still read; that fallback goes in 1.15.0.
+
+### Fixed
+
+- **Selecting a failed build's output dragged the window instead.** That output is the text most
+  worth copying in the whole app, and it could not be selected. The list of running work lives in the
+  title bar, so the dialog it opens is rendered inside the draggable strip — and "drag the window"
+  inherits like any other CSS property, so every word in the output had it.
+- **A scan reported the same flaw over and over.** An image of Go binaries reported 986 findings
+  across 37 packages. There were 131 and 28. Trivy reports one result per thing it read, and the same
+  library is read out of every binary built with it — so `stdlib` was listed six times as separate
+  rows, and the same CVE twenty times inside each. The counts were twenty times too, and so was the
+  headline.
+- **Table headings sit over their own values again.** The Status column's heading was centred while
+  its contents were not, so it floated in the middle of a column whose values were somewhere else.
 
 ## [v1.10.1] — 2026-08-23
 
