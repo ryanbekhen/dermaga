@@ -115,7 +115,7 @@ export function TaskStatusItem() {
         <div
           role="dialog"
           aria-label="Work in progress"
-          className="absolute right-0 top-full z-40 mt-2 w-[26rem] rounded-xl border border-ink-200 bg-white p-2 text-left text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100"
+          className="no-drag absolute right-0 top-full z-40 mt-2 w-[26rem] rounded-xl border border-ink-200 bg-white p-2 text-left text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100"
         >
           <ul className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
             {tasks.map((task) => (

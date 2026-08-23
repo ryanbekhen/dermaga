@@ -175,9 +175,16 @@
 
 /* Declared as utilities, not components: Tailwind 4 only lets @apply reference
    utilities, and .card-interactive / .btn-* are built on these. */
-/* Opts an element back into text selection inside the non-selectable chrome. */
+/* Opts an element back into text selection inside the non-selectable chrome.
+
+   And out of dragging the window, which is the other half of the same idea:
+   selecting is done by dragging across the words, so anything that inherited
+   `--wails-draggable: drag` from a chrome ancestor would move the window
+   instead -- and the text most worth copying, a failed command's output, hangs
+   from the title bar. */
 @utility selectable {
   user-select: text;
+  --wails-draggable: no-drag;
 }
 
 @utility card {

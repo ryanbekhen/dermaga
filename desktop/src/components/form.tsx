@@ -117,8 +117,13 @@ export function Modal({
   }, [onClose, onSubmit]);
 
   return (
+    // no-drag for the same reason the panel sets its own text colour below: a
+    // dialog opened from the title bar is rendered inside it, and
+    // `--wails-draggable` inherits like any other property. Without this,
+    // dragging across the text of a failed build's output moved the window
+    // instead of selecting the line somebody was trying to copy.
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/55 p-6"
+      className="no-drag fixed inset-0 z-40 flex items-center justify-center bg-ink-950/55 p-6"
       onClick={onClose}
     >
       {/* The panel is the page's own paper, and its head and foot are white:

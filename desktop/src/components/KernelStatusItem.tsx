@@ -79,7 +79,7 @@ export function KernelStatusItem() {
         <div
           role="dialog"
           aria-label="Linux kernel"
-          className="absolute right-0 top-full z-40 mt-2 w-96 rounded-xl border border-ink-200 bg-white p-3 text-left text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100"
+          className="no-drag absolute right-0 top-full z-40 mt-2 w-96 rounded-xl border border-ink-200 bg-white p-3 text-left text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100"
         >
           <p className="text-xs font-semibold">No Linux kernel is configured</p>
           <p className="mt-1 text-tiny leading-relaxed text-ink-600 dark:text-ink-400">

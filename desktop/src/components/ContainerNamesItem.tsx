@@ -100,7 +100,7 @@ export function ContainerNamesItem() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-ink-200 bg-white p-3 text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100">
+        <div className="no-drag absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-ink-200 bg-white p-3 text-ink-900 shadow-panel dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100">
           <p className="flex items-center gap-1.5 wrap-break-word text-xs font-semibold">
             <Globe size={13} aria-hidden />
             {state.registered ? 'Container names are on' : 'Let containers find each other by name'}
