@@ -7,6 +7,26 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.11.0] — 2026-08-23
+
+### Added
+
+- **A container knows when its image moved on.** Edit the code, press `Build`, and the container
+  carries on running the build before it. Nothing said so: the row still reads `api:dev`, because the
+  reference has not changed — only what it points at has. Putting the new build in meant opening
+  Containers, remembering the spec, deleting by hand and typing it back. The row now marks itself
+  **image moved on** and offers Recreate, which runs the container's own configuration again on what
+  the tag means today: same name, ports, volumes, environment. Nothing pops up and nothing recreates
+  itself — a build takes minutes, and the marker waits on the row until you come to it. An image that
+  is no longer on this Mac is never marked, because there would be nothing to recreate it from.
+- **Drop a Dockerfile on the window to build it.** Building one meant telling the dialog three
+  things: the folder to build against, the file within it, and a tag. The first two are things the
+  file already knows — they are where it is. Drag it in from Finder and the whole window says what
+  dropping it would do; let go, and the build dialog opens with the folder and the filename filled
+  in and the caret in the Tag field, on a name taken from the folder and selected so typing replaces
+  it. A folder with a Dockerfile in it is the same drag. `Dockerfile.dev` and `dev.Dockerfile` are
+  recognised as well, and anything that is not a build says so rather than opening a form about it.
+
 ## [v1.10.1] — 2026-08-23
 
 ### Fixed
