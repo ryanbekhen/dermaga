@@ -4,6 +4,8 @@
  * server to point one at.
  */
 
+import type { BuildDrop } from '../types';
+
 export interface Notification {
   method: string;
   params?: unknown;
@@ -24,6 +26,7 @@ interface Bridge {
   pickFile?: (options: { title?: string; extension?: string }) => Promise<string | null>;
   pathForFile?: (file: File) => string;
   onFilesDropped?: (callback: (paths: string[], target: string) => void) => () => void;
+  resolveBuildDrop?: (paths: string[]) => Promise<BuildDrop | null>;
   syncSettings?: (settings: { notifyOnExit: boolean }) => void;
   openNotificationSettings?: () => Promise<void>;
   openExternal?: (url: string) => Promise<void>;
@@ -110,6 +113,18 @@ export function pathForFile(file: File): string | null {
  */
 export function onFilesDropped(callback: (paths: string[], target: string) => void): () => void {
   return bridge().onFilesDropped?.(callback) ?? (() => {});
+}
+
+/**
+ * What a dropped path is worth building, if anything.
+ *
+ * Only the shell can answer: whether a path is a folder, and whether there is a
+ * Dockerfile in it, are questions about a disk the page cannot see. Nothing to
+ * build comes back as null, which is a real answer -- most drops are not about
+ * building.
+ */
+export async function resolveBuildDrop(paths: string[]): Promise<BuildDrop | null> {
+  return (await bridge().resolveBuildDrop?.(paths)) ?? null;
 }
 
 /** Keeps the main process in step with preferences it acts on by itself. */

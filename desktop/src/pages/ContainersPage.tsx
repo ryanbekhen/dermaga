@@ -293,7 +293,14 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
 
       {creating.open && (
         <ContainerForm
-          initial={creating.target ? { image: creating.target } : (fromTemplate ?? undefined)}
+          // An intent that names an image opens the form on it. The other
+          // shape an intent target comes in -- a dropped Dockerfile -- belongs
+          // to the build dialog and never arrives here.
+          initial={
+            typeof creating.target === 'string'
+              ? { image: creating.target }
+              : (fromTemplate ?? undefined)
+          }
           onClose={() => {
             creating.close();
             setFromTemplate(null);

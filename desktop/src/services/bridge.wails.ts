@@ -152,6 +152,7 @@ window.dermaga = {
     on<{ paths?: string[]; target?: string }>('dermaga:files-dropped', (data) =>
       callback(data?.paths ?? [], data?.target ?? '')
     ),
+  resolveBuildDrop: (paths) => call('ResolveBuildDrop', paths),
 
   checkUpdate: () => call('CheckUpdate'),
   stageUpdate: (assetUrl, version) => call('StageUpdate', assetUrl, version),

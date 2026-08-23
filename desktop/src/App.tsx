@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Hammer } from 'lucide-react';
 import { HelpView } from './components/HelpView';
 import { LicencesPage } from './pages/LicencesPage';
 import { RegistriesPage } from './pages/RegistriesPage';
@@ -10,6 +11,7 @@ import { onOpenContainer, syncSettings, takePendingOpen } from './services/ipc';
 import { subscribeToScanner } from './store/scannerStore';
 import { useSettingsStore } from './store/settingsStore';
 import { useEventStream } from './hooks/useEventStream';
+import { useFileDrop } from './hooks/useFileDrop';
 import { useTheme } from './hooks/useTheme';
 import { api } from './services/api';
 import { ChangelogPage } from './pages/ChangelogPage';
@@ -36,6 +38,11 @@ export function App() {
   useTheme();
 
   const connection = useEventStream();
+
+  // A Dockerfile dragged in from Finder opens the build dialog on it. What the
+  // window looks like while one is held over it is the stylesheet's, not this
+  // component's: the drag never reaches the page to be put into state.
+  useFileDrop();
 
   // The scanner reports itself; this only opens the ear for it.
   useEffect(() => subscribeToScanner(), []);
@@ -156,7 +163,12 @@ export function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    // Marked as a drop target because Wails only reports a drop that lands on
+    // one: a file let go over anything unmarked is swallowed before either side
+    // hears about it. The whole window, so a Dockerfile can be dropped wherever
+    // it happens to be dragged to -- and the pane that copies into a container
+    // carries a mark of its own, which being nearer wins for drops on it.
+    <div data-file-drop-target="window" className="flex h-screen flex-col overflow-hidden">
       <TitleBar build={build} system={system} connection={connection} error={error} />
 
       <div className="flex min-h-0 flex-1">
@@ -231,7 +243,49 @@ export function App() {
         </div>
       </div>
 
+      <DropTarget />
+
       <Toasts />
+    </div>
+  );
+}
+
+/**
+ * The window, while a file is held over it.
+ *
+ * Not a panel floating over the app: the whole of it, opaque, so what is
+ * underneath is gone rather than dimmed. A card in the middle of a window that
+ * is otherwise still a list of containers reads as a dialog that appeared --
+ * something with a decision in it -- when the only thing being said is that
+ * this window is, for as long as you hold the file, one thing: somewhere to
+ * build an image.
+ *
+ * The title bar stays. It is where the window's own controls are, and a Mac
+ * window that loses them for a second looks like it has crashed rather than
+ * like it is waiting.
+ *
+ * Always rendered, and shown by the stylesheet when the window is the drag's
+ * target. React is not told that a drag is happening at all -- on macOS the
+ * drag belongs to a native view above the web content, and the page's only
+ * word of it is the class Wails puts on whichever drop target the pointer is
+ * over. The pane that copies files into a container marks itself too, and
+ * being the nearer target it takes the class instead, which is what keeps this
+ * from covering a drag meant for it.
+ */
+function DropTarget() {
+  return (
+    <div className="drop-surface pointer-events-none fixed inset-0 top-13 z-50 flex flex-col bg-ink-100 p-5 dark:bg-ink-950">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-brand-600/55 bg-brand-600/4">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600/10 text-brand-600 dark:text-brand-400">
+          <Hammer size={26} aria-hidden />
+        </span>
+        <div className="flex max-w-120 flex-col items-center gap-1.5 text-center">
+          <p className="text-page font-semibold">Build an image</p>
+          <p className="text-body text-ink-600 dark:text-ink-400">
+            Drop a Dockerfile, or a folder with one in it — the tag is the only thing left to name.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

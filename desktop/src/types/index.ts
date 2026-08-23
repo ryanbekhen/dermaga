@@ -361,6 +361,21 @@ export interface BuildSpec {
   noCache?: boolean;
 }
 
+/**
+ * A path dragged onto the window that turns out to be something to build.
+ *
+ * A Dockerfile is edited in one window and built in another, and the second one
+ * asks for the folder, the file's name within it, and a tag. The drop already
+ * knows the first two.
+ */
+export interface BuildDrop {
+  context: string;
+  /** Empty when it is the plain `Dockerfile` the CLI looks for anyway. */
+  dockerfile?: string;
+  /** A tag worth suggesting, from the folder's own name. */
+  name?: string;
+}
+
 /** One live reading of a container's usage. Never stored: see useLiveUsage. */
 export interface UsagePoint {
   at: number;

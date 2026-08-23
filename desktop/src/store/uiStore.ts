@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ContainerTab, MachineTab, Route } from '../types';
+import type { BuildDrop, ContainerTab, MachineTab, Route } from '../types';
 
 /**
  * Something to do on arrival, set by whoever navigated. The command palette can
@@ -18,6 +18,16 @@ export type Intent =
   | 'machine.create'
   | 'registry.add';
 
+/**
+ * What an intent is about.
+ *
+ * A string for the ones that name a single thing -- the container to detach,
+ * the image to run. A value for the one that cannot: a Dockerfile dropped on
+ * the window is a folder, a filename within it and a tag worth suggesting, and
+ * squeezing three things into one string only means parsing them back out.
+ */
+export type IntentTarget = string | BuildDrop;
+
 interface UIState {
   route: Route;
   /**
@@ -28,10 +38,10 @@ interface UIState {
   globalQuery: string;
   intent: Intent | null;
   /** What the intent is about, when it needs one -- the container to detach. */
-  intentTarget: string | null;
+  intentTarget: IntentTarget | null;
   navigate: (route: Route) => void;
   /** Navigates and asks the page it lands on to open something. */
-  navigateWith: (route: Route, intent: Intent, target?: string) => void;
+  navigateWith: (route: Route, intent: Intent, target?: IntentTarget) => void;
   /** Called by the page once it has acted on the intent, or dismissed it. */
   clearIntent: () => void;
   /** `path` opens the files tab at a directory, e.g. a volume's mount point. */

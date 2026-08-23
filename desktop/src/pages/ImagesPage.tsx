@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileUp, FolderOpen, Hammer, Play, ScanSearch, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -24,8 +24,8 @@ import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
 import { DockerfileEditor } from '../components/DockerfileEditor';
-import { useUIStore } from '../store/uiStore';
-import type { BuildSpec, Image } from '../types';
+import { useUIStore, type IntentTarget } from '../store/uiStore';
+import type { BuildDrop, BuildSpec, Image } from '../types';
 import { formatBytes, formatDuration, shortDigest } from '../utils/format';
 
 /**
@@ -316,12 +316,27 @@ export function ImagesPage() {
 
       {building.open && (
         <BuildDialog
+          // A second Dockerfile dropped while this is open is a different
+          // dialog, not the same one with new props: the fields take their
+          // values once, at mount, so without a key of its own the drop would
+          // land on a form that quietly ignored it.
+          key={dropKey(building.target)}
           from={building.target === 'paste' ? 'paste' : 'folder'}
+          // The other shape an intent target comes in: a Dockerfile dropped on
+          // the window, which is the folder and the filename already answered.
+          drop={building.target && typeof building.target !== 'string' ? building.target : null}
           onClose={() => building.close()}
         />
       )}
     </div>
   );
+}
+
+/** What makes one opening of the build dialog a different one from the last. */
+function dropKey(target: IntentTarget | null): string {
+  if (!target || typeof target === 'string') return 'typed';
+
+  return `${target.context}/${target.dockerfile ?? ''}`;
 }
 
 /**
@@ -355,10 +370,13 @@ function VulnerabilityCell({ group }: { group: ImageGroup }) {
  */
 function BuildDialog({
   from: opened,
+  drop,
   onClose,
 }: {
   /** Which half search asked for; the toggle still moves between them. */
   from: 'folder' | 'paste';
+  /** A Dockerfile dragged onto the window, which answers most of this. */
+  drop?: BuildDrop | null;
   onClose: () => void;
 }) {
   // Two ways in, one dialog. A pasted Dockerfile and a project folder are the
@@ -368,9 +386,12 @@ function BuildDialog({
   const [from, setFrom] = useState<'folder' | 'paste'>(opened);
   const [text, setText] = useState('');
 
-  const [context, setContext] = useState('');
-  const [dockerfile, setDockerfile] = useState('');
-  const [tag, setTag] = useState('');
+  // A drop arrives with two of the three answers already in it. The third is
+  // only a suggestion -- the folder's own name -- and it opens selected, so
+  // typing replaces it and Return accepts it.
+  const [context, setContext] = useState(drop?.context ?? '');
+  const [dockerfile, setDockerfile] = useState(drop?.dockerfile ?? '');
+  const [tag, setTag] = useState(drop?.name ?? '');
   const [target, setTarget] = useState('');
   const [buildArgs, setBuildArgs] = useState('');
   const [noCache, setNoCache] = useState(false);
@@ -379,6 +400,17 @@ function BuildDialog({
   // starts it. Knowing up front means the first build can start it rather than
   // failing with an error about a container the user never asked for.
   const [builderRunning, setBuilderRunning] = useState<boolean | null>(null);
+
+  // The caret belongs in the one field a drop cannot answer. Done here rather
+  // than with autoFocus because the field is only sometimes the first thing:
+  // opened from the button, the folder is what somebody has come to type.
+  const tagField = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!drop) return;
+
+    tagField.current?.focus();
+    tagField.current?.select();
+  }, [drop]);
 
   useEffect(() => {
     void api
@@ -551,7 +583,7 @@ function BuildDialog({
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 placeholder="/Users/you/projects/api"
-                autoFocus
+                autoFocus={!drop}
                 className="input flex-1"
               />
               <button onClick={() => void choose()} className="btn-ghost shrink-0">
@@ -563,6 +595,7 @@ function BuildDialog({
 
           <Field label="Tag" hint="Names the result, for example api:dev. Optional.">
             <input
+              ref={tagField}
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="api:dev"

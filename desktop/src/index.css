@@ -140,6 +140,13 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-600/60;
   }
+
+  /* Shown only while the window is what a drag is over -- see below. In the
+     tree the whole time because the page is never told a drag is happening:
+     there is no state to render it from. */
+  .drop-surface {
+    visibility: hidden;
+  }
 }
 
 /* A file being dragged over a drop target.
@@ -151,6 +158,19 @@
    and a layered rule loses to a utility however specific it is. */
 .drop-target.file-drop-target-active .drop-overlay {
   display: flex;
+}
+
+/* And the window itself, which is a drop target too: a Dockerfile can be
+   dropped anywhere on it to be built.
+
+   A child selector, not a descendant one. The pane above is inside this window,
+   so `.file-drop-target-active .drop-overlay` written loosely here would put the
+   pane's own overlay up whenever anything at all was dragged over the window.
+
+   Only one of the two is ever active: the class goes on the nearest marked
+   element to the pointer, so a drag over that pane leaves the window alone. */
+.file-drop-target-active > .drop-surface {
+  visibility: visible;
 }
 
 /* Declared as utilities, not components: Tailwind 4 only lets @apply reference
