@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
+  ChevronRight,
   CircleFadingArrowUp,
   Hammer,
   LayoutGrid,
@@ -77,6 +79,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   // one already on its way back.
   const [confirmingRecreate, setConfirmingRecreate] = useState<Container | null>(null);
   const [recreating, setRecreating] = useState<string | null>(null);
+  // The row whose addresses are showing, and where its trigger was when it was
+  // pressed. By id rather than by container, so what the menu lists is read
+  // from the live list every render -- the addresses keep arriving while it is
+  // open, and a container that goes takes its menu with it.
+  const [portsMenu, setPortsMenu] = useState<{ id: string; at: DOMRect } | null>(null);
+  const closePortsMenu = useCallback(() => setPortsMenu(null), []);
   const pushToast = useToastStore((s) => s.push);
   const confirmDestructive = useSettingsStore((s) => s.confirmDestructive);
 
@@ -284,7 +292,15 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             <NameCell key="name">
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="truncate text-body font-medium">{container.name}</span>
-                <Endpoint container={container} />
+                <Endpoint
+                  container={container}
+                  expanded={portsMenu?.id === container.id}
+                  onOpenMenu={(at) =>
+                    setPortsMenu((open) =>
+                      open?.id === container.id ? null : { id: container.id, at }
+                    )
+                  }
+                />
               </span>
             </NameCell>,
             <ImageCell key="image" container={container} />,
@@ -326,6 +342,15 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
           ) : null
         }
       />
+
+      {portsMenu &&
+        (() => {
+          const container = visible.find((c) => c.id === portsMenu.id);
+
+          return container ? (
+            <PortMenu container={container} at={portsMenu.at} onClose={closePortsMenu} />
+          ) : null;
+        })()}
 
       {/* Creating does not navigate: the new container appears in this list,
           and being thrown into its detail page interrupts what you were doing. */}
@@ -439,54 +464,174 @@ function StatusCell({ status, since }: { status: string; since: string | null })
 /**
  * Where a container answers, under its name.
  *
- * One line, and the first endpoint. A row is a thing you are scanning past, and
- * the question it has to answer is "is this the one" -- not "which of its four
- * ports". The rest are on its own page, spelled out and each openable.
+ * One of them is a link: it is the whole address, it fits, and clicking it is
+ * the thing somebody wants. Several are not. A row is scanned past, and four
+ * addresses stacked in it turn the busiest column of the page into a paragraph
+ * -- and the one that happened to be first became the one you could click,
+ * which is an arbitrary thing to make easy.
  *
- * Published ports are reached here on this Mac. Everything else is reached at
- * the container's own name and the port its image says it listens on, which on
- * this runtime is a real endpoint: every container has an address of its own,
- * so an unpublished nginx answers on `whoami.internal:80` exactly as it stands.
- *
- * That second half only started working when the ports stopped coming from
- * `container image inspect`, which reports a config with them left out -- so
- * every container looked like one that listens on nothing.
+ * So several is a count, and opening it is a separate act.
  */
-function Endpoint({ container }: { container: Container }) {
-  const endpoints = endpointsOf(container);
-  const first = endpoints[0];
+function Endpoint({
+  container,
+  expanded,
+  onOpenMenu,
+}: {
+  container: Container;
+  expanded: boolean;
+  onOpenMenu: (at: DOMRect) => void;
+}) {
+  const { host, items } = endpointsOf(container);
+  const first = items[0];
 
   // Nothing to say rather than an em dash: this line is a note under a name,
   // and a placeholder under every quiet container is a column of dashes down
   // the busiest part of the page.
   if (!first) return null;
 
-  const rest = endpoints.length - 1;
-  const label = rest > 0 ? `${first.label} +${rest}` : first.label;
-  const title = endpoints.map((endpoint) => endpoint.title).join('\n');
+  if (items.length === 1) {
+    if (!first.url) {
+      return (
+        <span className="truncate font-mono text-tiny text-ink-500" title={first.title}>
+          {first.label}
+        </span>
+      );
+    }
 
-  if (!first.url) {
     return (
-      <span className="truncate font-mono text-tiny text-ink-500" title={title}>
-        {label}
-      </span>
+      <a
+        href={first.url}
+        // The row underneath opens the container; this leaves the app.
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void openExternal(first.url as string);
+        }}
+        title={`Open ${first.url}`}
+        className="w-fit max-w-full truncate font-mono text-tiny text-brand-700 hover:underline dark:text-brand-400"
+      >
+        {first.label}
+      </a>
     );
   }
 
   return (
-    <a
-      href={first.url}
-      // The row underneath opens the container; this leaves the app.
+    <button
+      // Marked so the handler that closes the menu on any click elsewhere can
+      // tell this one apart: without it, pressing the trigger again would close
+      // the menu on mousedown and reopen it on click, and it would never shut.
+      data-port-trigger=""
       onClick={(event) => {
-        event.preventDefault();
         event.stopPropagation();
-        void openExternal(first.url as string);
+        onOpenMenu(event.currentTarget.getBoundingClientRect());
       }}
-      title={`Open ${first.url}${rest > 0 ? `\n\n${title}` : ''}`}
-      className="w-fit max-w-full truncate font-mono text-tiny text-brand-700 hover:underline dark:text-brand-400"
+      title={items.map((item) => item.title).join('\n')}
+      aria-expanded={expanded}
+      aria-haspopup="menu"
+      className="flex w-fit max-w-full items-center gap-1 truncate font-mono text-tiny text-brand-700 hover:underline dark:text-brand-400"
     >
-      {label}
-    </a>
+      <ChevronRight
+        size={11}
+        aria-hidden
+        className={`shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+      />
+      <span className="truncate">{host ?? 'not running'}</span>
+      <span className="shrink-0">· {items.length} ports</span>
+    </button>
+  );
+}
+
+/**
+ * The addresses themselves, over the table rather than in it.
+ *
+ * In a portal and positioned in the viewport, because the list it hangs off
+ * scrolls: anything drawn inside that scrolling box is cut off by its edge, and
+ * a menu on the last row would be a menu nobody can read. It flips above the
+ * row when there is no room below, and closes on anything that would move it --
+ * a scroll, a resize, Escape, a click anywhere else.
+ */
+function PortMenu({
+  container,
+  at,
+  onClose,
+}: {
+  container: Container;
+  at: DOMRect;
+  onClose: () => void;
+}) {
+  const { items } = endpointsOf(container);
+
+  useEffect(() => {
+    const away = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      // The trigger closes it itself, by toggling.
+      if (target?.closest('[data-port-menu]') || target?.closest('[data-port-trigger]')) return;
+
+      onClose();
+    };
+
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('mousedown', away);
+    window.addEventListener('keydown', key);
+    // Captured, because what scrolls is the list inside the page rather than
+    // the page itself, and a scroll event there does not bubble to the window.
+    window.addEventListener('scroll', onClose, true);
+    window.addEventListener('resize', onClose);
+
+    return () => {
+      window.removeEventListener('mousedown', away);
+      window.removeEventListener('keydown', key);
+      window.removeEventListener('scroll', onClose, true);
+      window.removeEventListener('resize', onClose);
+    };
+  }, [onClose]);
+
+  // Enough for the four or five a container has; more than that scrolls inside
+  // the menu rather than off the bottom of the screen.
+  const maxHeight = 240;
+  const below = window.innerHeight - at.bottom > maxHeight + 16;
+
+  return createPortal(
+    <div
+      data-port-menu=""
+      role="menu"
+      style={{
+        position: 'fixed',
+        left: at.left,
+        ...(below ? { top: at.bottom + 4 } : { bottom: window.innerHeight - at.top + 4 }),
+        maxHeight,
+      }}
+      className="z-50 min-w-56 overflow-y-auto overscroll-contain rounded-xl border border-ink-200 bg-white p-1 shadow-panel dark:border-ink-700 dark:bg-ink-900"
+    >
+      {items.map((item) =>
+        item.url ? (
+          <button
+            key={item.label}
+            role="menuitem"
+            onClick={() => {
+              void openExternal(item.url as string);
+              onClose();
+            }}
+            title={`Open ${item.url}`}
+            className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left font-mono text-code text-ink-800 transition-colors hover:bg-ink-100 hover:text-ink-900 dark:text-ink-200 dark:hover:bg-ink-800 dark:hover:text-ink-100"
+          >
+            {item.label}
+          </button>
+        ) : (
+          <span
+            key={item.label}
+            title={item.title}
+            className="block truncate px-2.5 py-1.5 font-mono text-code text-ink-500"
+          >
+            {item.label}
+          </span>
+        )
+      )}
+    </div>,
+    document.body
   );
 }
 
@@ -496,26 +641,38 @@ function Endpoint({ container }: { container: Container }) {
  * A published port is reached here, on this Mac; anything else is reached at
  * the container itself. Only while it is running: an address belongs to a
  * container that is up, and a link to a stopped one is a link to nothing.
+ *
+ * The host comes back beside them because it is the same for all of them, which
+ * is what lets a row of four say where they are without listing them.
  */
-function endpointsOf(container: Container): { label: string; title: string; url: string | null }[] {
+function endpointsOf(container: Container): {
+  host: string | null;
+  items: { label: string; title: string; url: string | null }[];
+} {
   const running = container.status === 'running';
 
   if (container.ports.length > 0) {
-    return container.ports.map((port) => ({
-      label: `${port.host} → ${port.container}`,
-      title: `${port.host} → ${port.container}/${port.protocol}`,
-      url:
-        running && port.protocol.toLowerCase() === 'tcp' ? `http://localhost:${port.host}` : null,
-    }));
+    return {
+      host: running ? 'localhost' : null,
+      items: container.ports.map((port) => ({
+        label: `${port.host} → ${port.container}`,
+        title: `${port.host} → ${port.container}/${port.protocol}`,
+        url:
+          running && port.protocol.toLowerCase() === 'tcp' ? `http://localhost:${port.host}` : null,
+      })),
+    };
   }
 
   const host = running ? reachableAt(container) : null;
 
-  return (container.exposedPorts ?? []).map((port) => ({
-    label: host ? `${host}:${portNumber(port)}` : port,
-    title: host ? `${host}:${port}` : port,
-    url: host && isWeb(port) ? urlFor(host, port) : null,
-  }));
+  return {
+    host,
+    items: (container.exposedPorts ?? []).map((port) => ({
+      label: host ? `${host}:${portNumber(port)}` : port,
+      title: host ? `${host}:${port}` : port,
+      url: host && isWeb(port) ? urlFor(host, port) : null,
+    })),
+  };
 }
 
 /**
