@@ -23,6 +23,8 @@ import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
+import { useValidation } from '../hooks/useValidation';
+import { absolutePath, envText, imageReference, required } from '../utils/validate';
 import { DockerfileEditor } from '../components/DockerfileEditor';
 import { useUIStore, type IntentTarget } from '../store/uiStore';
 import type { BuildDrop, BuildSpec, Image } from '../types';
@@ -429,10 +431,16 @@ function BuildDialog({
   // failing on the line that uses them.
   const pasteNeedsContext = from === 'paste' && /^\s*(copy|add)\b/im.test(text);
 
-  const ready =
-    from === 'folder'
-      ? Boolean(context.trim())
-      : Boolean(tag.trim() && text.trim()) && (!pasteNeedsContext || Boolean(context.trim()));
+  // Two modes asking for different things, so the rules move with them: a
+  // folder build resolves everything against its folder, and a pasted
+  // Dockerfile has none unless it reaches for one.
+  const form = useValidation({
+    context:
+      from === 'folder' || pasteNeedsContext ? absolutePath(context, 'A folder') : null,
+    text: from === 'paste' ? required(text, 'A Dockerfile') : null,
+    tag: from === 'paste' ? (required(tag, 'A tag') ?? imageReference(tag)) : imageReference(tag),
+    buildArgs: envText(buildArgs),
+  });
 
   const build = () => {
     const folder = context.replace(/\/+$/, '').split('/').pop() || 'image';
@@ -486,7 +494,7 @@ function BuildDialog({
       title="Build image"
       subtitle="Progress appears in the title bar; you can keep working while it builds."
       onClose={onClose}
-      onSubmit={() => ready && build()}
+      onSubmit={() => form.attempt(build)}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
@@ -498,7 +506,7 @@ function BuildDialog({
               same interruption as a caret jumping while you type. The image
               lands in the list, and running it is a thing you do when you are
               ready to. */}
-          <button onClick={() => build()} className="btn-primary" disabled={!ready}>
+          <button onClick={() => build()} className="btn-primary" disabled={!form.valid}>
             Build
           </button>
         </>
@@ -538,6 +546,7 @@ function BuildDialog({
           <Field
             label="Tag"
             hint="Names the image this builds. Required — Run needs something to start."
+            {...form.field('tag')}
           >
             <input
               value={tag}
@@ -551,6 +560,7 @@ function BuildDialog({
           <Field
             label="Dockerfile"
             hint="Written to a directory of its own for the build, and removed when it finishes."
+            {...form.field('text')}
           >
             <DockerfileEditor value={text} onChange={setText} />
           </Field>
@@ -559,6 +569,7 @@ function BuildDialog({
             <Field
               label="Context"
               hint="COPY and ADD need a folder to resolve against. A pasted Dockerfile has none of its own."
+              {...form.field('context')}
             >
               <div className="flex gap-2">
                 <input
@@ -577,7 +588,11 @@ function BuildDialog({
         </>
       ) : (
         <>
-          <Field label="Context" hint="The folder COPY and ADD paths are resolved from.">
+          <Field
+            label="Context"
+            hint="The folder COPY and ADD paths are resolved from."
+            {...form.field('context')}
+          >
             <div className="flex gap-2">
               <input
                 value={context}
@@ -593,7 +608,11 @@ function BuildDialog({
             </div>
           </Field>
 
-          <Field label="Tag" hint="Names the result, for example api:dev. Optional.">
+          <Field
+            label="Tag"
+            hint="Names the result, for example api:dev. Optional."
+            {...form.field('tag')}
+          >
             <input
               ref={tagField}
               value={tag}
@@ -623,7 +642,7 @@ function BuildDialog({
         />
       </Field>
 
-      <Field label="Build arguments" hint="One KEY=value per line.">
+      <Field label="Build arguments" hint="One KEY=value per line." {...form.field('buildArgs')}>
         <textarea
           value={buildArgs}
           onChange={(e) => setBuildArgs(e.target.value)}
@@ -660,6 +679,10 @@ function PullDialog({ onClose }: { onClose: () => void }) {
 
   const plainHttp = decided ? insecure : isLocalRegistry(reference);
 
+  const form = useValidation({
+    reference: required(reference, 'A reference') ?? imageReference(reference),
+  });
+
   const pull = () => {
     const target = reference.trim();
     onClose();
@@ -677,23 +700,26 @@ function PullDialog({ onClose }: { onClose: () => void }) {
       title="Pull image"
       subtitle="Progress appears in the title bar; you can keep working while it downloads."
       onClose={onClose}
-      onSubmit={pull}
+      onSubmit={() => form.attempt(pull)}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
             Cancel
           </button>
-          <button onClick={pull} className="btn-primary" disabled={!reference.trim()}>
+          <button onClick={pull} className="btn-primary" disabled={!form.valid}>
             Pull
           </button>
         </>
       }
     >
-      <Field label="Reference" hint="For example redis:8.10 or ghcr.io/owner/app:1.2.3">
+      <Field
+        label="Reference"
+        hint="For example redis:8.10 or ghcr.io/owner/app:1.2.3"
+        {...form.field('reference')}
+      >
         <input
           value={reference}
           onChange={(e) => setReference(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && reference.trim() && pull()}
           placeholder="redis:8.10"
           autoFocus
           className="input"

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -86,4 +87,44 @@ func (r *Runner) RunTool(ctx context.Context, binary string, args ...string) ([]
 	}
 
 	return stdout, nil
+}
+
+// Mebibytes reads the size syntax the `container` CLI accepts -- a number with
+// an optional K, M, G or T -- and answers in mebibytes. Zero when it cannot
+// tell, which every caller treats as "no opinion" rather than as "nothing".
+//
+// Here rather than in one of the domains because two of them need it and it is
+// a fact about the CLI's language, which is what this package is for: a
+// container is refused under 200 MiB and a machine under a gibibyte, and both
+// would rather say so before the image is pulled than after.
+func Mebibytes(value string) int64 {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return 0
+	}
+
+	digits, multiplier := trimmed, int64(1)
+
+	switch trimmed[len(trimmed)-1] {
+	case 'k':
+		// Kilobytes round down to zero unless there are a lot of them.
+		digits, multiplier = trimmed[:len(trimmed)-1], 0
+	case 'm':
+		digits = trimmed[:len(trimmed)-1]
+	case 'g':
+		digits, multiplier = trimmed[:len(trimmed)-1], 1024
+	case 't':
+		digits, multiplier = trimmed[:len(trimmed)-1], 1024*1024
+	}
+
+	amount, err := strconv.ParseInt(strings.TrimSpace(digits), 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	if multiplier == 0 {
+		return amount / 1024
+	}
+
+	return amount * multiplier
 }

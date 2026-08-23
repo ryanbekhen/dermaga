@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/ryanbekhen/dermaga/internal/cli"
 )
 
 // ContainerSpec is everything Dermaga can set when creating a container. It
@@ -94,47 +96,11 @@ func (s ContainerSpec) Validate() error {
 
 	// The runtime rejects anything under 200 MiB, but only after pulling the
 	// image -- catching it here saves the wait.
-	if mib := parseMemoryMiB(s.Memory); s.Memory != "" && mib > 0 && mib < 200 {
+	if mib := cli.Mebibytes(s.Memory); s.Memory != "" && mib > 0 && mib < 200 {
 		return fmt.Errorf("memory must be at least 200m (got %s)", s.Memory)
 	}
 
 	return nil
-}
-
-// parseMemoryMiB reads the CLI's size syntax: a number with an optional
-// K/M/G/T suffix. Returns 0 when it cannot tell.
-func parseMemoryMiB(value string) int64 {
-	trimmed := strings.TrimSpace(strings.ToLower(value))
-	if trimmed == "" {
-		return 0
-	}
-
-	unit := trimmed[len(trimmed)-1]
-	digits := trimmed
-	multiplier := int64(1)
-
-	switch unit {
-	case 'k':
-		digits, multiplier = trimmed[:len(trimmed)-1], 0
-	case 'm':
-		digits = trimmed[:len(trimmed)-1]
-	case 'g':
-		digits, multiplier = trimmed[:len(trimmed)-1], 1024
-	case 't':
-		digits, multiplier = trimmed[:len(trimmed)-1], 1024*1024
-	}
-
-	amount, err := strconv.ParseInt(strings.TrimSpace(digits), 10, 64)
-	if err != nil {
-		return 0
-	}
-
-	// Kilobytes round down to zero MiB unless there are a lot of them.
-	if multiplier == 0 {
-		return amount / 1024
-	}
-
-	return amount * multiplier
 }
 
 // Args renders the spec as `container run` arguments.

@@ -16,6 +16,8 @@ import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
+import { useValidation } from '../hooks/useValidation';
+import { resourceName, size as sizeOf } from '../utils/validate';
 import { useUIStore } from '../store/uiStore';
 import type { Volume } from '../types';
 import { formatBytes } from '../utils/format';
@@ -189,6 +191,11 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const pushToast = useToastStore((s) => s.push);
 
+  const form = useValidation({
+    name: resourceName(name, 'A name'),
+    size: sizeOf(size, 'A size'),
+  });
+
   const submit = async () => {
     setSaving(true);
     try {
@@ -206,7 +213,7 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
     <Modal
       title="New volume"
       onClose={onClose}
-      onSubmit={() => void submit()}
+      onSubmit={() => form.attempt(() => void submit())}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost" disabled={saving}>
@@ -216,7 +223,7 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
             variant="primary"
             busy={saving}
             busyLabel="Creating…"
-            disabled={!name.trim()}
+            disabled={!form.valid}
             onClick={() => void submit()}
           >
             Create
@@ -224,7 +231,7 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <Field label="Name">
+      <Field label="Name" {...form.field('name')}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -234,7 +241,11 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <Field label="Size" hint="Optional maximum, e.g. 512M or 10G. Defaults to the CLI's own.">
+      <Field
+        label="Size"
+        hint="Optional maximum, e.g. 512M or 10G. Defaults to the CLI's own."
+        {...form.field('size')}
+      >
         <input
           value={size}
           onChange={(e) => setSize(e.target.value)}

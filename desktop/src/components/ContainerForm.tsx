@@ -5,6 +5,23 @@ import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import type { PendingEdit, ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, Modal, Row } from './form';
+import { useValidation } from '../hooks/useValidation';
+import {
+  absolutePath,
+  containerName,
+  count,
+  envText as envTextOf,
+  imageReference,
+  port as portOf,
+  required,
+  size as sizeOf,
+  user as userOf,
+} from '../utils/validate';
+
+/** A sentence made to follow a colon: "Port 2: host port must be a number." */
+function lower(sentence: string): string {
+  return sentence.charAt(0).toLowerCase() + sentence.slice(1);
+}
 import { EnvEditor, formatEnv, parseEnv } from './EnvEditor';
 import { SegmentedControl } from './SegmentedControl';
 import { runTask } from '../services/tasks';
@@ -156,6 +173,48 @@ export function ContainerForm({
     labels: withAutoBoot(base.labels, autoBoot),
   });
 
+  // A row nobody filled in is not a mistake -- it is a row that was added and
+  // left, and the spec drops those. A row filled in halfway is a mistake, and
+  // one that used to be dropped just as quietly: a port with no container side
+  // simply never appeared, and nothing said why.
+  const portProblem = () => {
+    for (const [index, entry] of ports.entries()) {
+      if (!entry.host && !entry.container) continue;
+
+      const problem = portOf(entry.host, 'Host port') ?? portOf(entry.container, 'Container port');
+      if (problem) return `Port ${index + 1}: ${lower(problem)}`;
+    }
+
+    return null;
+  };
+
+  const mountProblem = () => {
+    for (const [index, entry] of mounts.entries()) {
+      if (!entry.source && !entry.target) continue;
+
+      const problem =
+        required(entry.source, entry.type === 'bind' ? 'A path on this Mac' : 'A volume name') ??
+        absolutePath(entry.target, 'A path inside the container');
+      if (problem) return `Mount ${index + 1}: ${lower(problem)}`;
+    }
+
+    return null;
+  };
+
+  const form = useValidation({
+    name: containerName(name),
+    image: required(image, 'An image') ?? imageReference(image),
+    cpus: count(String(cpus), 'CPUs'),
+    // The runtime refuses anything under 200 MiB -- but only after pulling the
+    // image, which is minutes spent to be told something knowable now.
+    memory: sizeOf(memory, 'Memory', 200),
+    workdir: workdir.trim() ? absolutePath(workdir, 'A working directory') : null,
+    user: userOf(user),
+    ports: portProblem(),
+    mounts: mountProblem(),
+    env: envTextOf(envText),
+  });
+
   // The dialog closes immediately and the work reports itself in the list, so
   // a slow image pull does not hold a modal open.
   const submit = () => {
@@ -206,13 +265,13 @@ export function ContainerForm({
           : 'Runs `container run --detach` with these settings.'
       }
       onClose={onClose}
-      onSubmit={submit}
+      onSubmit={() => form.attempt(submit)}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
             Cancel
           </button>
-          <button onClick={submit} className="btn-primary" disabled={!image.trim()}>
+          <button onClick={submit} className="btn-primary" disabled={!form.valid}>
             {editing ? 'Recreate' : 'Create'}
           </button>
         </>
@@ -234,7 +293,7 @@ export function ContainerForm({
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Name" hint="Left blank, the CLI generates one.">
+        <Field label="Name" hint="Left blank, the CLI generates one." {...form.field('name')}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -244,7 +303,11 @@ export function ContainerForm({
           />
         </Field>
 
-        <Field label="Image" hint="Pick a local image or type any reference.">
+        <Field
+          label="Image"
+          hint="Pick a local image or type any reference."
+          {...form.field('image')}
+        >
           <input
             value={image}
             onChange={(e) => setImage(e.target.value)}
@@ -259,7 +322,7 @@ export function ContainerForm({
           </datalist>
         </Field>
 
-        <Field label="CPUs">
+        <Field label="CPUs" {...form.field('cpus')}>
           <input
             type="number"
             min={1}
@@ -270,7 +333,7 @@ export function ContainerForm({
           />
         </Field>
 
-        <Field label="Memory" hint="Accepts K, M, G suffixes.">
+        <Field label="Memory" hint="Accepts K, M, G suffixes." {...form.field('memory')}>
           <input
             value={memory}
             onChange={(e) => setMemory(e.target.value)}
@@ -279,7 +342,7 @@ export function ContainerForm({
           />
         </Field>
 
-        <Field label="Working directory">
+        <Field label="Working directory" {...form.field('workdir')}>
           <input
             value={workdir}
             onChange={(e) => setWorkdir(e.target.value)}
@@ -306,7 +369,7 @@ export function ContainerForm({
           />
         </Field>
 
-        <Field label="User" hint="name, uid, or uid:gid.">
+        <Field label="User" hint="name, uid, or uid:gid." {...form.field('user')}>
           <input
             value={user}
             onChange={(e) => setUser(e.target.value)}
@@ -369,6 +432,7 @@ export function ContainerForm({
       <Fieldset
         legend="Ports"
         addLabel="Add port"
+        {...form.field('ports')}
         onAdd={() => setPorts([...ports, { host: '', container: '', protocol: 'tcp' }])}
       >
         {ports.map((port, index) => (
@@ -411,6 +475,7 @@ export function ContainerForm({
       <Fieldset
         legend="Mounts"
         addLabel="Add mount"
+        {...form.field('mounts')}
         onAdd={() =>
           setMounts([...mounts, { type: 'volume', source: '', target: '', readOnly: false }])
         }
@@ -474,6 +539,7 @@ export function ContainerForm({
         }
         onAdd={envMode === 'fields' ? () => setEnvText(envText ? `${envText}\n=` : '=') : undefined}
         addLabel="Add variable"
+        {...form.field('env')}
       >
         <SegmentedControl
           ariaLabel="How to edit the environment"

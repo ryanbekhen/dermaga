@@ -6,6 +6,8 @@ import { Field, Modal } from '../components/form';
 import { PageHeader } from '../components/PageHeader';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
+import { useValidation } from '../hooks/useValidation';
+import { registryHost, required } from '../utils/validate';
 import { useDialog } from '../hooks/useDialog';
 import { formatDuration } from '../utils/format';
 import type { RegistryLogin } from '../types';
@@ -212,7 +214,12 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const pushToast = useToastStore((s) => s.push);
 
   const plainHttp = decided ? insecure : isLocal(server);
-  const ready = server.trim() && username.trim() && password;
+
+  const form = useValidation({
+    server: registryHost(server),
+    username: required(username, 'A username'),
+    password: password ? null : 'A password or token is required.',
+  });
 
   const submit = async () => {
     setBusy(true);
@@ -233,7 +240,7 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
       title="Log in to a registry"
       subtitle="Apple's CLI stores the credentials; Dermaga does not keep them."
       onClose={onClose}
-      onSubmit={() => void submit()}
+      onSubmit={() => form.attempt(() => void submit())}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">
@@ -243,7 +250,7 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
             variant="primary"
             busy={busy}
             busyLabel="Signing in…"
-            disabled={!ready}
+            disabled={!form.valid}
             onClick={() => void submit()}
           >
             Log in
@@ -251,7 +258,11 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </>
       }
     >
-      <Field label="Registry" hint="For example docker.io, ghcr.io, or localhost:5050.">
+      <Field
+        label="Registry"
+        hint="For example docker.io, ghcr.io, or localhost:5050."
+        {...form.field('server')}
+      >
         <input
           value={server}
           onChange={(e) => setServer(e.target.value)}
@@ -261,7 +272,7 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
         />
       </Field>
 
-      <Field label="Username">
+      <Field label="Username" {...form.field('username')}>
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -270,12 +281,15 @@ function LoginDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
         />
       </Field>
 
-      <Field label="Password or token" hint="Sent to the CLI over stdin, never on a command line.">
+      <Field
+        label="Password or token"
+        hint="Sent to the CLI over stdin, never on a command line."
+        {...form.field('password')}
+      >
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && ready && void submit()}
           autoComplete="off"
           className="input"
         />

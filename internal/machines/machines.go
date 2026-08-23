@@ -283,6 +283,14 @@ func (s Spec) Validate() error {
 		return fmt.Errorf("home mount must be ro, rw or none")
 	}
 
+	// A machine is a virtual machine, and the runtime will not boot one in less
+	// than a gibibyte: `invalid memory value '512mb'. Must be greater than
+	// 1gb`. It says so only after fetching and unpacking the image, which is
+	// the better part of a minute spent to be told a number was too small.
+	if mib := cli.Mebibytes(s.Memory); s.Memory != "" && mib > 0 && mib < 1024 {
+		return fmt.Errorf("memory must be at least 1G (got %s)", s.Memory)
+	}
+
 	return nil
 }
 

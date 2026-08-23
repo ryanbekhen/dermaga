@@ -162,7 +162,14 @@ export function Modal({
         </div>
 
         <div className="header-actions flex shrink-0 items-center gap-2.5 border-t border-ink-200 bg-white px-6 py-3.5 dark:border-ink-800 dark:bg-ink-900">
-          <p className="min-w-0 flex-1 truncate text-xs text-ink-500">{hint}</p>
+          {/* The shortcut, said out loud wherever the dialog has nothing more
+              pressing to say. One key finishes every dialog in this window and
+              it is this one -- but a shortcut nobody is told about is a
+              shortcut nobody uses, and the foot of the dialog is where the eye
+              already goes when it is deciding to press the button. */}
+          <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
+            {hint ?? (onSubmit ? <Shortcut /> : null)}
+          </p>
           {footer}
         </div>
       </div>
@@ -170,20 +177,58 @@ export function Modal({
   );
 }
 
+/** `⌘↩`, drawn as the keys it is. */
+function Shortcut() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <kbd className="rounded border border-ink-300 px-1 font-mono text-tiny text-ink-600 dark:border-ink-700 dark:text-ink-400">
+        ⌘↩
+      </kbd>
+      to confirm
+    </span>
+  );
+}
+
 export function Field({
   label,
   hint,
+  error,
+  name,
+  onBlur,
   children,
 }: {
   label: string;
   hint?: string;
+  /**
+   * What is wrong with what is in it, when the form is ready to say so. Shown
+   * in place of the hint rather than under it: the hint explains the field to
+   * somebody who has not filled it in yet, and once they have, the thing they
+   * need is the correction. Swapping keeps the dialog from growing a line and
+   * shuffling everything below it as they type.
+   */
+  error?: string;
+  /** Names the field to the form's validation, and to the caret it sends. */
+  name?: string;
+  onBlur?: () => void;
   children: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label
+      className="flex flex-col gap-1.5"
+      data-field={name}
+      // Read by the stylesheet, which colours whatever control is inside --
+      // an input, a textarea, a row of them -- without every call site having
+      // to pass a class down to it.
+      data-invalid={error ? '' : undefined}
+      onBlur={onBlur}
+    >
       <span className="label-mono">{label}</span>
       {children}
-      {hint && <span className="text-tiny text-ink-600 dark:text-ink-400">{hint}</span>}
+      {error ? (
+        <span className="text-tiny font-medium text-orange-700 dark:text-orange-500">{error}</span>
+      ) : (
+        hint && <span className="text-tiny text-ink-600 dark:text-ink-400">{hint}</span>
+      )}
     </label>
   );
 }
@@ -191,12 +236,25 @@ export function Field({
 export function Fieldset({
   legend,
   hint,
+  error,
+  name,
+  onBlur,
   onAdd,
   addLabel,
   children,
 }: {
   legend: string;
   hint?: string;
+  /**
+   * The first thing wrong in the group, said once underneath it rather than
+   * beside the cell it belongs to. A row is three narrow controls in a line
+   * with no room under any of them, and a message that names its row -- "Port
+   * 2: host port must be a number" -- points at it just as well without
+   * making the row twice as tall.
+   */
+  error?: string;
+  name?: string;
+  onBlur?: () => void;
   // Omitted by groups that are not a list of rows, such as the .env editor.
   onAdd?: () => void;
   addLabel?: string;
@@ -248,7 +306,12 @@ export function Fieldset({
   };
 
   return (
-    <fieldset className="flex flex-col gap-2">
+    <fieldset
+      className="flex flex-col gap-2"
+      data-field={name}
+      data-invalid={error ? '' : undefined}
+      onBlur={onBlur}
+    >
       {/* The rule runs from the label to the right edge, which is what makes a
           group of fields read as a group without drawing a box around it --
           the box is the panel underneath, and two edges around one thing is
@@ -276,6 +339,10 @@ export function Fieldset({
           </button>
         )}
       </div>
+
+      {error && (
+        <p className="text-tiny font-medium text-orange-700 dark:text-orange-500">{error}</p>
+      )}
     </fieldset>
   );
 }

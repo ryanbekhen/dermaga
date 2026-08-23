@@ -275,6 +275,15 @@
     @apply h-7 rounded-md border border-ink-300 bg-white px-2.5 text-xs text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100;
   }
 
+  /* A field that is answering back. The message says what is wrong; this is so
+     the eye finds the field it is about while scanning a long form, and it is
+     put on the control rather than passed to it as a class, so a group of rows
+     -- a port, a mount -- is marked as one thing. */
+  [data-invalid] .input,
+  [data-invalid] .textarea {
+    @apply border-orange-600/70 focus:border-orange-600 focus:ring-orange-600/20 dark:border-orange-600/60;
+  }
+
   /* The same skin as .input, but a box that holds several lines. .input carries
      the fixed control height every button and field shares, which squashes a
      textarea to a single line however many rows it asks for. */

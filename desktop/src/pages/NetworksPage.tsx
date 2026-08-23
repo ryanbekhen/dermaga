@@ -16,6 +16,8 @@ import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
+import { useValidation } from '../hooks/useValidation';
+import { resourceName, subnet as subnetOf } from '../utils/validate';
 import { useUIStore } from '../store/uiStore';
 import type { Network } from '../types';
 import { formatDuration } from '../utils/format';
@@ -187,6 +189,11 @@ function CreateNetworkDialog({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const pushToast = useToastStore((s) => s.push);
 
+  const form = useValidation({
+    name: resourceName(name, 'A name'),
+    subnet: subnetOf(subnet),
+  });
+
   const submit = async () => {
     setSaving(true);
     try {
@@ -208,7 +215,7 @@ function CreateNetworkDialog({ onClose }: { onClose: () => void }) {
     <Modal
       title="New network"
       onClose={onClose}
-      onSubmit={() => void submit()}
+      onSubmit={() => form.attempt(() => void submit())}
       footer={
         <>
           <button onClick={onClose} className="btn-ghost" disabled={saving}>
@@ -218,7 +225,7 @@ function CreateNetworkDialog({ onClose }: { onClose: () => void }) {
             variant="primary"
             busy={saving}
             busyLabel="Creating…"
-            disabled={!name.trim()}
+            disabled={!form.valid}
             onClick={() => void submit()}
           >
             Create
@@ -226,7 +233,7 @@ function CreateNetworkDialog({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <Field label="Name">
+      <Field label="Name" {...form.field('name')}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -236,7 +243,11 @@ function CreateNetworkDialog({ onClose }: { onClose: () => void }) {
         />
       </Field>
 
-      <Field label="Subnet" hint="Optional, e.g. 192.168.80.0/24. The CLI picks one otherwise.">
+      <Field
+        label="Subnet"
+        hint="Optional, e.g. 192.168.80.0/24. The CLI picks one otherwise."
+        {...form.field('subnet')}
+      >
         <input
           value={subnet}
           onChange={(e) => setSubnet(e.target.value)}
