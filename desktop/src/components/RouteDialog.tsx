@@ -76,10 +76,7 @@ export function RouteDialog({
     };
   }, []);
 
-  const ofKind = useMemo(
-    () => (targets ?? []).filter((t) => t.kind === kind),
-    [targets, kind]
-  );
+  const ofKind = useMemo(() => (targets ?? []).filter((t) => t.kind === kind), [targets, kind]);
 
   const chosen = ofKind.find((t) => t.name === target) ?? (kind === 'host' ? ofKind[0] : undefined);
 
@@ -94,7 +91,9 @@ export function RouteDialog({
   const form = useValidation({
     label: validSubdomain(label),
     domain: domain.trim()
-      ? (zone ? null : 'That is not one of the domains this token reaches.')
+      ? zone
+        ? null
+        : 'That is not one of the domains this token reaches.'
       : 'A domain is required.',
     target: kind === 'host' || target.trim() ? null : `A ${kind} is required.`,
     port: validPort(port, 'A port'),

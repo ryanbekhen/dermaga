@@ -45,10 +45,7 @@ describe('buildRows', () => {
           { name: 'openssl', version: '3.0.1' },
           { name: 'openssl', version: '3.5.0' },
         ],
-        findings: [
-          finding('CVE-A', 'openssl', '3.0.1'),
-          finding('CVE-B', 'openssl', '3.5.0'),
-        ],
+        findings: [finding('CVE-A', 'openssl', '3.0.1'), finding('CVE-B', 'openssl', '3.5.0')],
       })
     );
 
@@ -91,7 +88,10 @@ describe('buildRows', () => {
   it('makes an inventory out of the findings when there is none', () => {
     const rows = buildRows(
       report({
-        findings: [finding('CVE-A', 'setuptools', '70.3.0'), finding('CVE-B', 'setuptools', '84.0.0')],
+        findings: [
+          finding('CVE-A', 'setuptools', '70.3.0'),
+          finding('CVE-B', 'setuptools', '84.0.0'),
+        ],
       })
     );
 

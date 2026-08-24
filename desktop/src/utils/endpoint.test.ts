@@ -3,7 +3,18 @@ import { isWeb, portNumber, reachableAt, urlFor } from './endpoint';
 import type { Container } from '../types';
 
 const container = (over: Partial<Container>): Container =>
-  ({ id: 'x', name: 'x', image: 'x', status: 'running', ports: [], mounts: [], labels: {}, state: 'running', createdAt: '', ...over }) as Container;
+  ({
+    id: 'x',
+    name: 'x',
+    image: 'x',
+    status: 'running',
+    ports: [],
+    mounts: [],
+    labels: {},
+    state: 'running',
+    createdAt: '',
+    ...over,
+  }) as Container;
 
 describe('reachableAt', () => {
   it('prefers the name, when the runtime has put it under a domain', () => {

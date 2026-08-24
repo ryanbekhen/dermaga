@@ -240,9 +240,7 @@ export function TunnelsPage() {
               onOpenContainer={(container) =>
                 navigate({ name: 'container', id: container, tab: 'overview' })
               }
-              onOpenRoute={(route) =>
-                void openExternal(route.url ?? `https://${route.hostname}`)
-              }
+              onOpenRoute={(route) => void openExternal(route.url ?? `https://${route.hostname}`)}
               onMoveRoute={(route) => setEditing(route)}
               onRemoveRoute={(route) => setRemoving(route)}
             />
@@ -293,7 +291,7 @@ export function TunnelsPage() {
           body={
             routes.length === 0
               ? "The API token is removed from this Mac's keychain. Nothing is published, so nothing comes down with it."
-              : 'Every hostname stops answering, its DNS record is removed, and the tunnels are deleted from your Cloudflare account — then the token is removed from this Mac. That order is deliberate: the token is the only thing that can reach Cloudflare, so forgetting it first would leave all of that behind with nothing able to clear it. The containers themselves are untouched.' 
+              : 'Every hostname stops answering, its DNS record is removed, and the tunnels are deleted from your Cloudflare account — then the token is removed from this Mac. That order is deliberate: the token is the only thing that can reach Cloudflare, so forgetting it first would leave all of that behind with nothing able to clear it. The containers themselves are untouched.'
           }
           confirmLabel={routes.length === 0 ? 'Disconnect' : 'Take down and disconnect'}
           onConfirm={() => {
@@ -519,7 +517,11 @@ function Requirement({
         <p className="flex items-center gap-1.5 text-sm font-medium">
           {title}
           {done && (
-            <Check size={13} className="text-emerald-600 dark:text-emerald-500" aria-label="ready" />
+            <Check
+              size={13}
+              className="text-emerald-600 dark:text-emerald-500"
+              aria-label="ready"
+            />
           )}
         </p>
         <p className="pt-0.5 text-tiny leading-relaxed text-ink-600 dark:text-ink-400">{detail}</p>

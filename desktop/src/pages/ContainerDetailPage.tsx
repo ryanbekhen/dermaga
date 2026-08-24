@@ -149,7 +149,9 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
       .getTunnels()
       .then((tunnels) =>
         setRoutes(
-          tunnels.flatMap((t) => t.routes).filter((r) => r.kind === 'container' && r.target === container.name)
+          tunnels
+            .flatMap((t) => t.routes)
+            .filter((r) => r.kind === 'container' && r.target === container.name)
         )
       )
       .catch(() => setRoutes([]));
@@ -337,9 +339,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
                 ? 'Starts with Dermaga — press to stop'
                 : 'Start this container when Dermaga starts'
             }
-            aria-label={
-              container.autoBoot ? 'Stop starting with Dermaga' : 'Start with Dermaga'
-            }
+            aria-label={container.autoBoot ? 'Stop starting with Dermaga' : 'Start with Dermaga'}
             onClick={() => {
               setMarking(true);
               void api
@@ -352,10 +352,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
                   )
                 )
                 .catch((err: unknown) =>
-                  pushToast(
-                    err instanceof Error ? err.message : 'Could not change that',
-                    'error'
-                  )
+                  pushToast(err instanceof Error ? err.message : 'Could not change that', 'error')
                 )
                 .finally(() => setMarking(false));
             }}
@@ -735,11 +732,7 @@ function ContainerRail({ container, routes }: { container: Container; routes?: T
               address it holds inside, because they are the same question asked
               from two places. One line per port, since each is its own route. */}
           {(routes ?? []).map((route) => (
-            <RailRow
-              key={route.hostname}
-              label={`Public :${route.port}`}
-              value={route.hostname}
-            />
+            <RailRow key={route.hostname} label={`Public :${route.port}`} value={route.hostname} />
           ))}
           <RailRow label="Created" value={`${formatDuration(container.createdAt)} ago`} />
           <RailRow label="Uptime" value={running ? formatDuration(container.startedAt) : '—'} />

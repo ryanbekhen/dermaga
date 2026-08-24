@@ -510,7 +510,8 @@ export function SearchResultsPage() {
       results: routeHits.map((route) => ({
         key: route.hostname,
         icon: Globe,
-        tone: route.status === 'running' ? 'text-emerald-600 dark:text-emerald-500' : 'text-ink-400',
+        tone:
+          route.status === 'running' ? 'text-emerald-600 dark:text-emerald-500' : 'text-ink-400',
         title: route.hostname,
         sub: route.kind === 'host' ? `this Mac:${route.port}` : `${route.target}:${route.port}`,
         meta: route.zoneName,
@@ -518,9 +519,7 @@ export function SearchResultsPage() {
         state: (
           <span
             className={`text-tiny font-medium ${
-              route.status === 'running'
-                ? 'text-emerald-700 dark:text-emerald-500'
-                : 'text-ink-500'
+              route.status === 'running' ? 'text-emerald-700 dark:text-emerald-500' : 'text-ink-500'
             }`}
           >
             {route.status === 'running' ? 'serving' : 'stopped'}

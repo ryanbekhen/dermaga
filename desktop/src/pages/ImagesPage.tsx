@@ -435,8 +435,7 @@ function BuildDialog({
   // folder build resolves everything against its folder, and a pasted
   // Dockerfile has none unless it reaches for one.
   const form = useValidation({
-    context:
-      from === 'folder' || pasteNeedsContext ? absolutePath(context, 'A folder') : null,
+    context: from === 'folder' || pasteNeedsContext ? absolutePath(context, 'A folder') : null,
     text: from === 'paste' ? required(text, 'A Dockerfile') : null,
     tag: from === 'paste' ? (required(tag, 'A tag') ?? imageReference(tag)) : imageReference(tag),
     buildArgs: envText(buildArgs),

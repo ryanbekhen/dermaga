@@ -222,7 +222,8 @@ export function registryHost(value: string): string | null {
   if (!/^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(host)) {
     return 'That is not a hostname.';
   }
-  if (port !== undefined && !/^\d{1,5}$/.test(port)) return 'The port after the : must be a number.';
+  if (port !== undefined && !/^\d{1,5}$/.test(port))
+    return 'The port after the : must be a number.';
 
   return null;
 }
