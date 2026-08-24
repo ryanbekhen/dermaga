@@ -102,7 +102,9 @@ The [architecture notes](docs/architecture.md) go through this properly. In shor
 
 - A domain package never imports the watcher or the RPC layer. If it needs to
   announce a change, it takes a `notify.Notifier`.
-- `internal/cli` is the only package allowed to use `os/exec`.
+- `internal/cli` is the only package that runs Apple's CLI. Others do start
+  processes -- `tar`, `ps`, `security`, `launchctl`, `codesign`, `open` -- but
+  nothing else builds a `container` command.
 - Adding an operation means: a method on the domain manager, then a case in
   `internal/agent`, then a call in `desktop/src/services/api.ts`.
 - Anything long-running is a stream, so the UI can show progress and cancel it.

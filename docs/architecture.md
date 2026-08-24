@@ -43,7 +43,7 @@ label and it is still read; that fallback goes in 1.15.0.
 
 ```
 cmd/dermaga-agent/   entrypoint: JSON-RPC on stdio
-internal/cli/        runs `container`; the only package that touches os/exec
+internal/cli/        runs `container`; nothing else builds a command for it
 internal/oci/        reads the runtime's content store for what the CLI leaves out
 internal/containers/ list, lifecycle, spec, live stats
 internal/images/     list, inspect, build, pull, delete, prune
@@ -54,6 +54,10 @@ internal/scanner/    Trivy: install, database, background scans, stored results
 internal/volumes/    ·  internal/networks/  ·  internal/machines/
 internal/system/     services and disk usage
 internal/settings/   ~/.dermaga/config.json
+internal/store/      the cache: scan results, catalogue, an edit not finished
+internal/tasks/      what a command printed, kept after it finished
+internal/templates/  starting points for the create form
+internal/toolchain/  the CLI itself: installed version, install, upgrade
 internal/terminal/   pty-backed shell sessions
 internal/watcher/    one authoritative snapshot, pushed on change
 internal/rpc/        framing, dispatch, streams
@@ -163,6 +167,18 @@ sequenceDiagram
 | `tunnels.addRoute/removeRoute` `tunnels.start/stop` `tunnels.install`                 | Routes and connectors; install is a stream |
 | `containers.run`                                                                      | Create and wait, for helper containers   |
 | `machines.list/get/start/stop/delete/setDefault/configure`                            | Machine lifecycle                        |
+| `containers.history` `containers.hasShell` `containers.kill`                          | Usage over the last minutes, and the abrupt stop |
+| `containers.recreate` `containers.setAutoBoot`                                        | Run again on what the tag means now; start with Dermaga |
+| `containers.pendingEdit` `containers.discardEdit`                                     | An edit begun and not finished |
+| `images.save` `images.load`                                                           | An image out to an OCI archive, and back |
+| `machines.logs`                                                                       | A machine's own log, boot or stdio |
+| `scanner.result` `scanner.dismiss`                                                    | One report, and clearing the badge |
+| `system.dns`                                                                          | The runtime's local DNS domains |
+| `toolchain.status` `toolchain.install` `toolchain.update`                             | The CLI itself, through Homebrew |
+| `templates.list` `templates.refresh`                                                  | Starting points for the create form |
+| `tasks.list` `tasks.record` `tasks.forget`                                            | What a finished command printed |
+| `volumes.owner` `volumes.setOwner` `volumes.tidy`                                     | Who a volume belongs to, and clearing up |
+| `app.info`                                                                            | Version, commit and build date |
 | `events.subscribe`                                                                    | Pushes `events.snapshot` on every change |
 | `containers.create` `containers.logs` `images.pull` `images.build` `machines.create`  | Streams                                  |
 | `terminal.open/input/resize` `stream.cancel`                                          | pty sessions, base64 payloads            |

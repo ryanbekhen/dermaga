@@ -38,7 +38,8 @@ CLI through Homebrew and a Linux kernel for it to run — both with a button, no
 ## What it does
 
 **Containers** — create, start, stop, restart, edit and remove, in bulk if you like. Live CPU and
-memory, the whole network and mount configuration, and half an hour of readings as a chart. A real
+memory, the whole network and mount configuration, and the last couple of minutes drawn as a chart —
+already filled in when you open it, because the sampler runs from the moment the agent does. A real
 shell in any running container, backed by a pty. Browse its filesystem and drag files in and out of
 Finder. Mark one to come up when Dermaga does.
 
@@ -91,7 +92,9 @@ attach or detach a network, or open the create, pull, build and load forms direc
 | `⌘,` | Settings |
 
 Preferences live in `~/.dermaga/config.json` as plain JSON, safe to edit by hand or keep in
-dotfiles. Scan results and templates live beside it in `~/.dermaga/dermaga.db`.
+dotfiles. What Dermaga works out for itself sits beside it in `~/.dermaga/dermaga.db`: scan results,
+the template catalogue, an edit begun and not finished, which containers are marked to start, and the
+tunnel routes.
 
 ## Privacy
 
