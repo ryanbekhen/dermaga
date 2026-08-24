@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 import { CLOUDFLARE_ORANGE } from './CloudflareMark';
 import { CardNode, HubNode, NodeAction, PillNode } from './TunnelNodes';
 import type { Tunnel, TunnelKind, TunnelRoute, TunnelStatus } from '../types';
@@ -504,6 +504,11 @@ export function TunnelTopology({
   }, []);
 
   // Frame the whole graph on arrival, and again whenever it grows or shrinks.
+  //
+  // There used to be a button for this too. It worked -- it put the view back
+  // exactly where it started -- but the graph is already framed almost all the
+  // time, so pressing it did nothing anybody could see, and its icon promised
+  // fullscreen, which was never what it did.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useLayoutEffect(() => fit(), [fit]);
 
@@ -824,7 +829,6 @@ export function TunnelTopology({
       <div className="absolute right-2 bottom-2 flex gap-1">
         <ViewButton label="Zoom in" onClick={() => zoomBy(1.25)} icon={ZoomIn} />
         <ViewButton label="Zoom out" onClick={() => zoomBy(0.8)} icon={ZoomOut} />
-        <ViewButton label="Fit" onClick={fit} icon={Maximize2} />
       </div>
     </div>
   );

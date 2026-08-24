@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Globe, Maximize2, Network as NetworkIcon, ZoomIn, ZoomOut } from 'lucide-react';
+import { Boxes, Globe, Network as NetworkIcon, ZoomIn, ZoomOut } from 'lucide-react';
 import { StatusDot } from './StatusBadge';
 import type { Container, Network } from '../types';
 import { shortImage } from '../utils/format';
@@ -205,6 +205,11 @@ export function NetworkTopology({ network, containers, onOpenContainer }: Networ
   }, []);
 
   // Frame the whole graph on arrival, and again whenever it grows or shrinks.
+  //
+  // There used to be a button for this too. It worked -- it put the view back
+  // exactly where it started -- but the graph is already framed almost all the
+  // time, so pressing it did nothing anybody could see, and its icon promised
+  // fullscreen, which was never what it did.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useLayoutEffect(() => fit(), [fit]);
 
@@ -386,14 +391,6 @@ export function NetworkTopology({ network, containers, onOpenContainer }: Networ
           aria-label="Zoom out"
         >
           <ZoomOut size={14} aria-hidden />
-        </button>
-        <button
-          className="btn-icon bg-white dark:bg-ink-900"
-          onClick={fit}
-          title="Fit to view"
-          aria-label="Fit to view"
-        >
-          <Maximize2 size={14} aria-hidden />
         </button>
       </div>
 
