@@ -381,3 +381,18 @@ func TestOtherErrorsArePassedThrough(t *testing.T) {
 		t.Errorf("error = %v, want Cloudflare's own wording", err)
 	}
 }
+
+// Being rate limited is not something Dermaga's own use can cause, so the
+// message says where to look rather than repeating the status.
+func TestRateLimitingSaysWhereToLook(t *testing.T) {
+	api := serve(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w,
+			`{"success":false,"errors":[{"code":971,"message":"Too many requests"}]}`)
+	})
+
+	err := api.verify(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "rate limiting") {
+		t.Errorf("error = %v, want it to name the rate limit", err)
+	}
+}

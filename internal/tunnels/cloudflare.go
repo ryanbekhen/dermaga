@@ -59,6 +59,13 @@ func (e apiError) Error() string {
 	case 1000:
 		return "Cloudflare does not recognise that API token. It may have been deleted or expired."
 
+	// Asking too fast. Dermaga is nowhere near Cloudflare's ceiling in normal
+	// use, so this almost certainly means something else on the same account is
+	// -- and saying that is more use than repeating "rate limited".
+	case 971:
+		return "Cloudflare is rate limiting this account. Something is calling its API " +
+			"faster than it allows; try again in a few minutes."
+
 	// Returned for every authentication and permission failure alike, so on its
 	// own it tells nobody what to change.
 	case 10000:

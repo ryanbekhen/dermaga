@@ -284,6 +284,18 @@ type Manager struct {
 	loaded bool
 	// One connector per tunnel, keyed by tunnel id.
 	running map[string]*process
+	// Held by anything that rewrites a tunnel's routing at Cloudflare.
+	//
+	// The ingress is sent whole -- there is no call that adds one rule -- so
+	// two of these overlapping is two complete documents in flight, and the
+	// one computed second can arrive first. Cloudflare then holds a routing
+	// table nobody asked for, and nothing here would ever notice: the next
+	// pass finds the records it expects, because the records are right. It is
+	// the copy at Cloudflare that is wrong.
+	//
+	// Its own lock rather than mu: writing an ingress means reading the routes,
+	// which takes mu already.
+	pushing sync.Mutex
 	// Where each container was last seen, so Reconcile can tell what moved.
 	targets map[string]Target
 }
@@ -787,6 +799,11 @@ func (m *Manager) AddRoute(ctx context.Context, spec Spec) (Route, error) {
 		return Route{}, errors.New("a route needs a port")
 	}
 
+	// Waits rather than skips: this is somebody pressing a button, and it has
+	// to happen. Reconcile is the one that gives way.
+	m.pushing.Lock()
+	defer m.pushing.Unlock()
+
 	api, err := m.client(ctx)
 	if err != nil {
 		return Route{}, err
@@ -932,6 +949,9 @@ func (m *Manager) RemoveRoute(ctx context.Context, hostname string) error {
 		return nil
 	}
 
+	m.pushing.Lock()
+	defer m.pushing.Unlock()
+
 	// The record goes whatever happens next.
 	//
 	// Removing used to stop here when Cloudflare could not be reached -- no
@@ -1059,7 +1079,20 @@ func (m *Manager) retireIfEmpty(ctx context.Context, api *client, tunnelID, acco
 // A container recreated on a new address would otherwise keep a hostname that
 // resolves and answers nothing, with nothing on screen to say why.
 func (m *Manager) Reconcile(ctx context.Context, targets []Target) {
+	// Where things are is recorded whatever else happens: the window reads it
+	// to say whether a route is reachable, and that should not wait on a push.
 	m.Observe(targets)
+
+	// Skipped rather than queued when something else is already rewriting an
+	// ingress. This runs on every change the watcher sees, so a queue of them
+	// would pile up behind one slow call and then replay in order against a
+	// world that had moved on. Whatever this pass would have found, the next
+	// one finds too -- and an addition or a removal pushes the current routing
+	// on its own way out.
+	if !m.pushing.TryLock() {
+		return
+	}
+	defer m.pushing.Unlock()
 
 	routes := m.routes()
 	if len(routes) == 0 {

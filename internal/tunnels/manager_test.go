@@ -2,11 +2,14 @@ package tunnels
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
@@ -583,4 +586,78 @@ func containsCall(calls []string, want string) bool {
 	}
 
 	return false
+}
+
+// Cloudflare takes an ingress whole, so two rewrites overlapping is two whole
+// documents in flight -- and the one computed second can arrive first, leaving
+// a routing table nobody asked for and nothing here able to notice.
+func TestIngressIsNeverRewrittenTwiceAtOnce(t *testing.T) {
+	m := manager(t)
+	m.keys = &memory{token: "a-token"}
+
+	var (
+		mu      sync.Mutex
+		inside  int
+		overlap bool
+		pushes  int
+	)
+
+	serve(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/configurations") {
+			ok(w, `{}`)
+			return
+		}
+
+		mu.Lock()
+		inside++
+		pushes++
+		if inside > 1 {
+			overlap = true
+		}
+		mu.Unlock()
+
+		// Long enough that a second pass would be inside this one if it could.
+		time.Sleep(20 * time.Millisecond)
+
+		mu.Lock()
+		inside--
+		mu.Unlock()
+
+		ok(w, `{}`)
+	})
+
+	carrier(t, m, "tun1", "acc1", "Ryan")
+	route(t, m, "api.example.com", "api", "3000", "tun1", "acc1")
+
+	// Every pass sees the container somewhere new, so every one has work to do.
+	var wg sync.WaitGroup
+	for i := range 12 {
+		wg.Add(1)
+
+		go func(n int) {
+			defer wg.Done()
+
+			m.Reconcile(t.Context(), []Target{{
+				Kind:    KindContainer,
+				Name:    "api",
+				Address: fmt.Sprintf("192.168.64.%d", 20+n),
+			}})
+		}(i)
+	}
+
+	wg.Wait()
+
+	if overlap {
+		t.Error("two ingress rewrites were in flight at once")
+	}
+
+	// Skipped, not queued: twelve passes must not become twelve pushes waiting
+	// behind each other and replaying against a world that has moved on.
+	if pushes >= 12 {
+		t.Errorf("%d pushes for 12 overlapping passes; they queued rather than gave way", pushes)
+	}
+
+	if pushes == 0 {
+		t.Error("no push at all; the address changed and nothing was sent")
+	}
 }
