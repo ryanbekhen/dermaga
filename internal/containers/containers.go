@@ -323,12 +323,7 @@ func (cm *Manager) UseStore(db *store.Store) {
 }
 
 func (cm *Manager) List(ctx context.Context, all bool) ([]Container, error) {
-	args := []string{"list", "--format", "json"}
-	if all {
-		args = append(args, "--all")
-	}
-
-	output, err := cm.runner.Run(ctx, args...)
+	output, err := cm.runner.Run(ctx, listArgs(all)...)
 	if err != nil {
 		cm.logger.Error("Failed to list containers", "error", err)
 		return nil, err
@@ -742,13 +737,7 @@ func (cm *Manager) Start(ctx context.Context, id string) (*Container, error) {
 }
 
 func (cm *Manager) Stop(ctx context.Context, id string, timeout int) (*Container, error) {
-	args := []string{"stop"}
-	if timeout > 0 {
-		args = append(args, "--time", fmt.Sprintf("%d", timeout))
-	}
-	args = append(args, id)
-
-	if _, err := cm.runner.Run(ctx, args...); err != nil {
+	if _, err := cm.runner.Run(ctx, stopArgs(id, timeout)...); err != nil {
 		cm.logger.Error("Failed to stop container", "id", id, "error", err)
 		return nil, err
 	}
@@ -800,13 +789,7 @@ func (cm *Manager) Kill(ctx context.Context, id string) (*Container, error) {
 }
 
 func (cm *Manager) Remove(ctx context.Context, id string, force bool) error {
-	args := []string{"delete"}
-	if force {
-		args = append(args, "--force")
-	}
-	args = append(args, id)
-
-	if _, err := cm.runner.Run(ctx, args...); err != nil {
+	if _, err := cm.runner.Run(ctx, removeArgs(id, force)...); err != nil {
 		// Asking for something to be gone and being told it already is, is
 		// the outcome that was wanted. Two callers ask for exactly that --
 		// the volume browser wipes the slate before starting its helper, and
@@ -839,16 +822,7 @@ func (cm *Manager) Remove(ctx context.Context, id string, force bool) error {
 // StreamLogs builds the log-following command. The caller owns starting and
 // waiting on it; the context cancels the child when the client disconnects.
 func (cm *Manager) LogsCommand(ctx context.Context, id string, tail int, follow bool) *exec.Cmd {
-	args := []string{"logs"}
-	if follow {
-		args = append(args, "--follow")
-	}
-	if tail > 0 {
-		args = append(args, "-n", fmt.Sprintf("%d", tail))
-	}
-	args = append(args, id)
-
-	return cm.runner.Command(ctx, args...)
+	return cm.runner.Command(ctx, logsCommandArgs(id, tail, follow)...)
 }
 
 // ParseLogsLine splits a leading RFC3339-ish timestamp off a log line. Lines
