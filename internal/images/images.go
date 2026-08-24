@@ -274,18 +274,7 @@ func (m *Manager) Inspect(ctx context.Context, reference string) (*ImageDetail, 
 // PullImage builds the pull command. Progress is relayed to the client as an
 // SSE stream, so the caller owns starting it.
 func (m *Manager) PullCommand(ctx context.Context, reference, platform, scheme string) *exec.Cmd {
-	args := []string{"image", "pull", "--progress", "plain"}
-	if platform != "" {
-		args = append(args, "--platform", platform)
-	}
-	// A registry on this machine has no TLS, and without being told so the CLI
-	// fails the handshake with "-9836: bad protocol version".
-	if scheme != "" {
-		args = append(args, "--scheme", scheme)
-	}
-	args = append(args, reference)
-
-	return m.runner.Command(ctx, args...)
+	return m.runner.Command(ctx, pullCommandArgs(reference, platform, scheme)...)
 }
 
 // BuildOptions describes one `container build` invocation. Only Context is
@@ -311,37 +300,8 @@ type BuildOptions struct {
 
 // BuildCommand builds an image from a Dockerfile. Output is streamed, so the
 // caller owns starting it.
-//
-// `--progress plain` matters: the default emits TTY control codes that redraw
-// in place, which turns into unreadable noise once it is relayed line by line.
 func (m *Manager) BuildCommand(ctx context.Context, opts BuildOptions) *exec.Cmd {
-	args := []string{"build", "--progress", "plain"}
-
-	if opts.Tag != "" {
-		args = append(args, "--tag", opts.Tag)
-	}
-	if opts.Dockerfile != "" {
-		args = append(args, "--file", opts.Dockerfile)
-	}
-	if opts.Target != "" {
-		args = append(args, "--target", opts.Target)
-	}
-	if opts.Platform != "" {
-		args = append(args, "--platform", opts.Platform)
-	}
-	for _, arg := range opts.BuildArgs {
-		if strings.TrimSpace(arg) != "" {
-			args = append(args, "--build-arg", arg)
-		}
-	}
-	if opts.NoCache {
-		args = append(args, "--no-cache")
-	}
-
-	// The context directory is positional and has to come last.
-	args = append(args, opts.Context)
-
-	return m.runner.Command(ctx, args...)
+	return m.runner.Command(ctx, buildCommandArgs(opts)...)
 }
 
 // BuilderStatus reports whether the buildkit container that every build runs
@@ -407,12 +367,7 @@ func (m *Manager) StartBuilderCommand(ctx context.Context) *exec.Cmd {
 // because a large image takes a while and the file grows silently until it is
 // done.
 func (m *Manager) SaveCommand(ctx context.Context, reference, platform, output string) *exec.Cmd {
-	args := []string{"image", "save", reference, "--output", output}
-	if platform != "" {
-		args = append(args, "--platform", platform)
-	}
-
-	return m.runner.Command(ctx, args...)
+	return m.runner.Command(ctx, saveCommandArgs(reference, platform, output)...)
 }
 
 // LoadCommand reads such an archive back in. The images it contains land under
