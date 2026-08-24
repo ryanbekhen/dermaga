@@ -124,12 +124,7 @@ func (sm *Manager) Start(ctx context.Context, installKernel bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	flag := "--disable-kernel-install"
-	if installKernel {
-		flag = "--enable-kernel-install"
-	}
-
-	if _, err := sm.runner.Run(ctx, "system", "start", flag); err != nil {
+	if _, err := sm.runner.Run(ctx, startArgs(installKernel)...); err != nil {
 		sm.logger.Error("Failed to start system services", "error", err)
 		return err
 	}
@@ -175,15 +170,7 @@ func (sm *Manager) DiskUsage(ctx context.Context) (*DiskUsage, error) {
 // StreamLogs follows the services' own logs, which is where to look when a
 // container refuses to start for no visible reason.
 func (sm *Manager) LogsCommand(ctx context.Context, last string, follow bool) *exec.Cmd {
-	args := []string{"system", "logs"}
-	if follow {
-		args = append(args, "--follow")
-	}
-	if last != "" {
-		args = append(args, "--last", last)
-	}
-
-	return sm.runner.Command(ctx, args...)
+	return sm.runner.Command(ctx, logsCommandArgs(last, follow)...)
 }
 
 // PruneResult reports what a prune actually achieved, so the UI can say how

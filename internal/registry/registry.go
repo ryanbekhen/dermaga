@@ -102,13 +102,7 @@ func (m *Manager) Login(ctx context.Context, server, username, password, scheme 
 	ctx, cancel := context.WithTimeout(ctx, timeoutFor(server))
 	defer cancel()
 
-	args := []string{"registry", "login", "--username", username, "--password-stdin"}
-	if scheme != "" {
-		args = append(args, "--scheme", scheme)
-	}
-	args = append(args, server)
-
-	cmd := m.runner.Command(ctx, args...)
+	cmd := m.runner.Command(ctx, loginArgs(username, scheme, server)...)
 	cmd.Stdin = strings.NewReader(password)
 
 	var stderr bytes.Buffer
@@ -157,11 +151,5 @@ func (m *Manager) Tag(ctx context.Context, source, target string) error {
 // PushCommand uploads an image. Streamed, because it is a slow job with
 // progress worth watching.
 func (m *Manager) PushCommand(ctx context.Context, reference, scheme string) *exec.Cmd {
-	args := []string{"image", "push", "--progress", "plain"}
-	if scheme != "" {
-		args = append(args, "--scheme", scheme)
-	}
-	args = append(args, reference)
-
-	return m.runner.Command(ctx, args...)
+	return m.runner.Command(ctx, pushArgs(reference, scheme)...)
 }

@@ -110,22 +110,7 @@ func (m *Manager) Create(ctx context.Context, spec Spec) error {
 		return fmt.Errorf("network name is required")
 	}
 
-	args := []string{"network", "create"}
-	if spec.Subnet != "" {
-		args = append(args, "--subnet", spec.Subnet)
-	}
-	if spec.SubnetV6 != "" {
-		args = append(args, "--subnet-v6", spec.SubnetV6)
-	}
-	if spec.Internal {
-		args = append(args, "--internal")
-	}
-	for key, value := range spec.Labels {
-		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
-	}
-	args = append(args, spec.Name)
-
-	if _, err := m.runner.Run(ctx, args...); err != nil {
+	if _, err := m.runner.Run(ctx, createArgs(spec)...); err != nil {
 		m.logger.Error("Failed to create network", "name", spec.Name, "error", err)
 		return err
 	}

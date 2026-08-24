@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -69,11 +68,7 @@ func Open(
 		// already, so the container fallback snippet would be parsed twice.
 		// With no command it opens the machine's own interactive shell, and it
 		// boots the VM first if it is down.
-		args := []string{"machine", "run", "--name", id}
-		if command != DefaultShell {
-			args = append(args, "--", command)
-		}
-		cmd = runner.Command(ctx, args...)
+		cmd = runner.Command(ctx, machineShellArgs(id, command)...)
 
 		// It opens wherever the caller was, which would be wherever the agent
 		// was started from. Open in the user's home instead.
@@ -81,13 +76,7 @@ func Open(
 			cmd.Dir = home
 		}
 	default:
-		args := []string{"exec", "-i", "-t"}
-		if strings.TrimSpace(user) != "" {
-			args = append(args, "--user", user)
-		}
-		args = append(args, id, "/bin/sh", "-c", command)
-
-		cmd = runner.Command(ctx, args...)
+		cmd = runner.Command(ctx, containerShellArgs(id, user, command)...)
 	}
 
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
