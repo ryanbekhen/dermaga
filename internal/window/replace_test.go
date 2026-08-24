@@ -126,9 +126,17 @@ func TestTheHandoverSwapsOnlyAfterTheAppIsGone(t *testing.T) {
 
 	_ = going.Wait()
 
+	// Putting the new version in place and clearing up what it displaced are
+	// two steps, and waiting only for the first catches the script between
+	// them often enough to matter. Wait for the whole sequence to settle.
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if which, err := os.ReadFile(filepath.Join(current, "which")); err == nil && string(which) == "new" {
+		which, err := os.ReadFile(filepath.Join(current, "which"))
+		_, stagedErr := os.Stat(staged)
+		_, displacedErr := os.Stat(current + ".old")
+
+		if err == nil && string(which) == "new" &&
+			os.IsNotExist(stagedErr) && os.IsNotExist(displacedErr) {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
