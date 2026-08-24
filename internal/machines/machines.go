@@ -213,19 +213,7 @@ func (mm *Manager) Stop(ctx context.Context, id string) (*Machine, error) {
 // StreamLogs follows a machine's log output. boot selects the boot log instead
 // of stdio.
 func (mm *Manager) LogsCommand(ctx context.Context, id string, tail int, follow, boot bool) *exec.Cmd {
-	args := []string{"machine", "logs"}
-	if follow {
-		args = append(args, "--follow")
-	}
-	if boot {
-		args = append(args, "--boot")
-	}
-	if tail > 0 {
-		args = append(args, "-n", fmt.Sprintf("%d", tail))
-	}
-	args = append(args, id)
-
-	return mm.runner.Command(ctx, args...)
+	return mm.runner.Command(ctx, logsCommandArgs(id, tail, follow, boot)...)
 }
 
 // MachineSpec is what `container machine create` accepts.
@@ -334,31 +322,12 @@ type Settings struct {
 }
 
 func (mm *Manager) Configure(ctx context.Context, id string, settings Settings) (*Machine, error) {
-	args := []string{"machine", "set", "--name", id}
-
-	if settings.CPUs > 0 {
-		args = append(args, fmt.Sprintf("cpus=%d", settings.CPUs))
+	args, err := configureArgs(id, settings)
+	if err != nil {
+		return nil, err
 	}
-	if settings.Memory != "" {
-		args = append(args, fmt.Sprintf("memory=%s", settings.Memory))
-	}
-	if settings.HomeMount != "" {
-		switch settings.HomeMount {
-		case "ro", "rw", "none":
-			args = append(args, fmt.Sprintf("home-mount=%s", settings.HomeMount))
-		default:
-			return nil, fmt.Errorf("home mount must be ro, rw or none")
-		}
-	}
-	if settings.Virtualization != nil {
-		args = append(args, fmt.Sprintf("virtualization=%t", *settings.Virtualization))
-	}
-	if settings.Kernel != "" {
-		args = append(args, fmt.Sprintf("kernel=%s", settings.Kernel))
-	}
-
-	// Nothing but the machine name means nothing to change.
-	if len(args) == 4 {
+	// Nothing to set means nothing to run.
+	if args == nil {
 		return mm.Get(ctx, id)
 	}
 
