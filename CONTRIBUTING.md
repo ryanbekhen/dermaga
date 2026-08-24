@@ -22,6 +22,39 @@ or behave differently.
 There is one maintainer, so a first reply can take a few days. A pull request
 that has gone quiet for longer than that is worth a nudge in its own thread.
 
+## What belongs here
+
+A few things are settled, and a change that argues with them is not going to be
+merged however well it is written:
+
+- **It drives Apple's `container`, it does not replace it.** What exists is
+  whatever the CLI says exists -- Dermaga keeps no second register of containers
+  or images, which is why what you do in a terminal shows up here within seconds
+  and what you do here is visible to `container ls`. It does keep what the
+  runtime has no concept of, in `~/.dermaga`: scan results, templates, tunnel
+  routes, which containers are marked to start. Never its own idea of what is
+  running.
+- **No ports, and no daemon unless one is asked for.** The window and its agent
+  talk over a socket in your home directory, never a port. By default the agent
+  belongs to the app and goes when it does; the background service is opt-in,
+  and it is what lets a container marked to start come up at login with no
+  window open.
+- **The scanning stays on the machine.** Nothing about your containers, images or
+  results is sent anywhere.
+- **The window is the Mac's own WebKit.** Not a bundled browser engine, and not a
+  second UI toolkit alongside it.
+
+How something looks is decided before it is built, so a pull request that
+redesigns a page is the one most likely to be turned down after the work is
+already done. Open an issue with a screenshot or a sketch first and it can be
+settled in a comment instead.
+
+One thing gets a pull request closed rather than reviewed: not being able to say
+what was actually run. `make check` proves the code compiles and the tests pass,
+which is not the same as the thing being fixed. If the description cannot say
+what was exercised on a real Mac and what it did, there is nothing here to review
+yet.
+
 ## Getting set up
 
 ```bash
