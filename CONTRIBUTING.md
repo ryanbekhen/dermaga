@@ -1,15 +1,41 @@
 # Contributing
 
+## Before you start
+
+**You need a Mac.** Not for convenience: the window is Cocoa and WebKit through
+cgo -- `internal/window` links `-framework Cocoa` -- so the app does not compile
+anywhere else, which is why CI runs on a macOS runner. Apple Silicon on macOS 26,
+the same as the app asks of anyone running it -- you cannot try a change without
+the runtime it drives.
+
+**There is nothing to sign.** No CLA, no DCO sign-off, and commits do not have
+to be GPG-signed. What you open comes in under the [MIT licence](LICENSE), the
+same terms as everything already here.
+
+**Say what you are planning before building something large.** A fix, a rough
+edge, a missing state -- go straight to a pull request, and an open issue
+labelled `bug` is fair game without asking first. A new page, a new domain
+package, or a change to how something already works is worth an issue of its own
+before the code, so a week of work does not turn out to have been meant to look
+or behave differently.
+
+There is one maintainer, so a first reply can take a few days. A pull request
+that has gone quiet for longer than that is worth a nudge in its own thread.
+
 ## Getting set up
 
 ```bash
+git clone https://github.com/<you>/dermaga   # your fork
+cd dermaga
 make desktop-deps   # npm install for the renderer
 make dev            # builds the agent, then runs Vite + the app
 ```
 
-You need Go 1.23+, Node 18+, and Apple's [`container`](https://github.com/apple/container)
-CLI on your PATH. Everything the app does goes through that CLI, so if a command
-misbehaves in Dermaga, try it in a terminal first.
+You need Go 1.27 or newer -- [go.mod](go.mod) is the version that counts -- Node
+20.19+ (Vite and ESLint both refuse anything older, and CI runs 20), and Apple's
+[`container`](https://github.com/apple/container) CLI on your PATH. Everything
+the app does goes through that CLI, so if a command misbehaves in Dermaga, try
+it in a terminal first.
 
 ## Before opening a pull request
 
@@ -26,6 +52,33 @@ rather than moving, because the app proxies to that address and a silent move
 means a blank window. It is pinned to 127.0.0.1 too: left to itself Vite binds
 IPv6 only, and the app's asset server dials IPv4.
 
+Two things about running it locally read as bugs and are not:
+
+- **The copy in `/Applications` answers to the same bundle identifier.** So
+  `open -a Dermaga`, the Dock icon or a notification can raise the installed app
+  while you are looking for your build, and the change you just made appears to
+  have done nothing. `make dev` runs `dist/Dermaga.app/Contents/MacOS/Dermaga`
+  directly, and a bundle outside `/Applications` keeps to `~/.dermaga/dev.sock`
+  rather than the installed app's socket -- so the two do not drive each other,
+  they only look alike. Quitting the installed one while you work removes the
+  confusion; `make install` replaces it, so it is not the way to try a build out.
+- **The embedded frontend is built once and then left alone.** `internal/window/assets/dist`
+  is a make target with no prerequisites, so `make check` and `make dev` reuse
+  whatever is already there and only `make dist` rebuilds it. Under `make dev`
+  the window loads from Vite, so it makes no difference -- but to see a frontend
+  change in a run that Vite is not serving, `cd desktop && npm run build` first.
+
+## Sending it
+
+Work on a branch in your own fork and open the pull request against `main`. The
+title becomes the commit subject when it is squashed, so give it one of the
+prefixes below; the [pull request template](.github/pull_request_template.md)
+asks for the rest, and the part worth spending time on is what you actually ran
+-- much of this only fails on a real machine, and `make check` cannot see that.
+
+Anything a user would notice wants an entry in `CHANGELOG.md`: the app's
+**What's new** page is generated from that file, and `make dev` regenerates it.
+
 ## Layout
 
 The [architecture notes](docs/architecture.md) go through this properly. In short:
@@ -38,7 +91,7 @@ The [architecture notes](docs/architecture.md) go through this properly. In shor
 - `internal/window` — the window: draws through WKWebView, brokers everything
   it is asked for to the agent, and embeds the built frontend
 - `desktop` — the React window, which has no network access of its own;
-  Vite writes its build into `internal/window/dist`
+  Vite writes its build into `internal/window/assets/dist`
 
 ## Where the rest is written down
 
