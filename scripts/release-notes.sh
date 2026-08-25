@@ -8,7 +8,15 @@
 #   usage: scripts/release-notes.sh v1.1.0
 set -eu
 
-tag="${1:?usage: release-notes.sh <tag>}"
+# `--who` asks only who wrote it, one handle per line, and is how the release
+# entry in CHANGELOG.md gets the same answer without the notes around it.
+only_who=false
+if [ "${1:-}" = "--who" ]; then
+	only_who=true
+	shift
+fi
+
+tag="${1:?usage: release-notes.sh [--who] <tag>}"
 
 # Works before the tag exists, so the notes can be read before cutting the
 # release they describe: an unknown tag means "everything since the last one".
@@ -32,16 +40,11 @@ repo=$(git remote get-url origin 2>/dev/null |
 # Whoever the repository belongs to. Their name is left off every line: a
 # release where the maintainer wrote most of it reads as a wall of the same
 # handle, and the point of naming anybody is that it says something.
-owner=${repo%%/*}
-
-# The same person, by the address they commit under.
 #
-# Read from the last `release:` commit, because releases are cut by the
-# maintainer and by nobody else -- so the history says who that is without
-# anything having to be configured, and says it with no network. Which matters:
-# the handle above is only known once GitHub has been asked, and offline every
-# line would otherwise be credited to the person who wrote most of them.
-house=$(git log --no-merges --format='%aE' --grep='^release: ' -n 1 "$head" 2>/dev/null || true)
+# Told apart by the handle rather than by an address, so it holds however many
+# machines and addresses somebody commits from: they all belong to one account,
+# and the account is what is asked about.
+owner=${repo%%/*}
 
 # email<tab>who, filled as authors are met. Two calls for a release with two
 # outside contributors in it, rather than one per commit.
@@ -49,22 +52,28 @@ known=$(mktemp)
 thanked=$(mktemp)
 trap 'rm -f "$known" "$thanked"' EXIT
 
-# Who wrote a commit, as a GitHub handle where one can be had.
+# Who wrote a commit, as a GitHub handle -- or nothing.
 #
-# Three ways, cheapest first. A no-reply address carries the handle in it and
-# needs nothing. Otherwise GitHub knows which account a commit belongs to, and
-# is asked -- once per author, and only when `gh` is here and signed in.
-# Failing both, the name as it was written in the commit: `make notes` is a
-# preview somebody runs on a plane, and a release note that says "by canks"
-# rather than nothing is the right way to be offline.
+# A handle and not a name, because a name in a release note is a string and a
+# handle is a person: it links, it is what they are called in the issue they
+# opened, and it is the same in every release. Where one cannot be had, the
+# line simply carries no name. Saying "by Muh Ihsan Nur" in one release and
+# "@canks69" in the next is worse than saying it once, properly.
+#
+# Two ways. A no-reply address carries the handle in it and needs nothing;
+# otherwise GitHub knows which account a commit belongs to, and is asked, once
+# per author rather than once per commit. `make publish` cannot run without
+# `gh` anyway, so the release itself is never the run that comes up empty --
+# only a preview asked for with no network, which says so by naming nobody.
 who() {
 	email="$1"
-	name="$2"
-	sha="$3"
+	sha="$2"
 
 	cached=$(grep -F "$email	" "$known" 2>/dev/null | head -1 | cut -f2) || true
 	if [ -n "${cached:-}" ]; then
-		printf '%s' "$cached"
+		# `-` is a question already asked and answered with nothing, which is
+		# not the same as one nobody has asked yet.
+		[ "$cached" = "-" ] || printf '%s' "$cached"
 		return 0
 	fi
 
@@ -78,10 +87,23 @@ who() {
 
 	if [ -z "$handle" ] && [ -n "$repo" ] && command -v gh >/dev/null 2>&1; then
 		login=$(gh api "repos/$repo/commits/$sha" --jq '.author.login' 2>/dev/null || true)
-		[ -n "$login" ] && [ "$login" != "null" ] && handle="@$login"
+
+		# Checked against what a handle can be, not merely against being empty.
+		# A commit GitHub has never seen -- one made here and not pushed yet,
+		# which is every commit while a release is being prepared -- comes back
+		# as a refusal printed where the answer would have been, and "@{"
+		# message": "No commit found for SHA" ...}" is not a person.
+		case "$login" in
+		'' | null) ;;
+		*[!A-Za-z0-9-]*) ;;
+		*) handle="@$login" ;;
+		esac
 	fi
 
-	[ -n "$handle" ] || handle="$name"
+	if [ -z "$handle" ]; then
+		printf '%s\t-\n' "$email" >>"$known"
+		return 0
+	fi
 
 	printf '%s\t%s\n' "$email" "$handle" >>"$known"
 	printf '%s' "$handle"
@@ -93,25 +115,59 @@ who() {
 # Its own field, and set after the hash rather than after the sentence, because
 # a subject is a sentence and a name on the end of one joins it: "say what will
 # be made by @canks69" reads as a claim about what was made.
-log=$(git log --no-merges --format='%h%x09%aE%x09%aN%x09%s' "$range" |
-	while IFS='	' read -r hash email name subject; do
-		# Known before anything is asked, so the maintainer's own commits
-		# cost no lookup at all.
-		if [ -n "$house" ] && [ "$email" = "$house" ]; then
+log=$(git log --no-merges --format='%h%x09%ae%x09%s' "$range" |
+	while IFS='	' read -r hash email subject; do
+		credit=$(who "$email" "$hash")
+
+		if [ -z "$credit" ]; then
 			printf '%s\t%s\t\n' "$hash" "$subject"
 			continue
 		fi
 
-		credit=$(who "$email" "$name" "$hash")
+		# Everybody who wrote any of it is named once, at the end -- the
+		# maintainer as much as anybody. A release is the list of who worked on
+		# it, and leaving out the person who did most of the work is a strange
+		# way to write one.
+		grep -qxF "$credit" "$thanked" 2>/dev/null || printf '%s\n' "$credit" >>"$thanked"
 
-		if [ "$credit" = "@$owner" ] || [ "$credit" = "$owner" ]; then
+		# Against a line, though, only somebody from outside the project.
+		# Otherwise a release where the maintainer wrote most of it is a wall
+		# of the same handle, and the point of a name against a line is that it
+		# says something the lines around it do not.
+		if [ "$credit" = "@$owner" ]; then
 			printf '%s\t%s\t\n' "$hash" "$subject"
 			continue
 		fi
 
 		printf '%s\t%s\t — %s\n' "$hash" "$subject" "$credit"
-		grep -qxF "$credit" "$thanked" 2>/dev/null || printf '%s\n' "$credit" >>"$thanked"
 	done)
+
+# Everybody who worked on it, as a sentence's worth of names.
+#
+# Twenty-five, then a count. A list this long is read to find one name in it,
+# and past a couple of dozen it stops being a list and becomes a paragraph
+# nobody finishes -- while the number says what the rest of it was there to
+# say. Alphabetical, so who is named does not depend on who happened to commit
+# first.
+credited() {
+	total=$(sort -u "$thanked" | wc -l | tr -d ' ')
+	[ "$total" -gt 0 ] || return 0
+
+	if [ "$total" -le 25 ]; then
+		sort -u "$thanked" | paste -sd, - | sed -E 's/,/, /g; s/, ([^,]*)$/ and \1/'
+		return 0
+	fi
+
+	printf '%s and %d more\n' \
+		"$(sort -u "$thanked" | head -25 | paste -sd, - | sed -E 's/,/, /g')" \
+		"$((total - 25))"
+}
+
+if [ "$only_who" = true ]; then
+	credited
+
+	exit 0
+fi
 
 section() {
 	pattern="$1"
@@ -143,15 +199,14 @@ if [ -n "$rest" ]; then
 	printf '\n'
 fi
 
-# Said once at the end as well as against each line. The lines are read by
-# somebody deciding whether to update; this is read by the person who wrote it,
-# and it is the only place in a release where their name is the subject rather
-# than a footnote to a change.
-if [ -s "$thanked" ]; then
-	printf '### Thanks\n\n'
-	printf 'This release carries work from %s.\n\n' "$(
-		sort -u "$thanked" | paste -sd, - | sed -E 's/,/, /g; s/, ([^,]*)$/ and \1/'
-	)"
+# Everybody who worked on it, said once. "Contributors" and not "Thanks",
+# because the maintainer is in this list too and a release does not thank
+# itself: this is who wrote the version, which is a fact about it rather than
+# a courtesy.
+names=$(credited)
+if [ -n "$names" ]; then
+	printf '### Contributors\n\n'
+	printf 'This release carries work from %s.\n\n' "$names"
 fi
 
 if [ -n "$repo" ] && [ -n "$prev" ]; then

@@ -148,10 +148,16 @@ release:
 	@test "$(VERSION)" != "0.0.0" || { echo "set VERSION, e.g. make release VERSION=1.1.0"; exit 1; }
 	@git diff --quiet && git diff --cached --quiet || { echo "working tree is dirty"; exit 1; }
 	@git rev-parse "v$(VERSION)" >/dev/null 2>&1 && { echo "tag v$(VERSION) already exists"; exit 1; } || true
+	@# Who worked on it, into the entry somebody actually reads. Before the tag
+	@# rather than after, so the line travels with everything built from here:
+	@# the tag itself, the list the app's What's new page is generated from, and
+	@# the notes on the release, which say the same thing in their own place.
+	sh scripts/credit-release.sh "v$(VERSION)"
+	$(MAKE) changelog
 	$(MAKE) check
 	cd desktop && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null
 	@# npm stamps the version into the lockfile too, so both have to go in.
-	git add desktop/package.json desktop/package-lock.json
+	git add desktop/package.json desktop/package-lock.json CHANGELOG.md desktop/src/generated/changelog.json
 	@# package.json can already be at this version -- tag the current commit then.
 	@git diff --cached --quiet || git commit -m "release: v$(VERSION)"
 	git tag -a "v$(VERSION)" -m "Dermaga v$(VERSION)"
