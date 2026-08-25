@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { Badge } from '../components/DataTable';
 import releases from '../generated/changelog.json';
 import { useChangelogStore } from '../store/changelogStore';
+import { openExternal } from '../services/ipc';
 
 interface Release {
   version: string;
@@ -95,32 +96,60 @@ export function ChangelogPage({ version }: { version: string }) {
  * path. Built as elements rather than HTML, so nothing in the file can become
  * markup.
  */
-function inline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <strong key={index} className="font-semibold text-ink-900 dark:text-ink-100">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
+export function inline(text: string): ReactNode[] {
+  // `@handle` is the last alternative, and the only one that has to care what
+  // comes before it: the lookbehind is what keeps an address out of it, so
+  // `someone@example.com` stays a piece of text rather than becoming a link to
+  // a person called example.
+  return text
+    .split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|(?<![\w@.-])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/g)
+    .map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return (
+          <strong key={index} className="font-semibold text-ink-900 dark:text-ink-100">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
 
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-      return (
-        <em key={index} className="italic">
-          {part.slice(1, -1)}
-        </em>
-      );
-    }
+      if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+        return (
+          <em key={index} className="italic">
+            {part.slice(1, -1)}
+          </em>
+        );
+      }
 
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code key={index} className="rounded bg-ink-100 px-1 font-mono text-tiny dark:bg-ink-800">
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return (
+          <code key={index} className="rounded bg-ink-100 px-1 font-mono text-tiny dark:bg-ink-800">
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
 
-    return part;
-  });
+      // Somebody who worked on the release, as the person rather than as a
+      // string. Opened outside rather than followed: this window is the app, and
+      // a link that navigated it would replace Dermaga with a web page and leave
+      // no way back.
+      if (part.startsWith('@') && part.length > 1) {
+        const url = `https://github.com/${part.slice(1)}`;
+
+        return (
+          <a
+            key={index}
+            href={url}
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternal(url);
+            }}
+            className="font-medium text-brand-700 hover:underline dark:text-brand-400"
+          >
+            {part}
+          </a>
+        );
+      }
+
+      return part;
+    });
 }
