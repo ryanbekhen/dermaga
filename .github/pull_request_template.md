@@ -38,5 +38,5 @@
 
 - [ ] `make check` passes
 - [ ] The title carries a conventional prefix
-- [ ] User-facing? `CHANGELOG.md` has an entry — the app's **What's new** page is built from it
+- [ ] User-facing? The summary above says so in a sentence — `CHANGELOG.md` is written at release time, by the maintainer, and is not yours to add to
 - [ ] Anything left unverified is named above, rather than left to be discovered

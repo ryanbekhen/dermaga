@@ -109,8 +109,17 @@ prefixes below; the [pull request template](.github/pull_request_template.md)
 asks for the rest, and the part worth spending time on is what you actually ran
 -- much of this only fails on a real machine, and `make check` cannot see that.
 
-Anything a user would notice wants an entry in `CHANGELOG.md`: the app's
-**What's new** page is generated from that file, and `make dev` regenerates it.
+Do not touch `CHANGELOG.md`, and do not pick a version number. It reads as the
+obvious courtesy and it is the one thing here that cannot be contributed: the
+file is the public claim about what a release means, the version is a claim
+about how much it means, and both are decided when a release is cut rather than
+when a change is written. An entry added on a branch has to invent a heading for
+a release nobody has decided on yet.
+
+What is wanted instead is a sentence in the pull request description saying what
+a user would notice. That is what the entry gets written from. The same goes for
+`desktop/src/generated/changelog.json`, which is built from that file and not
+edited by hand.
 
 ## Layout
 
