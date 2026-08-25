@@ -414,25 +414,61 @@ func named(name, fallback string) string {
 // once, over a socket on this machine, and it keeps one idea of what a task is
 // instead of two halves that have to be kept in step.
 func (a *Agent) registerTasks() {
+	// The shelf is the agent's, so writing to it is too. A stream the window
+	// filed is written down when it ends, by whatever is running at the time --
+	// which on a long build is often nothing but this process.
+	a.streams.shelve = func(streamID string, f *filing, err error) {
+		record := tasks.Record{
+			ID:       f.taskID,
+			StreamID: streamID,
+			Kind:     f.kind,
+			Label:    f.label,
+			Status:   "done",
+			Lines:    f.output(),
+			At:       time.Now().UTC().Format(time.RFC3339),
+		}
+
+		if err != nil {
+			record.Status = "failed"
+			record.Error = err.Error()
+		}
+
+		if putErr := a.tasks.Put(record); putErr != nil {
+			a.logger.Error("Could not keep what a command printed", "task", f.taskID, "error", putErr)
+		}
+	}
+
 	a.server.Register("tasks.list", func(_ context.Context, _ json.RawMessage) (any, error) {
 		return a.tasks.List(), nil
 	})
 
-	a.server.Register("tasks.record", func(_ context.Context, params json.RawMessage) (any, error) {
-		record, err := decodeParams[tasks.Record](params)
+	// The window's name for a run it has just started, said as soon as it knows
+	// the agent's.
+	//
+	// Two names for one thing, and both are needed: the window files a run
+	// under something a person would recognise, so building the same tag twice
+	// replaces the row rather than stacking it; the agent knows only its own
+	// `build-7`, which is the name a notification comes back with. Told them
+	// here, the agent can keep the output under both -- and keep it whether or
+	// not there is still a window to keep it for.
+	a.server.Register("tasks.name", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			StreamID string `json:"streamId"`
+			ID       string `json:"id"`
+			Kind     string `json:"kind"`
+			Label    string `json:"label"`
+		}](params)
 		if err != nil {
 			return nil, err
 		}
 
-		if record.ID == "" {
-			return nil, rpc.Fail("a finished command needs an id to be remembered by")
+		if args.StreamID == "" || args.ID == "" {
+			return nil, rpc.Fail("a run needs both names to be filed under")
 		}
 
-		if err := a.tasks.Put(record); err != nil {
-			return nil, rpc.Fail(err.Error())
-		}
+		a.streams.file(args.StreamID, args.ID, args.Kind, args.Label)
 
-		return map[string]any{"id": record.ID}, nil
+		return map[string]any{"id": args.ID}, nil
 	})
 
 	a.server.Register("tasks.forget", func(_ context.Context, params json.RawMessage) (any, error) {

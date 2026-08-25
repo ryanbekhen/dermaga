@@ -363,8 +363,16 @@ export const api = {
   },
 
   /** Hands a finished command's output over to be kept. */
-  async recordTask(record: TaskRecord): Promise<void> {
-    await invoke('tasks.record', record);
+  /**
+   * Tells the agent what the window calls a run it has just started.
+   *
+   * Both names, because each side knows only its own: the window files a run
+   * under something a person would recognise, the agent under `build-7`. Said
+   * as soon as the stream is open, so that everything printed from then on is
+   * kept — by the agent, which is still here when the window is not.
+   */
+  async nameTask(task: { streamId: string; id: string; kind: string; label: string }): Promise<void> {
+    await invoke('tasks.name', task);
   },
 
   /** Dismissing it in the window means forgetting it here. */

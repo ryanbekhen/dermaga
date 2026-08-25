@@ -36,35 +36,6 @@ function explain(problem: string): string {
 const closers = new Map<string, () => void>();
 
 /**
- * Hands a finished command's output to the agent to keep.
- *
- * At the end rather than as it arrives: it is a megabyte at the very worst,
- * once, over a socket on this machine -- and it leaves one idea of what a task
- * is instead of two halves to keep in step while lines are still coming.
- *
- * Failing to keep it is not worth telling anybody about. The output is still on
- * screen, which is what somebody is looking at; all that is lost is reading it
- * back tomorrow.
- */
-function shelve(id: string) {
-  const task = useTaskStore.getState().tasks.find((t) => t.id === id);
-  if (!task || task.status === 'running') return;
-
-  void api
-    .recordTask({
-      id: task.id,
-      streamId: task.streamId,
-      kind: task.kind,
-      label: task.label,
-      status: task.status,
-      error: task.error,
-      lines: task.lines,
-      at: new Date().toISOString(),
-    })
-    .catch(() => {});
-}
-
-/**
  * Puts what Dermaga has to say into the corner, when the reader is here to see
  * it.
  *
@@ -175,7 +146,17 @@ export async function runTask({
 
   try {
     const close = await openStream(method, params, {
-      onStart: (streamId) => name(id, streamId),
+      onStart: (streamId) => {
+        name(id, streamId);
+
+        // And the agent is told the same pair, because from here it keeps the
+        // output itself. It used to be this window that wrote a finished run
+        // to the shelf, which meant a build outliving the window -- the one
+        // case the finish notification exists for -- left nothing to open.
+        void api.nameTask({ streamId, id, kind, label }).catch(() => {
+          // Then the run is only in this window, which is where it was before.
+        });
+      },
       onData: (line) => append(id, line),
       onEnd: (error) => {
         closers.delete(id);
@@ -194,7 +175,6 @@ export async function runTask({
           finish(id);
         }
 
-        shelve(id);
         onDone?.(Boolean(error));
       },
     });
@@ -202,8 +182,10 @@ export async function runTask({
     closers.set(id, close);
   } catch (err) {
     closers.delete(id);
+    // Nothing to shelve: the stream never opened, so the agent has no record
+    // of this to finish -- and an agent that could not be reached is not one
+    // that can be asked to remember anything either.
     fail(id, err instanceof Error ? err.message : 'Could not reach the Dermaga agent');
-    shelve(id);
     onDone?.(true);
   }
 }

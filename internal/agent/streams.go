@@ -31,9 +31,50 @@ type streams struct {
 	// about when they end. Only work with a name somebody would recognise --
 	// an image being built, a machine being made -- has one; following a log
 	// does not, and neither does anything else nobody is waiting on.
-	named    map[string]string
+	named map[string]string
+	// The streams the window has filed as a task, and what they have printed.
+	//
+	// Kept here because the window is not always there to keep it. A build is
+	// minutes long and the window can be closed for all of them -- that is the
+	// case the finish notification exists for -- and until this, the output
+	// lived in the window's memory and was written to the shelf by the window,
+	// when it finished, if it was still open. Which meant the one run somebody
+	// was told about afterwards was the one run there was nothing to read.
+	filed    map[string]*filing
 	sequence atomic.Uint64
+
+	// Where a finished filing goes. Set by the agent, which owns the shelf.
+	shelve func(id string, f *filing, err error)
 }
+
+// filing is what the window said a stream is, and what the stream has said
+// since.
+type filing struct {
+	// The window's own name for it -- `build:api-dev` rather than `build-7`.
+	// The two are filed together so a notification, which knows only the
+	// second, can still find the first.
+	taskID string
+	kind   string
+	label  string
+
+	lines []string
+	// How much of `lines` is being held, so the limit below is a size and not
+	// a guess at one.
+	size int
+	// Whether anything was let go of to stay under it.
+	trimmed bool
+}
+
+// How much of one stream's output is kept.
+//
+// Bytes rather than lines, because a line has no size: a pull writes progress
+// as one very long line per layer, and a thousand of those is not the same
+// thing as a thousand lines of a compiler. Quarter of a megabyte is a long
+// build's worth of ordinary output, and ten of these on the shelf is still
+// smaller than the smallest image layer.
+//
+// The tail is what is kept. A command that failed says why at the end.
+const keptOutput = 256 * 1024
 
 func newStreams(server *rpc.Server) *streams {
 	return &streams{
@@ -41,7 +82,65 @@ func newStreams(server *rpc.Server) *streams {
 		cancels:  map[string]context.CancelFunc{},
 		sessions: map[string]*terminal.Session{},
 		named:    map[string]string{},
+		filed:    map[string]*filing{},
 	}
+}
+
+// file notes that the window has filed a stream as a task, under a name of its
+// own. From here on the stream's output is kept.
+func (s *streams) file(streamID, taskID, kind, label string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Not if it has already ended: a filing made after the fact would keep
+	// nothing and be written out empty over the record that has the output.
+	if _, running := s.cancels[streamID]; !running {
+		return
+	}
+
+	s.filed[streamID] = &filing{taskID: taskID, kind: kind, label: label}
+}
+
+// keep adds a line to what is held for a stream, if anything is.
+func (s *streams) keep(id, line string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	f := s.filed[id]
+	if f == nil {
+		return
+	}
+
+	f.lines = append(f.lines, line)
+	f.size += len(line) + 1
+
+	for f.size > keptOutput && len(f.lines) > 1 {
+		f.size -= len(f.lines[0]) + 1
+		f.lines = f.lines[1:]
+		f.trimmed = true
+	}
+}
+
+// takeFiling reads what was held for a stream and forgets it, since a stream
+// ends once.
+func (s *streams) takeFiling(id string) *filing {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	f := s.filed[id]
+	delete(s.filed, id)
+
+	return f
+}
+
+// output is what the shelf should hold: the lines, said to be the tail where
+// that is what they are.
+func (f *filing) output() []string {
+	if !f.trimmed {
+		return f.lines
+	}
+
+	return append([]string{"[earlier output dropped]"}, f.lines...)
 }
 
 func (s *streams) nextID(prefix string) string {
@@ -67,6 +166,10 @@ func (s *streams) cancel(id string) {
 	delete(s.cancels, id)
 	delete(s.sessions, id)
 	delete(s.named, id)
+	// The filing is not dropped here. Cancelling kills the command, the command
+	// ending is what calls `end`, and `end` is where what it printed is written
+	// down -- a build somebody stopped halfway is still a build whose output
+	// says why they stopped it.
 	s.mu.Unlock()
 
 	if hasSession {
@@ -100,6 +203,13 @@ func (s *streams) closeAll() {
 }
 
 func (s *streams) data(id string, chunk any) {
+	// Held as well as sent, for the streams the window has filed. A terminal's
+	// chunks are base64 and not lines, and nothing files one, so this only ever
+	// keeps text somebody could read back.
+	if line, ok := chunk.(string); ok {
+		s.keep(id, line)
+	}
+
 	s.server.Notify("stream.data", map[string]any{"id": id, "chunk": chunk})
 }
 
@@ -116,6 +226,14 @@ func (s *streams) end(id string, err error) {
 	}
 
 	s.server.Notify("stream.end", params)
+
+	// The shelf, before the stream is forgotten. Whether a window is listening
+	// makes no difference here, which is the whole point: the run somebody is
+	// told about by a notification is exactly the run they were not watching.
+	if f := s.takeFiling(id); f != nil && s.shelve != nil {
+		s.shelve(id, f, err)
+	}
+
 	s.cancel(id)
 }
 

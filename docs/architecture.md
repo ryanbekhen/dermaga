@@ -176,7 +176,7 @@ sequenceDiagram
 | `system.dns`                                                                          | The runtime's local DNS domains |
 | `toolchain.status` `toolchain.install` `toolchain.update`                             | The CLI itself, through Homebrew |
 | `templates.list` `templates.refresh`                                                  | Starting points for the create form |
-| `tasks.list` `tasks.record` `tasks.forget`                                            | What a finished command printed |
+| `tasks.list` `tasks.name` `tasks.forget`                                                 | What a finished command printed |
 | `volumes.owner` `volumes.setOwner` `volumes.tidy`                                     | Who a volume belongs to, and clearing up |
 | `app.info`                                                                            | Version, commit and build date |
 | `events.subscribe`                                                                    | Pushes `events.snapshot` on every change |
