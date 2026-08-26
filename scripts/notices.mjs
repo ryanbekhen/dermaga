@@ -25,7 +25,7 @@ function licenceText(dir) {
   return found ? readFileSync(join(dir, found), 'utf8').trim() : '';
 }
 
-function npmPackages() {
+function frontendPackages() {
   const pkg = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8'));
 
   // Runtime dependencies: what the window is built from and ships with.
@@ -92,7 +92,7 @@ function goPackages() {
   return modules;
 }
 
-const packages = [...npmPackages(), ...goPackages()]
+const packages = [...frontendPackages(), ...goPackages()]
   .map((entry) => ({ ...entry, licence: guessLicence(entry) }))
   .sort((a, b) => a.name.localeCompare(b.name));
 

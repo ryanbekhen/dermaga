@@ -60,12 +60,12 @@ yet.
 ```bash
 git clone https://github.com/<you>/dermaga   # your fork
 cd dermaga
-make desktop-deps   # npm install for the renderer
+make desktop-deps   # bun install for the renderer
 make dev            # builds the agent, then runs Vite + the app
 ```
 
-You need Go 1.27 or newer -- [go.mod](go.mod) is the version that counts -- Node
-20.19+ (Vite and ESLint both refuse anything older, and CI runs 20), and Apple's
+You need Go 1.27 or newer -- [go.mod](go.mod) is the version that counts --
+[Bun](https://bun.sh) 1.3 or newer, and Apple's
 [`container`](https://github.com/apple/container) CLI on your PATH. Everything
 the app does goes through that CLI, so if a command misbehaves in Dermaga, try
 it in a terminal first.
@@ -99,7 +99,7 @@ Two things about running it locally read as bugs and are not:
   is a make target with no prerequisites, so `make check` and `make dev` reuse
   whatever is already there and only `make dist` rebuilds it. Under `make dev`
   the window loads from Vite, so it makes no difference -- but to see a frontend
-  change in a run that Vite is not serving, `cd desktop && npm run build` first.
+  change in a run that Vite is not serving, `cd desktop && bun run build` first.
 
 ## Sending it
 

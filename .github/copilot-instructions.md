@@ -27,7 +27,7 @@ fuller version of this file.
   is the app the user actually runs.
 - **Never edit generated files.** `desktop/src/generated/changelog.json`,
   `THIRD-PARTY-NOTICES.md`, `internal/window/assets/dist` — all built, by
-  `make changelog`, `make notices` and `npm run build`.
+  `make changelog`, `make notices` and `bun run build`.
 - **Never delete or prune the user's images, volumes, containers or
   `~/.dermaga/dermaga.db`.**
 

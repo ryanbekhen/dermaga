@@ -30,7 +30,7 @@ fit. What follows is the part an agent gets wrong.
   is the app the user actually runs. `make dev` is how a change is tried.
 - **Do not edit generated files.** `desktop/src/generated/changelog.json`,
   `THIRD-PARTY-NOTICES.md` and `internal/window/assets/dist` are all built —
-  `make changelog`, `make notices`, `npm run build`. Editing one only means it
+  `make changelog`, `make notices`, `bun run build`. Editing one only means it
   is wrong until the next build.
 - **Do not delete or prune anything of the user's** — images, volumes,
   containers, `~/.dermaga/dermaga.db`. Diagnosing a problem is not a reason to
@@ -59,7 +59,7 @@ commit that does not compile on its own is a commit nobody can bisect through.
   `internal/window/assets/dist` is a make target with no prerequisites, so
   `make check` and `make dev` reuse whatever is there. Under `make dev` the
   window loads from Vite so it does not matter; anywhere else, run
-  `cd desktop && npm run build` first.
+  `cd desktop && bun run build` first.
 - **Vite's port is pinned to 127.0.0.1:3000.** If it is busy it stops rather
   than moving, because the app proxies to that address and a silent move is a
   blank window.

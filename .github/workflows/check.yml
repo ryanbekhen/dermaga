@@ -33,16 +33,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          bun-version: latest
 
-      # ci rather than install: the lockfile is the point of running this at
-      # all, and `npm install` is free to quietly disagree with it.
+      # --frozen-lockfile rather than a plain install: the lockfile is the
+      # point of running this at all, and an install is free to quietly
+      # disagree with it.
       - name: Install frontend dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
         working-directory: desktop
 
       # go vet, go test, tsc, eslint -- the same one line a contributor runs.

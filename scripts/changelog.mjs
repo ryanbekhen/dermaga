@@ -84,8 +84,15 @@ writeFileSync(target, `${JSON.stringify(releases, null, 2)}\n`);
 // The generated file is committed, so it has to satisfy the same formatter as
 // everything else -- a short array printed over three lines is the only thing
 // Prettier and JSON.stringify disagree about here.
-execFileSync(join(desktop, 'node_modules', '.bin', 'prettier'), ['--write', target], {
-  stdio: 'ignore',
-});
+//
+// Run through Bun at Prettier's own entry point rather than through the shim
+// in node_modules/.bin, which starts with `#!/usr/bin/env node` and so needs a
+// Node that this project no longer asks anybody to have. `bunx prettier` would
+// work too, but it will fetch a copy if the local one is missing, and a
+// generated file should be formatted by the version in the lockfile or not at
+// all.
+const prettier = join(desktop, 'node_modules', 'prettier', 'bin', 'prettier.cjs');
+
+execFileSync('bun', [prettier, '--write', target], { stdio: 'ignore' });
 
 console.log(`changelog: ${releases.length} releases -> ${target.replace(`${root}/`, '')}`);

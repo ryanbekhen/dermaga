@@ -57,17 +57,17 @@ desktop/public/splash-logo.png: assets/logo.png
 	sips -z 256 256 $< --out $@ >/dev/null
 
 desktop-deps:
-	cd desktop && npm install
+	cd desktop && bun install
 
 ## Collect the licences of everything shipped. MIT, ISC and BSD all require
 ## their notice to travel with the binary, so this is a condition of
 ## distributing the DMG rather than a courtesy -- and generated, because a
 ## hand-written list drifts the moment a dependency moves.
 notices:
-	node scripts/notices.mjs
+	bun scripts/notices.mjs
 
 changelog:
-	node scripts/changelog.mjs
+	bun scripts/changelog.mjs
 
 ## Run Vite and the app together, with a freshly built agent.
 ##
@@ -80,35 +80,35 @@ changelog:
 ## Ctrl-C stops both.
 dev: agent icon notices changelog internal/window/assets/dist/index.html
 	VERSION=$(VERSION) ./scripts/bundle.sh --dev
-	cd desktop && npx concurrently -k -n vite,dermaga -c cyan,magenta \
-		"npx vite" \
-		"npx wait-on tcp:127.0.0.1:3000 && FRONTEND_DEVSERVER_URL=http://localhost:3000 ../$(APP)/Contents/MacOS/Dermaga"
+	cd desktop && bunx concurrently -k -n vite,dermaga -c cyan,magenta \
+		"bunx vite" \
+		"bunx wait-on tcp:127.0.0.1:3000 && FRONTEND_DEVSERVER_URL=http://localhost:3000 ../$(APP)/Contents/MacOS/Dermaga"
 
 ## Everything that has to pass: vet, tests, types, lint.
 check: test lint
 	go vet ./...
-	cd desktop && npx tsc -b --force
+	cd desktop && bunx tsc -b --force
 
 test: internal/window/assets/dist/index.html
 	go test -ldflags "$(QUIET_LD)" ./...
-	cd desktop && npm test
+	cd desktop && bun run test
 
 ## The Go app embeds the built frontend, so it cannot be compiled without one.
 internal/window/assets/dist/index.html:
-	cd desktop && npm run build
+	cd desktop && bun run build
 
 lint:
 	gofmt -l . | tee /dev/stderr | (! read)
-	cd desktop && npm run lint
+	cd desktop && bun run lint
 
 fmt:
 	gofmt -w .
-	cd desktop && npm run format
+	cd desktop && bun run format
 
 ## Package the DMG. The agent travels in the bundle, and packaging fails rather
 ## than shipping one without it.
 dist: agent icon notices changelog
-	cd desktop && npm run build
+	cd desktop && bun run build
 	VERSION=$(VERSION) ./scripts/bundle.sh
 	@# Notarized before packaging as well as after: the ticket on the image
 	@# covers the app only while it is still inside the image, and the app is
@@ -155,9 +155,10 @@ release:
 	sh scripts/credit-release.sh "v$(VERSION)"
 	$(MAKE) changelog
 	$(MAKE) check
-	cd desktop && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null
-	@# npm stamps the version into the lockfile too, so both have to go in.
-	git add desktop/package.json desktop/package-lock.json CHANGELOG.md desktop/src/generated/changelog.json
+	cd desktop && bun pm pkg set version=$(VERSION)
+	@# The version is written into the lockfile as well, so both have to go in.
+	cd desktop && bun install --lockfile-only >/dev/null
+	git add desktop/package.json desktop/bun.lock CHANGELOG.md desktop/src/generated/changelog.json
 	@# package.json can already be at this version -- tag the current commit then.
 	@git diff --cached --quiet || git commit -m "release: v$(VERSION)"
 	git tag -a "v$(VERSION)" -m "Dermaga v$(VERSION)"
