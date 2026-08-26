@@ -127,6 +127,21 @@ export function SettingsPanel() {
                       />
                     }
                   />
+                  {/* Said once per version, not once per launch. Somebody who
+                      leaves an update for later opens Dermaga a dozen times
+                      before they get to it, and being told a dozen times is
+                      how a notification stops being read at all. */}
+                  <Setting
+                    label="Notify when Apple's CLI needs attention"
+                    hint="A newer container release, or one older than Dermaga is written for. Said once for each version, and the System page carries it either way."
+                    control={
+                      <Switch
+                        checked={settings.notifyOnUpdate}
+                        onChange={settings.setNotifyOnUpdate}
+                        label="Notify when Apple's CLI needs attention"
+                      />
+                    }
+                  />
                 </Group>
               </>
             )}

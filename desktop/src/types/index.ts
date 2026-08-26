@@ -308,6 +308,7 @@ export interface Settings {
   /** And when work somebody started finishes: an image built or pulled, a
    *  container or a machine made. */
   notifyOnFinish: boolean;
+  notifyOnUpdate: boolean;
   sidebarCollapsed: boolean;
   /** Where templates are fetched from. Empty means Dermaga's own catalogue. */
   templatesUrl?: string;
@@ -322,6 +323,9 @@ export interface ToolchainStatus {
   brewAvailable: boolean;
   updateAvailable: boolean;
   latestVersion?: string;
+  /** The oldest CLI Dermaga is written for, and whether this one is behind it. */
+  minimumVersion?: string;
+  belowMinimum?: boolean;
   checkError?: string;
 }
 

@@ -124,6 +124,7 @@ export function Sidebar({ version }: { version?: string }) {
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const setCollapsed = useSettingsStore((s) => s.setSidebarCollapsed);
   const hasUnread = useUnreadChangelog(version);
+  const cli = useToolchainMark();
   const counts = useCounts();
 
   const item = ({ target, owns, icon: Icon, label, count, beta }: NavEntry) => {
@@ -131,6 +132,12 @@ export function Sidebar({ version }: { version?: string }) {
     // A menu entry says the notes exist; the dot says there are some the user
     // has not read. It clears the moment the page is opened.
     const unread = target.name === 'changelog' && hasUnread;
+    // The same dot on System, in the colour of how much it matters: amber for
+    // a newer CLI waiting, the flag red for one too old for Dermaga to be
+    // relied on. This one does not clear when the page is opened -- it is not
+    // about having read something, it is about the state of the machine, and
+    // it goes when that changes.
+    const mark = target.name === 'system' ? cli : null;
     const total = count ? counts[count] : undefined;
 
     return (
@@ -153,9 +160,11 @@ export function Sidebar({ version }: { version?: string }) {
       >
         <span className="relative shrink-0">
           <Icon size={16} strokeWidth={active ? 2.1 : 1.7} aria-hidden />
-          {unread && (
+          {(unread || mark) && (
             <span
-              className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-brand-500 ring-2 ring-chrome-bg"
+              className={`absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-chrome-bg ${
+                mark?.tone === 'update' ? 'bg-amber-500' : 'bg-brand-500'
+              }`}
               aria-hidden
             />
           )}
@@ -167,6 +176,7 @@ export function Sidebar({ version }: { version?: string }) {
         >
           {label}
           {unread && <span className="sr-only"> (unread)</span>}
+          {mark && <span className="sr-only"> ({mark.label})</span>}
         </span>
         {/* Counted, not just labelled: the number is what tells you whether a
             page is worth opening, and it is the one thing the sidebar can say
@@ -270,6 +280,29 @@ function Meta({ active, children }: { active: boolean; children: ReactNode }) {
  * infrastructure rather than somebody's container, and it is either in both
  * totals or in neither.
  */
+/**
+ * What the System entry has to say about Apple's CLI before it is opened.
+ *
+ * Only the two things worth a dot. Everything else the System page knows --
+ * which version, how it was installed, whether the check itself failed -- is a
+ * reading, and a reading belongs on the page rather than in the frame.
+ */
+function useToolchainMark(): { tone: 'update' | 'unsupported'; label: string } | null {
+  const toolchain = useResourceStore((s) => s.toolchain);
+
+  if (!toolchain) return null;
+
+  if (toolchain.belowMinimum) {
+    return { tone: 'unsupported', label: 'the container CLI is too old' };
+  }
+
+  if (toolchain.updateAvailable) {
+    return { tone: 'update', label: 'a container CLI update is available' };
+  }
+
+  return null;
+}
+
 function useCounts() {
   const showBuilder = useSettingsStore((s) => s.showBuilder);
   const containers = useResourceStore((s) => s.containers);

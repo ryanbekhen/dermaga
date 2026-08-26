@@ -111,7 +111,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.networks = networks.NewManager(runner, logger, changed)
 	agent.machines = machines.NewManager(runner, logger, changed)
 	agent.system = system.NewManager(runner, logger, changed)
-	agent.toolchain = toolchain.NewManager(runner, logger)
+	agent.toolchain = toolchain.NewManager(runner, logger, changed)
 	agent.registry = registry.NewManager(runner, logger)
 	agent.tunnels = tunnels.NewManager(runner, logger, changed)
 	agent.scanner = scanner.NewManager(runner, logger)
@@ -194,7 +194,11 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		// dark reaches the window the same way every other change does.
 		Tunnels:      agent.tunnels.Tunnels,
 		CLIAvailable: agent.runner.Available,
-		Disk:         agent.system.DiskUsage,
+		// Checked on its own schedule rather than in a pass: asking Homebrew
+		// costs seconds, and the answer changes about as often as Apple cuts a
+		// release.
+		Toolchain: agent.toolchain.Latest,
+		Disk:      agent.system.DiskUsage,
 	}, logger)
 	agent.watcher = pending
 
@@ -218,6 +222,8 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 			logger.Info("Container exited on its own", "container", exit.Name)
 			server.Notify("containers.exited", exit)
 		}
+
+		agent.announceToolchain(snapshot.Toolchain)
 	})
 
 	return agent
@@ -276,6 +282,7 @@ func (a *Agent) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
+	go a.toolchain.Watch(ctx)
 	go a.volumes.KeepHelper(ctx)
 	go a.templates.Run(ctx, func() string { return a.settings.Load().TemplatesURL })
 
@@ -319,6 +326,7 @@ func (a *Agent) Listen(ctx context.Context, socket string) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
+	go a.toolchain.Watch(ctx)
 	go a.volumes.KeepHelper(ctx)
 	go a.templates.Run(ctx, func() string { return a.settings.Load().TemplatesURL })
 
@@ -560,9 +568,65 @@ func (a *Agent) registerSystem() {
 
 // --- toolchain ------------------------------------------------------------
 
+// announceToolchain says out loud, once, that the CLI wants attention.
+//
+// Two kinds of news, and they are not the same size. A newer release is worth
+// mentioning; a CLI older than Dermaga is written for is worth saying plainly,
+// because it is the reason something in the app is about to behave oddly.
+//
+// Once is the whole difficulty. The check runs at startup, and somebody who
+// leaves an update for later opens Dermaga a dozen times before they get round
+// to it -- so what has already been said is written down, keyed by the version
+// it was said about. A different version is different news; the same version
+// is the same sentence again.
+func (a *Agent) announceToolchain(status *toolchain.Status) {
+	if status == nil {
+		return
+	}
+
+	subject := ""
+	switch {
+	case status.BelowMinimum:
+		subject = "below-" + status.Version
+	case status.UpdateAvailable && status.LatestVersion != "":
+		subject = "update-" + status.LatestVersion
+	default:
+		return
+	}
+
+	// No store means no memory of what was said, and the choice is between
+	// saying it every launch or never. Never is the quieter mistake: the
+	// sidebar and the System page still carry it, and neither of them forgets.
+	if a.store == nil {
+		return
+	}
+
+	var told string
+	if found, err := a.store.Get(store.BucketNotices, "toolchain", &told); err != nil {
+		a.logger.Debug("Could not read what has been said about the CLI", "error", err)
+		return
+	} else if found && told == subject {
+		return
+	}
+
+	if err := a.store.Put(store.BucketNotices, "toolchain", subject); err != nil {
+		// Not fatal, but it does mean this is about to be said again, so it is
+		// worth a line rather than a silent repeat.
+		a.logger.Warn("Could not record that the CLI notice was raised", "error", err)
+	}
+
+	a.logger.Info("The container CLI wants attention", "subject", subject)
+	a.server.Notify("toolchain.news", status)
+}
+
 func (a *Agent) registerToolchain() {
+	// Checked afresh rather than read from the cache: this is asked when the
+	// System page opens and again when an upgrade on it finishes, and both are
+	// exactly when the cached answer is the wrong one. It updates the cache on
+	// its way through, so the sidebar's dot goes at the same moment the page's
+	// own line does.
 	a.server.Register("toolchain.status", func(ctx context.Context, _ json.RawMessage) (any, error) {
-		return a.toolchain.Status(ctx), nil
+		return a.toolchain.Refresh(ctx), nil
 	})
 
 	// A Mac that has never run a container has no Linux kernel, and the runtime

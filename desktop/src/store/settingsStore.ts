@@ -12,6 +12,7 @@ interface SettingsState extends Settings {
   setConfirmDestructive: (confirm: boolean) => void;
   setNotifyOnExit: (notify: boolean) => void;
   setNotifyOnFinish: (notify: boolean) => void;
+  setNotifyOnUpdate: (notify: boolean) => void;
   setTemplatesUrl: (url: string) => void;
   setShowBuilder: (show: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -53,6 +54,7 @@ export const useSettingsStore = create<SettingsState>()(
       confirmDestructive: true,
       notifyOnExit: true,
       notifyOnFinish: true,
+      notifyOnUpdate: true,
       sidebarCollapsed: false,
       templatesUrl: '',
       showBuilder: true,
@@ -62,6 +64,7 @@ export const useSettingsStore = create<SettingsState>()(
       setConfirmDestructive: (confirmDestructive) => set({ confirmDestructive }),
       setNotifyOnExit: (notifyOnExit) => set({ notifyOnExit }),
       setNotifyOnFinish: (notifyOnFinish) => set({ notifyOnFinish }),
+      setNotifyOnUpdate: (notifyOnUpdate) => set({ notifyOnUpdate }),
       setTemplatesUrl: (templatesUrl) => set({ templatesUrl }),
       setShowBuilder: (showBuilder) => set({ showBuilder }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
@@ -77,6 +80,7 @@ export const useSettingsStore = create<SettingsState>()(
         confirmDestructive: state.confirmDestructive,
         notifyOnExit: state.notifyOnExit,
         notifyOnFinish: state.notifyOnFinish,
+        notifyOnUpdate: state.notifyOnUpdate,
         sidebarCollapsed: state.sidebarCollapsed,
         templatesUrl: state.templatesUrl,
         showBuilder: state.showBuilder,

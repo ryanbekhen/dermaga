@@ -9,6 +9,7 @@ import type {
   Machine,
   Network,
   SystemStatus,
+  ToolchainStatus,
   Tunnel,
   Volume,
 } from '../types';
@@ -25,6 +26,7 @@ interface Snapshot {
   system?: SystemStatus;
   cliAvailable?: boolean;
   disk?: DiskUsage;
+  toolchain?: ToolchainStatus;
 }
 
 /**
@@ -71,7 +73,12 @@ export function useEventStream() {
         void api
           .getSystem()
           .then((report) =>
-            setHost({ system: report.status, cliAvailable: report.cliAvailable, disk: null })
+            setHost({
+              system: report.status,
+              cliAvailable: report.cliAvailable,
+              disk: null,
+              toolchain: null,
+            })
           )
           .catch(() => {});
       } else {
@@ -79,6 +86,7 @@ export function useEventStream() {
           system: snapshot.system,
           cliAvailable: snapshot.cliAvailable ?? true,
           disk: snapshot.disk ?? null,
+          toolchain: snapshot.toolchain ?? null,
         });
       }
       setConnection('live');

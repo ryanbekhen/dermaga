@@ -27,13 +27,18 @@ interface Bridge {
   pathForFile?: (file: File) => string;
   onFilesDropped?: (callback: (paths: string[], target: string) => void) => () => void;
   resolveBuildDrop?: (paths: string[]) => Promise<BuildDrop | null>;
-  syncSettings?: (settings: { notifyOnExit: boolean; notifyOnFinish: boolean }) => void;
+  syncSettings?: (settings: {
+    notifyOnExit: boolean;
+    notifyOnFinish: boolean;
+    notifyOnUpdate: boolean;
+  }) => void;
   openNotificationSettings?: () => Promise<void>;
   openExternal?: (url: string) => Promise<void>;
   openFinding?: (reference: string, id: string) => Promise<void>;
   registerContainerNames?: () => Promise<void>;
   takePendingOpen?: () => Promise<string | null>;
   takePendingTask?: () => Promise<string | null>;
+  takePendingPage?: () => Promise<string | null>;
   serviceStatus?: () => Promise<ServiceStatus>;
   installService?: () => Promise<ServiceStatus>;
   uninstallService?: () => Promise<ServiceStatus>;
@@ -41,6 +46,7 @@ interface Bridge {
   setOpenAtLogin?: (value: boolean) => Promise<boolean>;
   onOpenContainer?: (callback: (id: string) => void) => () => void;
   onOpenTask?: (callback: (id: string) => void) => () => void;
+  onOpenPage?: (callback: (page: string) => void) => () => void;
   onAnnouncement?: (callback: (news: Announcement) => void) => () => void;
   checkUpdate?: () => Promise<UpdateCheck>;
   stageUpdate?: (assetUrl: string, version: string) => Promise<StagedUpdate>;
@@ -131,7 +137,11 @@ export async function resolveBuildDrop(paths: string[]): Promise<BuildDrop | nul
 }
 
 /** Keeps the main process in step with preferences it acts on by itself. */
-export function syncSettings(settings: { notifyOnExit: boolean; notifyOnFinish: boolean }): void {
+export function syncSettings(settings: {
+  notifyOnExit: boolean;
+  notifyOnFinish: boolean;
+  notifyOnUpdate: boolean;
+}): void {
   bridge().syncSettings?.(settings);
 }
 
@@ -249,6 +259,31 @@ export function onOpenTask(callback: (id: string) => void): () => void {
 }
 
 /**
+ * The pages the main process can ask for by name.
+ *
+ * One, for now, and the list is closed rather than "any route": the other side
+ * is Go, so nothing checks that a page name still exists. A closed set means a
+ * page renamed here fails to compile rather than opening nothing.
+ */
+export type NoticePage = 'system';
+
+export function isNoticePage(page: string): page is NoticePage {
+  return page === 'system';
+}
+
+/**
+ * A page the main process wants opened -- news about the machine rather than
+ * about anything in a list, so there is nothing to hand over but where to go.
+ */
+export function takePendingPage(): Promise<string | null> {
+  return bridge().takePendingPage?.() ?? Promise.resolve(null);
+}
+
+export function onOpenPage(callback: (page: string) => void): () => void {
+  return bridge().onOpenPage?.(callback) ?? (() => {});
+}
+
+/**
  * Something Dermaga has to say, arriving because this window has the focus.
  *
  * The other side decides which of the two channels a piece of news goes down --
@@ -260,9 +295,13 @@ export interface Announcement {
   title: string;
   body: string;
   failed: boolean;
-  /** What pressing it opens: a container, or a finished command's output. */
+  /**
+   * What pressing it opens: a container, a finished command's output, or a
+   * page of the app.
+   */
   container?: string;
   task?: string;
+  page?: NoticePage;
 }
 
 export function onAnnouncement(callback: (news: Announcement) => void): () => void {

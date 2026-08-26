@@ -38,7 +38,13 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
   // container, image or volume moved. Nothing here asks for it, and nothing
   // here has to be told when an action of its own has changed it.
   const usage = useResourceStore((s) => s.disk);
-  const [toolchain, setToolchain] = useState<ToolchainStatus | null>(null);
+  // Two sources for one fact, and neither is redundant: the snapshot carries
+  // it before this page is ever opened, which is what the sidebar's dot is
+  // drawn from, and opening the page checks again -- because that is the
+  // moment somebody has come here to act on it.
+  const pushed = useResourceStore((s) => s.toolchain);
+  const [checked, setChecked] = useState<ToolchainStatus | null>(null);
+  const toolchain = checked ?? pushed;
   const update = useCommandProgress('toolchain.update');
   const [pending, setPending] = useState<
     'start' | 'stop' | 'clean-images' | 'clean-volumes' | 'clean-containers' | null
@@ -69,9 +75,9 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
 
   const loadToolchain = useCallback(async () => {
     try {
-      setToolchain(await api.getToolchain());
+      setChecked(await api.getToolchain());
     } catch {
-      setToolchain(null);
+      setChecked(null);
     }
   }, []);
 
@@ -86,6 +92,29 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadToolchain();
   }, [loadToolchain]);
+
+  // The one way Dermaga can act on any of this, and it exists only where the
+  // CLI came from Homebrew. Built here rather than twice below, because the
+  // two cases that offer it differ in what they say, not in what they do.
+  const upgradeButton =
+    toolchain?.managedBy === 'homebrew' ? (
+      <Button
+        icon={ArrowUpCircle}
+        busy={update.state === 'running'}
+        busyLabel="Updating…"
+        onClick={() =>
+          void update.run((failed) => {
+            if (failed) return;
+            pushToast(
+              toolchain.latestVersion ? `Updated to ${toolchain.latestVersion}` : 'CLI updated'
+            );
+            void loadToolchain();
+          })
+        }
+      >
+        {toolchain.latestVersion ? `Update to ${toolchain.latestVersion}` : 'Update the CLI'}
+      </Button>
+    ) : null;
 
   const run = async (
     action: 'start' | 'stop' | 'clean-images' | 'clean-volumes' | 'clean-containers',
@@ -258,25 +287,27 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
                 value={toolchain?.managedBy === 'homebrew' ? 'Homebrew' : 'manually'}
               />
 
-              {toolchain?.updateAvailable ? (
+              {/* Three things this can say, and the colour is which one it
+                  is. Red is not "there is an update", it is "this CLI is
+                  older than Dermaga is written for" -- a different sentence,
+                  and the reason something else is already misbehaving. Amber
+                  is the offer. Everything else is grey, because it is a
+                  reading rather than news. */}
+              {toolchain?.belowMinimum ? (
                 <div className="flex flex-col items-start gap-2 pt-1">
-                  <p className="text-tiny text-ink-600 dark:text-ink-400">
+                  <p className="text-tiny leading-relaxed text-brand-600 dark:text-brand-400">
+                    Dermaga is written for {toolchain.minimumVersion} or newer. Parts of the app may
+                    not work against {toolchain.version}.
+                  </p>
+                  {upgradeButton}
+                  <CommandProgress {...update} />
+                </div>
+              ) : toolchain?.updateAvailable ? (
+                <div className="flex flex-col items-start gap-2 pt-1">
+                  <p className="text-tiny text-amber-600 dark:text-amber-500">
                     Version {toolchain.latestVersion} is available.
                   </p>
-                  <Button
-                    icon={ArrowUpCircle}
-                    busy={update.state === 'running'}
-                    busyLabel="Updating…"
-                    onClick={() =>
-                      void update.run((failed) => {
-                        if (failed) return;
-                        pushToast(`Updated to ${toolchain.latestVersion}`);
-                        void loadToolchain();
-                      })
-                    }
-                  >
-                    Update to {toolchain.latestVersion}
-                  </Button>
+                  {upgradeButton}
                   <CommandProgress {...update} />
                 </div>
               ) : (

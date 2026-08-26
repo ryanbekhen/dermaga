@@ -46,6 +46,11 @@ const (
 	// name, plus the Cloudflare account they were made in. The API token is not
 	// here: it is in the login keychain.
 	BucketTunnels = "tunnels"
+	// News the user has already been told once, keyed by the subject. A
+	// notification about a new CLI is worth raising the day it appears and
+	// tiresome every time the app opens after that, and the app is opened a
+	// lot.
+	BucketNotices = "notices"
 )
 
 // Name of the database inside ~/.dermaga.
@@ -91,7 +96,7 @@ func Open() (*Store, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		buckets := []string{
 			BucketScans, BucketTemplates, BucketPending, BucketPorts, BucketContainers,
-			BucketTasks, BucketTunnels,
+			BucketTasks, BucketTunnels, BucketNotices,
 		}
 
 		for _, name := range buckets {

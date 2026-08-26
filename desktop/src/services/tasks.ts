@@ -61,12 +61,14 @@ export function openTaskLog(id: string): void {
 }
 
 export function watchAnnouncements(): () => void {
-  return onAnnouncement(({ title, body, failed, container, task }) => {
+  return onAnnouncement(({ title, body, failed, container, task, page }) => {
     const open = container
       ? () => useUIStore.getState().openContainer(container)
       : task
         ? () => openTaskLog(task)
-        : undefined;
+        : page
+          ? () => useUIStore.getState().navigate({ name: page })
+          : undefined;
 
     useToastStore
       .getState()

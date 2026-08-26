@@ -148,6 +148,11 @@ func Run(version string) error {
 
 		if id, ok := result.Response.UserInfo["taskId"].(string); ok && id != "" {
 			app.OpenTaskOutput(id)
+			return
+		}
+
+		if page, ok := result.Response.UserInfo["page"].(string); ok && page != "" {
+			app.OpenPage(page)
 		}
 	})
 
@@ -319,6 +324,9 @@ func (a *App) onNotify(message Notification) {
 		// machine made -- so anything arriving with one is worth saying.
 		a.notifyFinished(message.Params)
 
+	case "toolchain.news":
+		a.notifyToolchain(message.Params)
+
 	case "events.snapshot":
 		// The menu bar reads the same snapshots the window does, so it stays
 		// right whether or not there is a window to send them to.
@@ -394,6 +402,61 @@ func (a *App) notifyExit(params json.RawMessage) {
 	})
 }
 
+// notifyToolchain says that Apple's CLI wants attention: either a newer one is
+// waiting, or the one installed is older than Dermaga is written for.
+//
+// The agent decides whether this is worth saying at all and only sends it once
+// per version, so anything arriving here is news. All that is left is which of
+// the two it is, and they are not the same sentence: one is an offer, the
+// other is an explanation for whatever is already going wrong.
+func (a *App) notifyToolchain(params json.RawMessage) {
+	var status struct {
+		Version        string `json:"version"`
+		LatestVersion  string `json:"latestVersion"`
+		MinimumVersion string `json:"minimumVersion"`
+		BelowMinimum   bool   `json:"belowMinimum"`
+		ManagedBy      string `json:"managedBy"`
+	}
+
+	if err := json.Unmarshal(params, &status); err != nil {
+		return
+	}
+
+	if !a.bridge.notifyOnUpdate() {
+		log.Println("[dermaga] toolchain notification suppressed by settings")
+		return
+	}
+
+	news := announcement{Page: "system"}
+
+	switch {
+	case status.BelowMinimum:
+		news.ID = "toolchain-below-" + status.Version
+		news.Title = "The container CLI is older than Dermaga expects"
+		news.Body = "This Mac has " + status.Version + ". Dermaga is written for " +
+			status.MinimumVersion + " or newer."
+		// Not a failure of anything the user did, but it is the reason
+		// something else is about to fail, and it should read that way.
+		news.Failed = true
+
+	case status.LatestVersion != "":
+		news.ID = "toolchain-update-" + status.LatestVersion
+		news.Title = "container " + status.LatestVersion + " is available"
+		news.Body = "This Mac has " + status.Version + "."
+
+		// Only worth offering where Dermaga can actually do it. A CLI from
+		// Apple's installer is upgraded by Apple's installer.
+		if status.ManagedBy == "homebrew" {
+			news.Body += " Dermaga can update it for you."
+		}
+
+	default:
+		return
+	}
+
+	a.announce(news)
+}
+
 // announcement is one piece of news, and everything either channel needs to
 // carry it.
 type announcement struct {
@@ -401,10 +464,12 @@ type announcement struct {
 	Title  string
 	Body   string
 	Failed bool
-	// What pressing it opens -- a container, or what a finished command
-	// printed. One or the other, never both.
+	// What pressing it opens -- a container, what a finished command printed,
+	// or a page of the app when the news is about the machine rather than
+	// about anything in a list. One of the three, never more.
 	Container string
 	Task      string
+	Page      string
 }
 
 // announce says something once, through whichever channel can reach the reader.
@@ -426,6 +491,7 @@ func (a *App) announce(news announcement) {
 			"failed":    news.Failed,
 			"container": news.Container,
 			"task":      news.Task,
+			"page":      news.Page,
 		})
 
 		return
@@ -439,6 +505,9 @@ func (a *App) announce(news announcement) {
 	}
 	if news.Task != "" {
 		data["taskId"] = news.Task
+	}
+	if news.Page != "" {
+		data["page"] = news.Page
 	}
 
 	// Notifications fail quietly on macOS -- an app that has not been granted
@@ -985,6 +1054,24 @@ func (a *App) OpenTaskOutput(id string) {
 	}
 
 	a.bridge.setPendingTask(id)
+}
+
+// OpenPage brings the window up on one of the app's own pages.
+//
+// The same shape as OpenContainer and for the same reason: the notification
+// that led here is most useful when there was no window at all, and a window
+// that has just been made is not listening yet.
+func (a *App) OpenPage(page string) {
+	had := a.MainWindow() != nil
+
+	a.ShowWindow()
+
+	if had {
+		a.emit("dermaga:open-page", page)
+		return
+	}
+
+	a.bridge.setPendingPage(page)
 }
 
 func (a *App) quitAfterOpeningInstaller() {

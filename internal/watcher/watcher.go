@@ -17,6 +17,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
 	"github.com/ryanbekhen/dermaga/internal/system"
+	"github.com/ryanbekhen/dermaga/internal/toolchain"
 	"github.com/ryanbekhen/dermaga/internal/tunnels"
 	"github.com/ryanbekhen/dermaga/internal/volumes"
 )
@@ -46,6 +47,14 @@ type Snapshot struct {
 	// clicking, and the watcher is already the thing that notices such changes.
 	System       *system.Status `json:"system,omitempty"`
 	CLIAvailable bool           `json:"cliAvailable"`
+	// What the CLI itself is: its version, whether a newer one is waiting, and
+	// whether it is older than Dermaga is written for. Here for the same
+	// reason the two above are -- it changes without anybody clicking, and it
+	// used to be read only when the System page happened to be opened, which
+	// meant an update sat there unseen until somebody went looking for it.
+	// Nothing is asked of Homebrew in a pass: this is a value the toolchain
+	// manager has already worked out on its own schedule.
+	Toolchain *toolchain.Status `json:"toolchain,omitempty"`
 	// What the runtime occupies. Read only when something else in the snapshot
 	// actually changed -- it costs six times what the rest of a pass does, and
 	// it cannot move unless a container, image or volume has.
@@ -70,6 +79,9 @@ type Sources struct {
 	Tunnels func() []tunnels.Tunnel
 	// Whether the CLI is on this Mac at all. Not a call; a flag to read.
 	CLIAvailable func() bool
+	// The CLI's own version and update status, cached by the toolchain
+	// manager. A read, not a call. Nil until the first check has run.
+	Toolchain func() *toolchain.Status
 	// Expensive, so it runs only when a pass found something new.
 	Disk func(context.Context) (*system.DiskUsage, error)
 }
@@ -198,6 +210,10 @@ func (w *Watcher) refresh(ctx context.Context) {
 
 	if w.sources.CLIAvailable != nil {
 		snapshot.CLIAvailable = w.sources.CLIAvailable()
+	}
+
+	if w.sources.Toolchain != nil {
+		snapshot.Toolchain = w.sources.Toolchain()
 	}
 
 	// Fingerprinted before the disk is read, and deliberately: reading it is

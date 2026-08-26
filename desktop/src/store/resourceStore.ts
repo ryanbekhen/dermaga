@@ -6,6 +6,7 @@ import type {
   Machine,
   Network,
   SystemStatus,
+  ToolchainStatus,
   Tunnel,
   Volume,
 } from '../types';
@@ -28,6 +29,12 @@ interface ResourceState {
    */
   system: SystemStatus | null;
   cliAvailable: boolean;
+  /**
+   * Apple's CLI: its version, whether a newer one is waiting, and whether it
+   * is older than Dermaga is written for. Pushed like everything else, so the
+   * sidebar can say so without the System page ever being opened.
+   */
+  toolchain: ToolchainStatus | null;
   /** What the runtime occupies, recomputed by the agent when anything moved. */
   disk: DiskUsage | null;
   error: string | null;
@@ -41,6 +48,7 @@ interface ResourceState {
     system: SystemStatus | null;
     cliAvailable: boolean;
     disk: DiskUsage | null;
+    toolchain: ToolchainStatus | null;
   }) => void;
   setError: (error: string | null) => void;
 }
@@ -55,6 +63,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
   hasLoaded: false,
   system: null,
   cliAvailable: true,
+  toolchain: null,
   disk: null,
   error: null,
   setContainers: (containers) => set({ containers, hasLoaded: true }),
@@ -64,8 +73,15 @@ export const useResourceStore = create<ResourceState>((set) => ({
   setNetworks: (networks) => set({ networks }),
   setTunnels: (tunnels) => set({ tunnels }),
   // Disk is only recomputed by the agent when something changed, so a snapshot
-  // that carries none is saying "unchanged", not "gone".
-  setHost: ({ system, cliAvailable, disk }) =>
-    set((state) => ({ system, cliAvailable, disk: disk ?? state.disk })),
+  // that carries none is saying "unchanged", not "gone". The CLI's status is
+  // the same shape of thing: checked on its own schedule, and absent until the
+  // first check has run.
+  setHost: ({ system, cliAvailable, disk, toolchain }) =>
+    set((state) => ({
+      system,
+      cliAvailable,
+      disk: disk ?? state.disk,
+      toolchain: toolchain ?? state.toolchain,
+    })),
   setError: (error) => set({ error }),
 }));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Hammer } from 'lucide-react';
 import { HelpView } from './components/HelpView';
 import { LicencesPage } from './pages/LicencesPage';
@@ -11,10 +11,13 @@ import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
 import { Toasts } from './components/Toasts';
 import {
+  isNoticePage,
   onOpenContainer,
+  onOpenPage,
   onOpenTask,
   syncSettings,
   takePendingOpen,
+  takePendingPage,
   takePendingTask,
 } from './services/ipc';
 
@@ -79,6 +82,7 @@ export function App() {
   const openContainer = useUIStore((s) => s.openContainer);
   const notifyOnExit = useSettingsStore((s) => s.notifyOnExit);
   const notifyOnFinish = useSettingsStore((s) => s.notifyOnFinish);
+  const notifyOnUpdate = useSettingsStore((s) => s.notifyOnUpdate);
 
   // Clicking a "container stopped" notification opens that container.
   useEffect(() => onOpenContainer((id) => openContainer(id)), [openContainer]);
@@ -101,9 +105,31 @@ export function App() {
     });
   }, [openContainer]);
 
+  // News about the machine rather than about anything in a list, so all it
+  // carries is where to go. Both halves of the same pattern as the two above:
+  // one for a window that is already listening, one for a window this
+  // notification has just caused to exist.
+  const openPage = useCallback(
+    (page: string) => {
+      if (isNoticePage(page)) navigate({ name: page });
+    },
+    [navigate]
+  );
+
+  useEffect(() => onOpenPage(openPage), [openPage]);
+
+  useEffect(() => {
+    void takePendingPage().then((page) => {
+      if (page) openPage(page);
+    });
+  }, [openPage]);
+
   // The main process raises notifications itself, so it needs to know when the
   // user has asked it not to.
-  useEffect(() => syncSettings({ notifyOnExit, notifyOnFinish }), [notifyOnExit, notifyOnFinish]);
+  useEffect(
+    () => syncSettings({ notifyOnExit, notifyOnFinish, notifyOnUpdate }),
+    [notifyOnExit, notifyOnFinish, notifyOnUpdate]
+  );
 
   const containers = useResourceStore((s) => s.containers);
   const machines = useResourceStore((s) => s.machines);

@@ -35,9 +35,11 @@ type Bridge struct {
 	settings struct {
 		notifyOnExit   bool
 		notifyOnFinish bool
+		notifyOnUpdate bool
 	}
 	pendingOpen string
 	pendingTask string
+	pendingPage string
 }
 
 // NewBridge wires the bridge to the running app.
@@ -45,6 +47,7 @@ func NewBridge(app *App) *Bridge {
 	bridge := &Bridge{app: app}
 	bridge.settings.notifyOnExit = true
 	bridge.settings.notifyOnFinish = true
+	bridge.settings.notifyOnUpdate = true
 
 	return bridge
 }
@@ -94,10 +97,11 @@ func (b *Bridge) IsFullScreen() bool {
 // SyncSettings keeps this side in step with preferences it has to act on
 // without asking -- such as whether to raise a notification, which arrives at
 // the moment it is needed.
-func (b *Bridge) SyncSettings(notifyOnExit, notifyOnFinish bool) {
+func (b *Bridge) SyncSettings(notifyOnExit, notifyOnFinish, notifyOnUpdate bool) {
 	b.mu.Lock()
 	b.settings.notifyOnExit = notifyOnExit
 	b.settings.notifyOnFinish = notifyOnFinish
+	b.settings.notifyOnUpdate = notifyOnUpdate
 	b.mu.Unlock()
 }
 
@@ -106,6 +110,13 @@ func (b *Bridge) notifyOnExit() bool {
 	defer b.mu.Unlock()
 
 	return b.settings.notifyOnExit
+}
+
+func (b *Bridge) notifyOnUpdate() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.settings.notifyOnUpdate
 }
 
 func (b *Bridge) notifyOnFinish() bool {
@@ -248,6 +259,26 @@ func (b *Bridge) TakePendingTask() string {
 	b.pendingTask = ""
 
 	return id
+}
+
+// TakePendingPage collects a page a notification asked for before there was a
+// window to show it on. A page rather than a thing: the news it comes from is
+// about the machine, not about anything in a list.
+func (b *Bridge) TakePendingPage() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	page := b.pendingPage
+	b.pendingPage = ""
+
+	return page
+}
+
+func (b *Bridge) setPendingPage(page string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.pendingPage = page
 }
 
 func (b *Bridge) setPendingTask(id string) {

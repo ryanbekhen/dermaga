@@ -121,7 +121,12 @@ window.dermaga = {
     on<boolean>('dermaga:fullscreen', (value) => callback(Boolean(value))),
 
   syncSettings: (settings) => {
-    void call('SyncSettings', settings.notifyOnExit, settings.notifyOnFinish);
+    void call(
+      'SyncSettings',
+      settings.notifyOnExit,
+      settings.notifyOnFinish,
+      settings.notifyOnUpdate
+    );
   },
 
   openNotificationSettings: () => call('OpenNotificationSettings'),
@@ -137,6 +142,9 @@ window.dermaga = {
 
   takePendingTask: async () => orNull(await call<string>('TakePendingTask')),
   onOpenTask: (callback) => on<string>('dermaga:open-task', callback),
+
+  takePendingPage: async () => orNull(await call<string>('TakePendingPage')),
+  onOpenPage: (callback) => on<string>('dermaga:open-page', callback),
   onAnnouncement: (callback) =>
     on<Announcement>('dermaga:announce', (data) => data && callback(data)),
 

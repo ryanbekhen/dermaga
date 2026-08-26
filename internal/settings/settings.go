@@ -26,7 +26,12 @@ type Settings struct {
 	// because they are opposite kinds of news -- one is something going wrong
 	// while nobody watched, the other is something they asked for being done
 	// -- and somebody can reasonably want one without the other.
-	NotifyOnFinish   bool `json:"notifyOnFinish"`
+	NotifyOnFinish bool `json:"notifyOnFinish"`
+	// And when Apple's CLI wants attention: a newer release, or one older than
+	// Dermaga is written for. Raised once per version rather than once per
+	// launch, so this is a preference about whether to be told at all, not
+	// about how often.
+	NotifyOnUpdate   bool `json:"notifyOnUpdate"`
 	SidebarCollapsed bool `json:"sidebarCollapsed"`
 	// Where the container templates are fetched from. Empty means Dermaga's
 	// own, which is what almost everybody wants -- but a catalogue is a static
@@ -49,6 +54,7 @@ func Defaults() Settings {
 		ConfirmDestructive: true,
 		NotifyOnExit:       true,
 		NotifyOnFinish:     true,
+		NotifyOnUpdate:     true,
 		ShowBuilder:        true,
 	}
 }
