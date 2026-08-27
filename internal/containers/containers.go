@@ -383,22 +383,19 @@ func (cm *Manager) applyExposedPorts(containers []Container) {
 
 // applySettings marks each container with what Dermaga keeps about it.
 //
-// NOTE: TEMPORARY — drop the label half of this in 1.15.0.
+// A record first, and a label only where there is none. The record wins
+// wherever there is one, so nothing is ever decided by two sources at once:
+// turning a setting off writes a record saying so, which is exactly the case a
+// label alone could not express.
 //
-// `dermaga.autoboot` is how this was recorded up to 1.11.0, and containers
-// carrying one are still out there: a label cannot be removed without
-// recreating the container, so they keep it for as long as they live. Reading
-// it is what carries those containers across, and it is also what lets someone
-// mark a container from a terminal with `--label dermaga.autoboot=true`.
-//
-// The record wins wherever there is one, so nothing is ever decided by two
-// sources at once. Turning the setting off writes a record saying so, which is
-// exactly the case a label alone could not express.
-//
-// 1.15.0 is four releases out. By then a container old enough to have been
-// created before this changed has almost certainly been recreated at least
-// once -- and anybody it has not been is one tick away from being recorded
-// properly.
+// The label half started as a migration -- `dermaga.autoboot` is how this was
+// recorded up to 1.11.0 -- and was marked to be dropped once no container that
+// old was still around. That has come and gone, and the reading stays, because
+// the migration was never the only thing it did: it is also how somebody marks
+// a container from a terminal, with `--label dermaga.autoboot=true`, and has it
+// mean something the next time Dermaga looks. `dermaga.project` below is read
+// for exactly that reason and was never temporary. Keeping one and dropping the
+// other would leave two labels that look alike behaving differently.
 func (cm *Manager) applySettings(containers []Container) {
 	cm.settingsMu.RLock()
 	defer cm.settingsMu.RUnlock()
@@ -425,10 +422,13 @@ func (cm *Manager) applySettings(containers []Container) {
 	}
 }
 
-// wantsAutoBootLabel reads the label Dermaga used to write, tolerating the
-// shapes people actually type.
+// wantsAutoBootLabel reads the label a container can be marked with, tolerating
+// the shapes people actually type.
 //
-// NOTE: TEMPORARY — goes with applySettings' label fallback in 1.15.0.
+// Read, never written -- Dermaga records this in its own store, because a label
+// can only be set by `container run` and changing one would cost the container
+// its filesystem. What this is for is the other direction: a container made in
+// a terminal, marked there, and understood here without being opened first.
 func wantsAutoBootLabel(labels map[string]string) bool {
 	switch labels["dermaga.autoboot"] {
 	case "true", "yes", "1":

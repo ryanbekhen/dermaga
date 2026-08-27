@@ -129,10 +129,6 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	} else {
 		agent.store = opened
 
-		// NOTE: TEMPORARY — remove this call with internal/store/migrate.go in
-		// 1.15.0. See the note at the top of that file.
-		store.Migrate(opened, logger)
-
 		agent.scanner.UseStore(opened)
 		agent.templates.UseStore(opened)
 		agent.containers.UseStore(opened)

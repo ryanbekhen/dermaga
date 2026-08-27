@@ -379,11 +379,12 @@ func writeBlob(t *testing.T, root, content string) string {
 	return "sha256:" + name
 }
 
-// The record wins, and the label still carries the containers made before there
-// was one.
+// The record wins, and a label is read where there is no record.
 //
-// NOTE: TEMPORARY — the label half of this goes in 1.15.0, with the fallback
-// it tests.
+// Both halves matter and they are not the same half. The record winning is what
+// lets a setting be turned off -- a label alone can only say yes. The label
+// being read at all is what lets a container marked in a terminal mean
+// something here.
 func TestWhatDermagaKeepsBeatsTheLabelItUsedToWrite(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
