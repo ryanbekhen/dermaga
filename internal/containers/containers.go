@@ -568,7 +568,7 @@ func toContainer(r cliContainer) Container {
 		// A volume mount reports its human-readable volume name inside the
 		// union; prefer that over the on-disk image path.
 		for kind, detail := range m.Type {
-			mount.Type = kind
+			mount.Type = mountKind(kind)
 			if detail.Name != "" {
 				mount.Source = detail.Name
 			}
@@ -881,4 +881,26 @@ const BuilderImage = "ghcr.io/apple/container-builder-shim/"
 // convention and is not Dermaga's to rely on.
 func IsBuilder(c Container) bool {
 	return strings.HasPrefix(c.Image, BuilderImage)
+}
+
+// mountKind translates what the runtime calls a mount into what everything
+// above here calls it.
+//
+// A bind mount is written as `type=bind` and reported back as `virtiofs`, which
+// is the transport rather than the kind -- true, and no use to anybody reading
+// a form. Untranslated it reached the edit form as a value the type selector
+// had never heard of, so the selector fell back to its first option: `volume`.
+// And a selector's displayed value is what a save sends, so recreating a
+// container with a bind mount would have asked for a *volume* named
+// `/Users/somebody/project`. A path where a name goes, on somebody's source
+// directory.
+//
+// Only one way round. The runtime accepts `bind` on the way in -- checked --
+// so nothing has to translate back.
+func mountKind(kind string) string {
+	if kind == "virtiofs" {
+		return "bind"
+	}
+
+	return kind
 }

@@ -472,3 +472,28 @@ func TestARecordDoesNotOutliveTheContainerItIsAbout(t *testing.T) {
 		t.Error("the record was left on disk")
 	}
 }
+
+// The runtime writes a bind mount as `type=bind` and reports it back as
+// `virtiofs`. Untranslated, the edit form's type selector did not recognise it
+// and fell back to `volume` -- and what a selector shows is what a save sends,
+// so recreating turned a bind onto somebody's source directory into a request
+// for a volume named after a path.
+func TestMountKindReadsVirtiofsAsBind(t *testing.T) {
+	if got := mountKind("virtiofs"); got != "bind" {
+		t.Fatalf("want bind, got %q", got)
+	}
+}
+
+func TestMountKindLeavesAVolumeAlone(t *testing.T) {
+	if got := mountKind("volume"); got != "volume" {
+		t.Fatalf("want volume, got %q", got)
+	}
+}
+
+// A kind nobody has seen yet is passed through rather than guessed at: wrong
+// and visible beats wrong and disguised as something familiar.
+func TestMountKindPassesThroughWhatItDoesNotKnow(t *testing.T) {
+	if got := mountKind("tmpfs"); got != "tmpfs" {
+		t.Fatalf("want tmpfs, got %q", got)
+	}
+}
