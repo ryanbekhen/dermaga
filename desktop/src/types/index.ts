@@ -32,6 +32,8 @@ export interface DNSConfig {
 
 export interface Container {
   id: string;
+  /** The project it is filed under. Absent means default: filed under none. */
+  project?: string;
   networks?: string[];
   interfaces?: NetworkInterface[];
   hostname?: string;
@@ -158,6 +160,11 @@ export interface Machine {
 }
 
 export interface Image {
+  /**
+   * The project it was built in, absent for none. An image that was pulled
+   * belongs to no project and stays in default, borrowed by whoever needs it.
+   */
+  project?: string;
   reference: string;
   name: string;
   tag: string;
@@ -201,6 +208,8 @@ export interface ImageDetail {
 
 export interface Volume {
   name: string;
+  /** The project it is filed under, absent for none. */
+  project?: string;
   driver: string;
   format: string;
   source: string;
@@ -266,6 +275,11 @@ export interface Template {
 export interface ContainerSpec {
   name: string;
   image: string;
+  /**
+   * The project to file it under. Not a `container run` flag: the runtime has
+   * no idea projects exist, so the agent writes it to Dermaga's own record.
+   */
+  project?: string;
   entrypoint?: string;
   command?: string[];
   env?: string[];
@@ -310,6 +324,13 @@ export interface Settings {
   notifyOnFinish: boolean;
   notifyOnUpdate: boolean;
   sidebarCollapsed: boolean;
+  /**
+   * The project the window is looking through. Empty is "All".
+   *
+   * Deliberately a window preference and not something the agent acts on: a
+   * project decides what is shown, so where it is remembered is here.
+   */
+  activeProject?: string;
   /** Where templates are fetched from. Empty means Dermaga's own catalogue. */
   templatesUrl?: string;
   showBuilder: boolean;
@@ -385,6 +406,8 @@ export interface BuildSpec {
   target?: string;
   platform?: string;
   buildArgs?: string[];
+  /** The project to file the built image under. Not a build flag. */
+  project?: string;
   noCache?: boolean;
 }
 
@@ -726,6 +749,8 @@ export interface VolumeState {
 export interface VolumeSpec {
   name: string;
   size?: string;
+  /** The project to make it in. Named for it, and filed under it. */
+  project?: string;
   labels?: Record<string, string>;
 }
 
@@ -808,3 +833,15 @@ export type Route =
   | { name: 'help' }
   | { name: 'changelog' }
   | { name: 'licences' };
+
+/**
+ * A group containers can be filed under.
+ *
+ * `default` is not one of these. It is the absence of a project -- a container
+ * with no membership recorded is in default -- so it is never in this list, and
+ * the switcher puts it at the head of the list itself.
+ */
+export interface Project {
+  name: string;
+  createdAt?: string;
+}

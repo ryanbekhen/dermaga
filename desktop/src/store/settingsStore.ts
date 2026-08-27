@@ -2,11 +2,13 @@ import { create } from 'zustand';
 import { persist, type PersistStorage } from 'zustand/middleware';
 import { api } from '../services/api';
 import type { Settings } from '../types';
+import { DEFAULT_PROJECT } from '../utils/projects';
 
 export type Theme = Settings['theme'];
 
 interface SettingsState extends Settings {
   setTheme: (theme: Theme) => void;
+  setActiveProject: (activeProject: string) => void;
   setShowStopped: (show: boolean) => void;
   setLogTail: (lines: number) => void;
   setConfirmDestructive: (confirm: boolean) => void;
@@ -58,6 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
       sidebarCollapsed: false,
       templatesUrl: '',
       showBuilder: true,
+      activeProject: DEFAULT_PROJECT,
       setTheme: (theme) => set({ theme }),
       setShowStopped: (showStopped) => set({ showStopped }),
       setLogTail: (logTail) => set({ logTail }),
@@ -67,6 +70,7 @@ export const useSettingsStore = create<SettingsState>()(
       setNotifyOnUpdate: (notifyOnUpdate) => set({ notifyOnUpdate }),
       setTemplatesUrl: (templatesUrl) => set({ templatesUrl }),
       setShowBuilder: (showBuilder) => set({ showBuilder }),
+      setActiveProject: (activeProject) => set({ activeProject }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
     }),
     {
@@ -84,6 +88,7 @@ export const useSettingsStore = create<SettingsState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         templatesUrl: state.templatesUrl,
         showBuilder: state.showBuilder,
+        activeProject: state.activeProject,
       }),
     }
   )

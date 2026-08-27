@@ -16,6 +16,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/images"
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
+	"github.com/ryanbekhen/dermaga/internal/projects"
 	"github.com/ryanbekhen/dermaga/internal/system"
 	"github.com/ryanbekhen/dermaga/internal/toolchain"
 	"github.com/ryanbekhen/dermaga/internal/tunnels"
@@ -41,6 +42,12 @@ type Snapshot struct {
 	// Every tunnel and the routes on it, so the window sees a route go dark the
 	// moment its container does rather than when somebody reopens the page.
 	Tunnels []tunnels.Tunnel `json:"tunnels"`
+	// The projects somebody has made. Not a call to the CLI -- the runtime has
+	// no idea these exist -- but it belongs in the snapshot all the same: the
+	// window filters by project, so the list of them and the things being
+	// filtered have to arrive as one consistent view or the sidebar offers a
+	// project the containers have not heard of yet.
+	Projects []projects.Project `json:"projects"`
 	// Whether the services behind the CLI are up, and whether the CLI is even
 	// installed. Carried here rather than asked for by each window on a timer
 	// of its own: it is a fact about the machine, it changes without anybody
@@ -77,6 +84,8 @@ type Sources struct {
 	// a container behind a route that stops, is news the same way any other
 	// change is.
 	Tunnels func() []tunnels.Tunnel
+	// The projects. A read of a map, not a call.
+	Projects func() []projects.Project
 	// Whether the CLI is on this Mac at all. Not a call; a flag to read.
 	CLIAvailable func() bool
 	// The CLI's own version and update status, cached by the toolchain
@@ -200,6 +209,10 @@ func (w *Watcher) refresh(ctx context.Context) {
 
 	if w.sources.Tunnels != nil {
 		snapshot.Tunnels = w.sources.Tunnels()
+	}
+
+	if w.sources.Projects != nil {
+		snapshot.Projects = w.sources.Projects()
 	}
 
 	if w.sources.System != nil {

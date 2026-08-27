@@ -7,10 +7,12 @@ import { DockerfileEditor } from '../components/DockerfileEditor';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
 import { runTask } from '../services/tasks';
+import { useActiveProject } from '../hooks/useActiveProject';
 import { askBeforeLeaving, useUIStore } from '../store/uiStore';
 import { useValidation } from '../hooks/useValidation';
 import { absolutePath, envText, imageReference, required } from '../utils/validate';
 import { list } from '../utils/format';
+import { DEFAULT_PROJECT, EVERYTHING, prefixed, SEPARATOR } from '../utils/projects';
 import type { BuildDrop, BuildSpec, Route } from '../types';
 
 /**
@@ -130,6 +132,15 @@ function BuildForm({
   // than with autoFocus because the field is only sometimes the first thing:
   // opened from the button, the folder is what somebody has come to type.
   const openTask = useUIStore((s) => s.openTask);
+  const activeProject = useActiveProject();
+  // Shown only while it will actually be applied: a tag naming a registry or an
+  // account is where the image will be pushed, and a prefix in front of that
+  // would not be a longer name, it would be the wrong one. The agent makes the
+  // same exception.
+  const tagPrefix =
+    activeProject !== EVERYTHING && activeProject !== DEFAULT_PROJECT && !tag.includes('/')
+      ? `${activeProject}${SEPARATOR}`
+      : '';
 
   const tagField = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -170,13 +181,17 @@ function BuildForm({
     context: from === 'paste' && !pasteNeedsContext ? '' : context,
     dockerfileText: from === 'paste' ? text : undefined,
     dockerfile: from === 'paste' ? undefined : dockerfile.trim() || undefined,
-    tag: tag.trim() || undefined,
+    tag: (tagPrefix ? prefixed(activeProject, tag) : tag.trim()) || undefined,
     target: target.trim() || undefined,
     buildArgs: buildArgs
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean),
     noCache,
+    // An image built while a project is open is that project's. Nothing to
+    // choose here: the switcher already answered it, and a second place to
+    // answer the same question is a second place for the two to disagree.
+    project: activeProject || undefined,
   });
 
   const ask = () => setConfirming(buildSpec());
@@ -275,16 +290,29 @@ function BuildForm({
           <Fieldset legend="Image" columns={2}>
             <Field
               label="Tag"
-              hint="Names the image this builds. Required — Run needs something to start."
+              hint={
+                tagPrefix
+                  ? `Named for ${activeProject}. A tag with a registry or account in it is left as typed.`
+                  : 'Names the image this builds. Required — Run needs something to start.'
+              }
               {...form.field('tag')}
             >
-              <input
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                placeholder="my-api:dev"
-                autoFocus
-                className="input"
-              />
+              <div className="input flex items-center gap-0 p-0 focus-within:border-brand-600">
+                {tagPrefix && (
+                  <span className="shrink-0 select-none py-1.5 pl-2.5 font-mono text-code text-ink-500 dark:text-ink-400">
+                    {tagPrefix}
+                  </span>
+                )}
+                <input
+                  value={tag}
+                  onChange={(e) => setTag(e.target.value)}
+                  placeholder="my-api:dev"
+                  autoFocus
+                  className={`min-w-0 flex-1 bg-transparent py-1.5 pr-2.5 outline-hidden ${
+                    tagPrefix ? 'pl-0' : 'pl-2.5'
+                  }`}
+                />
+              </div>
             </Field>
 
             <Field

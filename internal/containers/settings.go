@@ -3,6 +3,7 @@ package containers
 import (
 	"encoding/json"
 
+	"github.com/ryanbekhen/dermaga/internal/projects"
 	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
@@ -26,6 +27,10 @@ import (
 type Settings struct {
 	// AutoBoot starts the container when Dermaga starts.
 	AutoBoot bool `json:"autoBoot"`
+	// Project is the group this container is filed under. Empty means default,
+	// which means no project -- so every container that existed before projects
+	// did is already filed correctly, with nothing written and nothing moved.
+	Project string `json:"project,omitempty"`
 }
 
 // Settings reads what is kept about one container.
@@ -138,4 +143,70 @@ func (cm *Manager) loadSettings(db *store.Store) map[string]Settings {
 	}
 
 	return loaded
+}
+
+// SetProject files a container under a project. Empty, or "default", files it
+// under none.
+//
+// A write to Dermaga's own record, like the tick above it: the container is not
+// stopped, not recreated, and not told. That is the point of keeping this here
+// rather than in a label -- moving a container between projects is a change of
+// mind about how it is filed, and a change of mind should never cost a
+// filesystem.
+func (cm *Manager) SetProject(name, project string) error {
+	if projects.IsDefault(project) {
+		project = ""
+	}
+
+	settings := cm.Settings(name)
+	settings.Project = project
+
+	return cm.SetSettings(name, settings)
+}
+
+// ClearProject sends everything filed under a project back to default. What a
+// deleted project leaves behind is containers, exactly where they were.
+func (cm *Manager) ClearProject(project string) error {
+	return cm.rewriteProject(project, "")
+}
+
+func (cm *Manager) rewriteProject(from, to string) error {
+	if from == "" {
+		return nil
+	}
+
+	cm.settingsMu.Lock()
+	var touched []string
+	for name, settings := range cm.settings {
+		if settings.Project != from {
+			continue
+		}
+
+		settings.Project = to
+		cm.settings[name] = settings
+		touched = append(touched, name)
+	}
+	db := cm.db
+	cm.settingsMu.Unlock()
+
+	if len(touched) == 0 {
+		return nil
+	}
+
+	cm.changed.Changed()
+
+	if db == nil {
+		return nil
+	}
+
+	cm.settingsMu.RLock()
+	defer cm.settingsMu.RUnlock()
+
+	for _, name := range touched {
+		if err := db.Put(store.BucketContainers, name, cm.settings[name]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

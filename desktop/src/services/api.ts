@@ -16,6 +16,7 @@ import type {
   MachineSpec,
   Network,
   NetworkSpec,
+  Project,
   Settings,
   SystemStatus,
   TaskRecord,
@@ -336,6 +337,36 @@ export const api = {
    */
   async setAutoBoot(id: string, autoBoot: boolean): Promise<void> {
     await invoke('containers.setAutoBoot', { id, autoBoot });
+  },
+
+  /**
+   * Files a container under a project, or under none when given "default".
+   *
+   * The twin of setAutoBoot, and cheap for the same reason: it writes a record
+   * Dermaga keeps rather than a label the runtime keeps, so the container is
+   * not stopped and not recreated.
+   */
+  async setProject(id: string, project: string): Promise<void> {
+    await invoke('containers.setProject', { id, project });
+  },
+
+  /** Files a volume under a project; a write to Dermaga's own record. */
+  async setVolumeProject(name: string, project: string): Promise<void> {
+    await invoke('volumes.setProject', { name, project });
+  },
+
+  /** Moves an image between projects; a write to Dermaga's own record. */
+  async setImageProject(reference: string, project: string): Promise<void> {
+    await invoke('images.setProject', { reference, project });
+  },
+
+  async createProject(name: string): Promise<Project> {
+    return invoke('projects.create', { name });
+  },
+
+  /** Forgets a project. What was filed under it goes back to default. */
+  async removeProject(name: string): Promise<void> {
+    await invoke('projects.remove', { name });
   },
 
   /** Applies a new spec by recreating the container; named volumes survive. */

@@ -8,6 +8,7 @@ import type {
   Image,
   Machine,
   Network,
+  Project,
   SystemStatus,
   ToolchainStatus,
   Tunnel,
@@ -23,6 +24,7 @@ interface Snapshot {
   volumes: Volume[];
   networks: Network[];
   tunnels: Tunnel[];
+  projects?: Project[];
   system?: SystemStatus;
   cliAvailable?: boolean;
   disk?: DiskUsage;
@@ -41,6 +43,7 @@ export function useEventStream() {
   const setVolumes = useResourceStore((s) => s.setVolumes);
   const setNetworks = useResourceStore((s) => s.setNetworks);
   const setTunnels = useResourceStore((s) => s.setTunnels);
+  const setProjects = useResourceStore((s) => s.setProjects);
   const setHost = useResourceStore((s) => s.setHost);
   const setError = useResourceStore((s) => s.setError);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
@@ -63,6 +66,7 @@ export function useEventStream() {
       setVolumes(snapshot.volumes ?? []);
       setNetworks(snapshot.networks ?? []);
       setTunnels(snapshot.tunnels ?? []);
+      setProjects(snapshot.projects ?? []);
       // An agent old enough not to carry the host in its snapshot is still a
       // working agent -- someone with the background service installed can be
       // running a copy of Dermaga from before this field existed. Left to the
@@ -108,6 +112,7 @@ export function useEventStream() {
     setVolumes,
     setNetworks,
     setTunnels,
+    setProjects,
     setHost,
     setError,
   ]);

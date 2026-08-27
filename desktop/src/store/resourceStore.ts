@@ -5,6 +5,7 @@ import type {
   Image,
   Machine,
   Network,
+  Project,
   SystemStatus,
   ToolchainStatus,
   Tunnel,
@@ -19,6 +20,11 @@ interface ResourceState {
   networks: Network[];
   /** Every tunnel and the routes on it, pushed with everything else. */
   tunnels: Tunnel[];
+  /**
+   * The projects somebody has made, pushed with everything else so the
+   * switcher and the list it filters can never disagree about what exists.
+   */
+  projects: Project[];
   /** False only until the first snapshot lands. */
   hasLoaded: boolean;
   /**
@@ -44,6 +50,7 @@ interface ResourceState {
   setVolumes: (volumes: Volume[]) => void;
   setNetworks: (networks: Network[]) => void;
   setTunnels: (tunnels: Tunnel[]) => void;
+  setProjects: (projects: Project[]) => void;
   setHost: (host: {
     system: SystemStatus | null;
     cliAvailable: boolean;
@@ -60,6 +67,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
   volumes: [],
   networks: [],
   tunnels: [],
+  projects: [],
   hasLoaded: false,
   system: null,
   cliAvailable: true,
@@ -72,6 +80,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
   setVolumes: (volumes) => set({ volumes }),
   setNetworks: (networks) => set({ networks }),
   setTunnels: (tunnels) => set({ tunnels }),
+  setProjects: (projects) => set({ projects }),
   // Disk is only recomputed by the agent when something changed, so a snapshot
   // that carries none is saying "unchanged", not "gone". The CLI's status is
   // the same shape of thing: checked on its own schedule, and absent until the

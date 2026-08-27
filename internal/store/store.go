@@ -46,6 +46,17 @@ const (
 	// name, plus the Cloudflare account they were made in. The API token is not
 	// here: it is in the login keychain.
 	BucketTunnels = "tunnels"
+	// What Dermaga keeps about a volume, keyed by name: the project it is filed
+	// under. A volume cannot be renamed on this runtime, so the key is as
+	// permanent as the volume itself.
+	BucketVolumes = "volumes"
+	// What Dermaga keeps about an image, keyed by its reference. Today that is
+	// the project it was built in, which the runtime has nowhere for.
+	BucketImages = "images"
+	// The projects somebody has made, keyed by name. Only the groups
+	// themselves: which container is in which is a field on the container's own
+	// record, because that is a fact about the container.
+	BucketProjects = "projects"
 	// News the user has already been told once, keyed by the subject. A
 	// notification about a new CLI is worth raising the day it appears and
 	// tiresome every time the app opens after that, and the app is opened a
@@ -96,7 +107,7 @@ func Open() (*Store, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		buckets := []string{
 			BucketScans, BucketTemplates, BucketPending, BucketPorts, BucketContainers,
-			BucketTasks, BucketTunnels, BucketNotices,
+			BucketTasks, BucketTunnels, BucketNotices, BucketProjects, BucketImages, BucketVolumes,
 		}
 
 		for _, name := range buckets {

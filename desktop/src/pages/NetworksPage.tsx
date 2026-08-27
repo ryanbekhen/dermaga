@@ -13,6 +13,8 @@ import {
 import { Checkbox, Field, Modal } from '../components/form';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { useActiveProject } from '../hooks/useActiveProject';
+import { networkInProject } from '../utils/projects';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
@@ -33,6 +35,8 @@ const COLUMNS: Column[] = [
 
 export function NetworksPage() {
   const networks = useResourceStore((s) => s.networks);
+  const containers = useResourceStore((s) => s.containers);
+  const activeProject = useActiveProject();
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const openNetwork = useUIStore((s) => s.openNetwork);
   const pushToast = useToastStore((s) => s.push);
@@ -44,7 +48,12 @@ export function NetworksPage() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const visible = networks;
+  // Not read off what is attached: a network made for a project says so in a
+  // label, and the built-in one belongs to no project at all. See
+  // networkInProject.
+  const visible = networks.filter((network) =>
+    networkInProject(network, containers, activeProject)
+  );
 
   const remove = async (network: Network) => {
     setDeleting(null);

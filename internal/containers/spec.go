@@ -10,11 +10,18 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/cli"
 )
 
-// ContainerSpec is everything Dermaga can set when creating a container. It
-// maps one-to-one onto `container run` flags.
+// ContainerSpec is everything Dermaga can set when creating a container.
+//
+// Nearly all of it maps one-to-one onto `container run` flags. Project is the
+// exception, and is marked as one where it is declared.
 type ContainerSpec struct {
-	Name       string            `json:"name"`
-	Image      string            `json:"image"`
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	// The project to file it under. Not an argument to `container run` and
+	// never will be -- the runtime has no idea projects exist. It rides on the
+	// spec because the form that fills the spec is where the answer is known,
+	// and the agent writes it to Dermaga's own record instead.
+	Project    string            `json:"project,omitempty"`
 	Entrypoint string            `json:"entrypoint,omitempty"`
 	Command    []string          `json:"command,omitempty"`
 	Env        []string          `json:"env,omitempty"`

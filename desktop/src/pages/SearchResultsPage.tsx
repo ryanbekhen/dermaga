@@ -31,6 +31,8 @@ import { loadImage } from '../components/ImageArchive';
 import { api } from '../services/api';
 import { openExternal } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
+import { useActiveProject } from '../hooks/useActiveProject';
+import { builtInProject, filedInProject, inProject, networkInProject } from '../utils/projects';
 import { useToastStore } from '../store/toastStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUIStore } from '../store/uiStore';
@@ -168,6 +170,7 @@ export function SearchResultsPage() {
   const addRoute = useUIStore((s) => s.addRoute);
   const newMachine = useUIStore((s) => s.newMachine);
   const containers = useResourceStore((s) => s.containers);
+  const activeProject = useActiveProject();
   const images = useResourceStore((s) => s.images);
   const volumes = useResourceStore((s) => s.volumes);
   const networks = useResourceStore((s) => s.networks);
@@ -396,8 +399,13 @@ export function SearchResultsPage() {
 
   // Hidden means hidden: the builder is left out of the lists when it is
   // switched off, and a search that hands it back has not hidden it.
-  const containerHits = withoutHidden(containers, showBuilder).filter((c) =>
-    matches(c.name, c.image, c.id)
+  //
+  // The project in force is the same kind of hiding, and gets the same answer.
+  // A search that reaches across every project would be the one place in the
+  // window where the point of view does not hold -- and the place it matters
+  // most, because a name found here is a name about to be acted on.
+  const containerHits = withoutHidden(containers, showBuilder).filter(
+    (c) => inProject(c, activeProject) && matches(c.name, c.image, c.id)
   );
   if (containerHits.length > 0) {
     groups.push({
@@ -422,7 +430,9 @@ export function SearchResultsPage() {
     });
   }
 
-  const imageHits = images.filter((i) => matches(i.reference, i.name, i.tag, i.digest));
+  const imageHits = images.filter(
+    (i) => builtInProject([i.project], activeProject) && matches(i.reference, i.name, i.tag, i.digest)
+  );
   if (imageHits.length > 0) {
     groups.push({
       label: 'Images',
@@ -452,7 +462,9 @@ export function SearchResultsPage() {
     });
   }
 
-  const volumeHits = volumes.filter((v) => matches(v.name, v.source, v.driver));
+  const volumeHits = volumes.filter(
+    (v) => filedInProject(v.project, activeProject) && matches(v.name, v.source, v.driver)
+  );
   if (volumeHits.length > 0) {
     groups.push({
       label: 'Volumes',
@@ -478,7 +490,9 @@ export function SearchResultsPage() {
     });
   }
 
-  const networkHits = networks.filter((n) => matches(n.name, n.ipv4Subnet, n.mode));
+  const networkHits = networks.filter(
+    (n) => networkInProject(n, containers, activeProject) && matches(n.name, n.ipv4Subnet, n.mode)
+  );
   if (networkHits.length > 0) {
     groups.push({
       label: 'Networks',

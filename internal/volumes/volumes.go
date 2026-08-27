@@ -24,6 +24,9 @@ type Manager struct {
 	// The copy of the image a helper container is built from, kept outside the
 	// runtime so a volume can still be opened with nothing to pull from.
 	helper *helperStore
+	// What Dermaga keeps about a volume: which project it is filed under. See
+	// projects.go.
+	settings settingsStore
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
@@ -40,7 +43,9 @@ func (m *Manager) KeepHelper(ctx context.Context) {
 }
 
 type Volume struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// The project it is filed under, empty for none.
+	Project     string `json:"project,omitempty"`
 	Driver      string `json:"driver"`
 	Format      string `json:"format"`
 	Source      string `json:"source"`
@@ -74,7 +79,14 @@ func (m *Manager) List(ctx context.Context) ([]Volume, error) {
 		return nil, err
 	}
 
-	return parse(output)
+	list, err := parse(output)
+	if err != nil {
+		return nil, err
+	}
+
+	m.applySettings(list)
+
+	return list, nil
 }
 
 func parse(output []byte) ([]Volume, error) {

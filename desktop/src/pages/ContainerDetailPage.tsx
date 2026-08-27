@@ -39,6 +39,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import type { TabDefinition } from '../components/Tabs';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ProjectMenu } from '../components/ProjectMenu';
 import { Facts, Flags, Row, Section } from '../components/DetailRow';
 import { api } from '../services/api';
 import { recreateContainer } from '../services/tasks';
@@ -311,6 +312,8 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
               )
             }
           />
+
+          <ProjectMenu container={container} disabled={busy} />
 
           {/* A write, not a recreate. This was a label until 1.11.0, and a
               label can only be set by `container run` -- so the only way to

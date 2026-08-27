@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, Network as NetworkIcon } from 'lucide-react';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { useActiveProject } from '../hooks/useActiveProject';
 import { askBeforeLeaving } from '../store/uiStore';
 import { useToastStore } from '../store/toastStore';
 import type { PendingEdit, ContainerSpec } from '../types';
@@ -10,6 +11,7 @@ import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Autocomplete } from './Autocomplete';
 import { formatBytes, formatMemory, list } from '../utils/format';
+import { DEFAULT_PROJECT, EVERYTHING, prefixed, SEPARATOR } from '../utils/projects';
 import { useValidation } from '../hooks/useValidation';
 import {
   absolutePath,
@@ -107,6 +109,17 @@ export function ContainerForm({
   onClose,
 }: ContainerFormProps) {
   const images = useResourceStore((s) => s.images);
+  // What a new container is filed under: the project the window is looking
+  // through. Nothing to choose here -- the switcher is what chooses it, and a
+  // second place to answer the same question is a second place to get it wrong.
+  const activeProject = useActiveProject();
+  // What the name will be filed as, shown in front of the field. Absent while
+  // editing: a rename on this runtime is a recreate, so an existing container
+  // keeps the name it was born with whatever project it is filed under now.
+  const namePrefix =
+    !editing && activeProject !== EVERYTHING && activeProject !== DEFAULT_PROJECT
+      ? `${activeProject}${SEPARATOR}`
+      : '';
   const volumes = useResourceStore((s) => s.volumes);
   const networks = useResourceStore((s) => s.networks);
   const pushToast = useToastStore((s) => s.push);
@@ -199,7 +212,9 @@ export function ContainerForm({
   // that rebuilt it from the fields alone would drop every one of them.
   const buildSpec = (): ContainerSpec => ({
     ...base,
-    name: name.trim(),
+    // Prefixed on the way in. The agent does it too -- it is the seam every
+    // way in passes through -- and both agreeing beats either guessing.
+    name: editing ? name.trim() : prefixed(activeProject, name),
     image: image.trim(),
     entrypoint: entrypoint.trim() || undefined,
     // Quoting is deliberately not supported here: anything that needs a shell
@@ -217,6 +232,11 @@ export function ContainerForm({
     init,
     removeOnExit,
     labels: base.labels,
+    // Only on the way in. Editing recreates the container under the same name,
+    // and membership is keyed by that name, so it survives on its own -- while
+    // sending the project in force here would quietly re-file a container
+    // somebody opened from a different point of view.
+    project: editing ? undefined : activeProject || undefined,
   });
 
   // A row nobody filled in is not a mistake -- it is a row that was added and
@@ -402,14 +422,35 @@ export function ContainerForm({
           that name it and the two that bound it -- kept together at the top so
           the common case is a card and a button. */}
       <Fieldset legend="Container" columns={2}>
-        <Field label="Name" hint="Left blank, the CLI generates one." {...form.field('name')}>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="my-service"
-            autoFocus
-            className="input"
-          />
+        <Field
+          label="Name"
+          hint={
+            namePrefix
+              ? `Named for ${activeProject}, and reached at that name from other containers.`
+              : 'Left blank, the CLI generates one.'
+          }
+          {...form.field('name')}
+        >
+          {/* The prefix is shown, never applied quietly. It is not decoration:
+              a container's name is its address on every network it joins, so
+              somebody typing `db` here needs to see that the thing they are
+              about to write into a connection string is `bengkel-db`. */}
+          <div className="input flex items-center gap-0 p-0 focus-within:border-brand-600">
+            {namePrefix && (
+              <span className="shrink-0 select-none py-1.5 pl-2.5 font-mono text-code text-ink-500 dark:text-ink-400">
+                {namePrefix}
+              </span>
+            )}
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="my-service"
+              autoFocus
+              className={`min-w-0 flex-1 bg-transparent py-1.5 pr-2.5 outline-hidden ${
+                namePrefix ? 'pl-0' : 'pl-2.5'
+              }`}
+            />
+          </div>
         </Field>
 
         <Field

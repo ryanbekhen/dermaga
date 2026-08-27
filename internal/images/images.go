@@ -22,6 +22,9 @@ type Manager struct {
 	// Where the half of an image's config the CLI does not report is read
 	// from. See internal/oci.
 	blobs *oci.Store
+	// What Dermaga keeps about an image: which project it was built in. See
+	// projects.go.
+	settings settingsStore
 }
 
 func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier) *Manager {
@@ -30,10 +33,13 @@ func NewManager(runner *cli.Runner, logger *slog.Logger, changed notify.Notifier
 
 // Image is the flattened view of `container image list --format json`.
 type Image struct {
-	Reference string   `json:"reference"`
-	Name      string   `json:"name"`
-	Tag       string   `json:"tag"`
-	Digest    string   `json:"digest"`
+	Reference string `json:"reference"`
+	Name      string `json:"name"`
+	Tag       string `json:"tag"`
+	Digest    string `json:"digest"`
+	// The project this image was built in, empty for none. An image that was
+	// pulled has no project and stays in default.
+	Project   string   `json:"project,omitempty"`
 	CreatedAt string   `json:"createdAt"`
 	Platforms []string `json:"platforms"`
 	// Sum of every variant's size, which is what the registry transferred.
@@ -146,7 +152,14 @@ func (m *Manager) List(ctx context.Context) ([]Image, error) {
 		return nil, err
 	}
 
-	return parse(output)
+	images, err := parse(output)
+	if err != nil {
+		return nil, err
+	}
+
+	m.applySettings(images)
+
+	return images, nil
 }
 
 func parse(output []byte) ([]Image, error) {
@@ -296,6 +309,10 @@ type BuildOptions struct {
 	Platform       string   `json:"platform"`
 	BuildArgs      []string `json:"buildArgs"`
 	NoCache        bool     `json:"noCache"`
+	// The project to file the built image under. Not a flag -- the runtime has
+	// no idea projects exist -- it is written to Dermaga's own record for the
+	// tag being built. See projects.go.
+	Project string `json:"project,omitempty"`
 }
 
 // BuildCommand builds an image from a Dockerfile. Output is streamed, so the

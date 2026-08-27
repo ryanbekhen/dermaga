@@ -16,6 +16,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/notify"
 	"github.com/ryanbekhen/dermaga/internal/oci"
+	"github.com/ryanbekhen/dermaga/internal/projects"
 	"github.com/ryanbekhen/dermaga/internal/store"
 )
 
@@ -64,6 +65,10 @@ type Container struct {
 	// Whether Dermaga starts this container when it starts. Kept by Dermaga
 	// rather than by the runtime, which has nowhere for it -- see settings.go.
 	AutoBoot bool `json:"autoBoot"`
+	// The project this container is filed under, empty for none. Kept the same
+	// way and for the same reason: the runtime has nowhere for it, and filing
+	// something differently should not cost it its filesystem.
+	Project string `json:"project,omitempty"`
 	// The ports the image says it listens on, e.g. "80/tcp". Read from the
 	// image rather than the container: the runtime reports what a container
 	// publishes to the host and nothing about what it listens on, so a
@@ -389,10 +394,17 @@ func (cm *Manager) applySettings(containers []Container) {
 
 		if recorded {
 			containers[i].AutoBoot = settings.AutoBoot
+			containers[i].Project = settings.Project
 			continue
 		}
 
 		containers[i].AutoBoot = wantsAutoBootLabel(containers[i].Labels)
+		// Nothing was recorded, so the label is the only thing that could say.
+		// Unlike autoboot this is not a migration -- Dermaga has never written
+		// this label -- it is for a container somebody made in a terminal and
+		// wants to see in the right place without opening it here first. Read
+		// only: filing one anywhere else writes a record, and the record wins.
+		containers[i].Project = projectLabel(containers[i].Labels)
 	}
 }
 
@@ -881,4 +893,15 @@ const BuilderImage = "ghcr.io/apple/container-builder-shim/"
 // convention and is not Dermaga's to rely on.
 func IsBuilder(c Container) bool {
 	return strings.HasPrefix(c.Image, BuilderImage)
+}
+
+// projectLabel reads the project a container was labelled with when it was
+// made. Never written by Dermaga; only honoured.
+func projectLabel(labels map[string]string) string {
+	name, err := projects.Validate(labels["dermaga.project"])
+	if err != nil {
+		return ""
+	}
+
+	return name
 }

@@ -33,6 +33,10 @@ type Settings struct {
 	// about how often.
 	NotifyOnUpdate   bool `json:"notifyOnUpdate"`
 	SidebarCollapsed bool `json:"sidebarCollapsed"`
+	// The project the window was last looking through, remembered so it opens
+	// where it was left. Empty means "All". Nothing on the agent's side reads
+	// it -- a project is a point of view, and this is where the window's was.
+	ActiveProject string `json:"activeProject,omitempty"`
 	// Where the container templates are fetched from. Empty means Dermaga's
 	// own, which is what almost everybody wants -- but a catalogue is a static
 	// file, so anyone can publish their own and point at it. A team with its

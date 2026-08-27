@@ -17,9 +17,12 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { useActiveProject } from '../hooks/useActiveProject';
 import { useUnreadChangelog } from '../store/changelogStore';
 import { useUIStore } from '../store/uiStore';
+import { ProjectSwitcher } from './ProjectSwitcher';
 import { withoutHidden } from '../utils/builder';
+import { builtInProject, filedInProject, inProject, networkInProject } from '../utils/projects';
 import type { Route } from '../types';
 
 interface NavEntry {
@@ -92,6 +95,16 @@ const NAV: NavGroup[] = [
         label: 'Tunnels',
         beta: true,
       },
+    ],
+  },
+  {
+    title: 'Host',
+    entries: [
+      // Down here rather than in Workspace, and it moved when projects
+      // arrived. A machine is not somebody's work, it is what the work runs
+      // inside: shared infrastructure, one of the few things a project has
+      // nothing to say about. Workspace is what the switcher above scopes, and
+      // this was the entry in it that a project never touches.
       {
         target: { name: 'machines' },
         owns: ['machines', 'machine', 'machine-new'],
@@ -99,11 +112,6 @@ const NAV: NavGroup[] = [
         label: 'Machines',
         count: 'machines',
       },
-    ],
-  },
-  {
-    title: 'Host',
-    entries: [
       { target: { name: 'system' }, owns: ['system'], icon: Cpu, label: 'System' },
       { target: { name: 'settings' }, owns: ['settings'], icon: Settings, label: 'Settings' },
     ],
@@ -195,6 +203,22 @@ export function Sidebar({ version }: { version?: string }) {
         collapsed ? 'w-17' : 'w-58'
       }`}
     >
+      {/* The point of view, above everything it decides. Not a nav entry: it
+          does not open a page, it changes what every page below it lists. */}
+      {!collapsed && (
+        <div className="flex items-center justify-between gap-2 px-2.5 pb-2 pt-1">
+          <span className="label-mono text-chrome-faint">Project</span>
+          {/* The same word Tunnels wears, in the same slot, for the same
+              reason: it answers "what is this" before somebody opens it. Every
+              page below is filtered by this control, so if it is still finding
+              its feet that is worth saying at the top rather than discovering
+              from a list that is shorter than expected. */}
+          <Meta active={false}>beta</Meta>
+        </div>
+      )}
+      <ProjectSwitcher collapsed={collapsed} />
+      <div className="h-1" />
+
       {NAV.map((group, index) => (
         <Fragment key={group.title ?? index}>
           {group.title && !collapsed && (
@@ -305,6 +329,7 @@ function useToolchainMark(): { tone: 'update' | 'unsupported'; label: string } |
 
 function useCounts() {
   const showBuilder = useSettingsStore((s) => s.showBuilder);
+  const active = useActiveProject();
   const containers = useResourceStore((s) => s.containers);
   const images = useResourceStore((s) => s.images);
   const volumes = useResourceStore((s) => s.volumes);
@@ -312,10 +337,15 @@ function useCounts() {
   const machines = useResourceStore((s) => s.machines);
 
   return {
-    containers: withoutHidden(containers, showBuilder).length,
-    images: images.length,
-    volumes: volumes.length,
-    networks: networks.length,
+    // Counted through the project in force, because a count that totals what
+    // the page will not show is a number nobody can reconcile with what is on
+    // screen. Volumes and networks are counted the same way, read off what is
+    // using them.
+    containers: withoutHidden(containers, showBuilder).filter((c) => inProject(c, active))
+      .length,
+    images: images.filter((i) => builtInProject([i.project], active)).length,
+    volumes: volumes.filter((v) => filedInProject(v.project, active)).length,
+    networks: networks.filter((n) => networkInProject(n, containers, active)).length,
     machines: machines.length,
   };
 }

@@ -13,6 +13,8 @@ import {
 import { Field, Modal } from '../components/form';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { useActiveProject } from '../hooks/useActiveProject';
+import { DEFAULT_PROJECT, filedInProject } from '../utils/projects';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
@@ -36,6 +38,7 @@ const COLUMNS: Column[] = [
 
 export function VolumesPage() {
   const volumes = useResourceStore((s) => s.volumes);
+  const activeProject = useActiveProject();
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const openVolume = useUIStore((s) => s.openVolume);
   const pushToast = useToastStore((s) => s.push);
@@ -47,7 +50,10 @@ export function VolumesPage() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const visible = volumes;
+  // Filed, not guessed at. A volume outlives every container that ever mounted
+  // it, so where it belongs is a record rather than a reading of what happens
+  // to be running.
+  const visible = volumes.filter((volume) => filedInProject(volume.project, activeProject));
 
   const remove = async (volume: Volume) => {
     setDeleting(null);
@@ -186,6 +192,7 @@ export function VolumesPage() {
 }
 
 function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
+  const activeProject = useActiveProject();
   const [name, setName] = useState('');
   const [size, setSize] = useState('');
   const [saving, setSaving] = useState(false);
@@ -199,7 +206,13 @@ function CreateVolumeDialog({ onClose }: { onClose: () => void }) {
   const submit = async () => {
     setSaving(true);
     try {
-      await api.createVolume({ name: name.trim(), size: size.trim() || undefined });
+      await api.createVolume({
+        name: name.trim(),
+        size: size.trim() || undefined,
+        // Named for the project it is made in, like a container born there.
+        // The agent applies it too; both agreeing beats either guessing.
+        project: activeProject === DEFAULT_PROJECT ? undefined : activeProject,
+      });
       pushToast(`Created ${name.trim()}`);
       onClose();
     } catch (err) {

@@ -68,6 +68,16 @@ func (a *Agent) autoBoot(ctx context.Context) {
 	// the same name to arrive and inherit it.
 	a.containers.PruneSettings(list)
 
+	// The same sweep for images, whose records are keyed by tag and outlive a
+	// tag deleted from a terminal in exactly the same way.
+	if all, err := a.images.List(ctx); err == nil {
+		a.images.PruneSettings(all)
+	}
+
+	if all, err := a.volumes.List(ctx); err == nil {
+		a.volumes.PruneSettings(all)
+	}
+
 	wanted := toBoot(list)
 	if len(wanted) == 0 {
 		return

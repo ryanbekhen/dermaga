@@ -20,6 +20,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/images"
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
+	"github.com/ryanbekhen/dermaga/internal/projects"
 	"github.com/ryanbekhen/dermaga/internal/registry"
 	"github.com/ryanbekhen/dermaga/internal/rpc"
 	"github.com/ryanbekhen/dermaga/internal/scanner"
@@ -70,6 +71,7 @@ type Agent struct {
 	templates  *templates.Manager
 	toolchain  *toolchain.Manager
 	tunnels    *tunnels.Manager
+	projects   *projects.Manager
 	settings   *settings.Store
 	watcher    *watcher.Watcher
 	exits      *exitWatch
@@ -116,6 +118,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.tunnels = tunnels.NewManager(runner, logger, changed)
 	agent.scanner = scanner.NewManager(runner, logger)
 	agent.templates = templates.NewManager(logger)
+	agent.projects = projects.NewManager(logger, changed)
 	agent.tasks = tasks.New(logger)
 
 	// Opened before anything reads from it, and forgiving if it cannot be:
@@ -133,6 +136,9 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		agent.scanner.UseStore(opened)
 		agent.templates.UseStore(opened)
 		agent.containers.UseStore(opened)
+		agent.projects.Open(opened)
+		agent.images.UseStore(opened)
+		agent.volumes.UseStore(opened)
 		agent.tasks.UseStore(opened)
 		agent.tunnels.UseStore(opened)
 
@@ -193,6 +199,7 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		// costs a map lookup rather than a call to the CLI -- and a route going
 		// dark reaches the window the same way every other change does.
 		Tunnels:      agent.tunnels.Tunnels,
+		Projects:     agent.projects.List,
 		CLIAvailable: agent.runner.Available,
 		// Checked on its own schedule rather than in a pass: asking Homebrew
 		// costs seconds, and the answer changes about as often as Apple cuts a
@@ -1070,6 +1077,142 @@ func (a *Agent) registerContainers() {
 		return map[string]any{"id": args.ID, "autoBoot": args.AutoBoot}, nil
 	})
 
+	// Filing a container under a project. A write to Dermaga's own record --
+	// see containers.setAutoBoot above, which this is the twin of. The
+	// container is not stopped, recreated or even told.
+	a.server.Register("containers.setProject", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			ID      string `json:"id"`
+			Project string `json:"project"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		// An unknown name would file a container somewhere that is not on the
+		// list, which reads as the container having vanished.
+		if !a.projects.Exists(args.Project) {
+			return nil, rpc.Fail(fmt.Sprintf("there is no project called %q", args.Project))
+		}
+
+		if err := a.containers.SetProject(args.ID, args.Project); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"id": args.ID, "project": args.Project}, nil
+	})
+
+	// Moving an image between projects, for the one built somewhere else or
+	// pulled and then adopted.
+	a.server.Register("images.setProject", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Reference string `json:"reference"`
+			Project   string `json:"project"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if !a.projects.Exists(args.Project) {
+			return nil, rpc.Fail(fmt.Sprintf("there is no project called %q", args.Project))
+		}
+
+		if err := a.images.SetProject(args.Reference, args.Project); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"reference": args.Reference, "project": args.Project}, nil
+	})
+
+	// Filing a volume. The twin of containers.setProject: a record, instant,
+	// and the volume is not touched.
+	a.server.Register("volumes.setProject", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Name    string `json:"name"`
+			Project string `json:"project"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if !a.projects.Exists(args.Project) {
+			return nil, rpc.Fail(fmt.Sprintf("there is no project called %q", args.Project))
+		}
+
+		if err := a.volumes.SetProject(args.Name, args.Project); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"name": args.Name, "project": args.Project}, nil
+	})
+
+	a.server.Register("projects.list", func(_ context.Context, _ json.RawMessage) (any, error) {
+		return a.projects.List(), nil
+	})
+
+	a.server.Register("projects.create", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Name string `json:"name"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		project, err := a.projects.Create(args.Name)
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		// The network comes with it, so that everything afterwards -- a
+		// container made here, a container moved here -- finds it already
+		// there rather than having to make it on the way past.
+		//
+		// A failure is not a reason to refuse the project. Filtering is most of
+		// what a project does and works without it, and the next container
+		// through will try again.
+		if _, err := a.ensureProjectNetwork(ctx, project.Name); err != nil {
+			a.logger.Warn("Made the project, but not its network",
+				"project", project.Name, "error", err)
+		}
+
+		return project, nil
+	})
+
+	// Deleting a project deletes a way of looking at containers, never the
+	// containers. What was filed under it goes back to default, and that
+	// happens first: if the memberships cannot be moved the project stays, so
+	// nothing is ever left filed under a name that no longer exists.
+	a.server.Register("projects.remove", func(ctx context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Name string `json:"name"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := a.containers.ClearProject(args.Name); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		if err := a.images.ClearProject(args.Name); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		if err := a.volumes.ClearProject(args.Name); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		if err := a.projects.Delete(args.Name); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		// And the network it was given, if it is empty. Anything still on it
+		// keeps it -- see dropProjectNetwork.
+		a.dropProjectNetwork(ctx, args.Name)
+
+		return map[string]any{"name": args.Name}, nil
+	})
+
 	a.server.Register("containers.remove", func(ctx context.Context, params json.RawMessage) (any, error) {
 		args, err := decodeParams[struct {
 			ID    string `json:"id"`
@@ -1188,7 +1331,38 @@ func (a *Agent) registerContainers() {
 		// Naming a volume in the form is how most volumes come into being --
 		// the CLI creates whatever is not there yet -- so this is where a
 		// volume has to be made fit to write to, not the New volume dialog.
-		a.prepareVolumes(ctx, spec)
+		a.prepareVolumes(ctx, &spec)
+
+		// Filed before it exists, because creating streams its progress and
+		// this call returns long before the container does. A record for a
+		// container that never arrives is not a new problem -- a create that
+		// fails leaves one, and the sweep at startup drops rows with nothing
+		// behind them, the same as it does for a container deleted from a
+		// terminal.
+		if spec.Project != "" && a.projects.Exists(spec.Project) {
+			// Stamped here rather than only in the form, because the form is
+			// not the only way in: a template, an image run from its own page,
+			// and a call made by hand all arrive at this one place.
+			spec.Name = projects.Prefixed(spec.Project, spec.Name)
+
+			if err := a.containers.SetProject(spec.Name, spec.Project); err != nil {
+				a.logger.Warn("Could not file the new container under its project",
+					"name", spec.Name, "project", spec.Project, "error", err)
+			}
+
+			// And attached to the project's own network, which is what lets two
+			// services born in the same project find each other by name. A
+			// failure here is not a reason to refuse the container: it still
+			// belongs to the project, and a grouping that cannot be drawn is a
+			// worse outcome than one that cannot resolve a hostname.
+			network, err := a.ensureProjectNetwork(ctx, spec.Project)
+			if err != nil {
+				a.logger.Warn("Could not make the project's network; creating without it",
+					"project", spec.Project, "error", err)
+			} else {
+				spec.Networks = withProjectNetwork(spec.Networks, network)
+			}
+		}
 
 		id, err := a.streams.runNamed(ctx, "create", named(spec.Name, spec.Image),
 			func(ctx context.Context) (*exec.Cmd, error) {
@@ -1325,6 +1499,27 @@ func (a *Agent) registerImages() {
 		if err != nil {
 			return nil, err
 		}
+		// An image built while a project is open is that project's, and this is
+		// where that is written down -- before the build, keyed by the tag, the
+		// same way a new container is filed before it exists. A build that fails
+		// leaves a record for a tag that is not there, which the sweep at
+		// startup drops along with everything else nothing is behind.
+		if opts.Project != "" && opts.Tag != "" && a.projects.Exists(opts.Project) {
+			// A tag with a slash in it names a registry or an account --
+			// `ghcr.io/ryanbekhen/app` -- and is the address the image will be
+			// pushed to. That is somebody's decision about where the image
+			// lives, and a prefix in front of it would not be a longer name, it
+			// would be the wrong one.
+			if !strings.Contains(opts.Tag, "/") {
+				opts.Tag = projects.Prefixed(opts.Project, opts.Tag)
+			}
+
+			if err := a.images.SetProject(opts.Tag, opts.Project); err != nil {
+				a.logger.Warn("Could not file the built image under its project",
+					"tag", opts.Tag, "project", opts.Project, "error", err)
+			}
+		}
+
 		// A Dockerfile typed into the app is written out first, and the
 		// directory holding it becomes the context -- unless a real one was
 		// named, which is what a paste with COPY in it needs.
@@ -1422,7 +1617,7 @@ func (a *Agent) registerImages() {
 //
 // Only the create path calls this. The helper containers Dermaga runs on its
 // own account already know what they are mounting.
-func (a *Agent) prepareVolumes(ctx context.Context, spec containers.ContainerSpec) {
+func (a *Agent) prepareVolumes(ctx context.Context, spec *containers.ContainerSpec) {
 	known := map[string]bool{}
 	if list, err := a.volumes.List(ctx); err == nil {
 		for _, volume := range list {
@@ -1430,9 +1625,28 @@ func (a *Agent) prepareVolumes(ctx context.Context, spec containers.ContainerSpe
 		}
 	}
 
-	for _, mount := range spec.Mounts {
+	filing := spec.Project != "" && a.projects.Exists(spec.Project)
+
+	for i := range spec.Mounts {
+		mount := &spec.Mounts[i]
 		if mount.Type != "volume" || mount.Source == "" {
 			continue
+		}
+
+		// A volume about to be made for a container born in a project takes
+		// that project's name, and is filed under it. Only one about to be
+		// made: a volume that already exists is mounted exactly as it was
+		// named, whoever made it and whenever. Renaming that on the way past
+		// would not move any data -- it would quietly hand the container an
+		// empty volume with a similar name, which is the worst shape a bug
+		// about somebody's data can take.
+		if filing && !known[mount.Source] {
+			mount.Source = projects.Prefixed(spec.Project, mount.Source)
+
+			if err := a.volumes.SetProject(mount.Source, spec.Project); err != nil {
+				a.logger.Warn("Could not file a new volume under its project",
+					"volume", mount.Source, "project", spec.Project, "error", err)
+			}
 		}
 
 		// Creating it here rather than leaving it to `container run` means it
@@ -1549,13 +1763,29 @@ func (a *Agent) registerVolumes() {
 	})
 
 	a.server.Register("volumes.create", func(ctx context.Context, params json.RawMessage) (any, error) {
-		spec, err := decodeParams[volumes.Spec](params)
+		spec, err := decodeParams[struct {
+			volumes.Spec
+			Project string `json:"project,omitempty"`
+		}](params)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := a.volumes.Create(ctx, spec); err != nil {
+		// Named for the project it is made in, and filed under it -- the same
+		// as a container or a built image.
+		if spec.Project != "" && a.projects.Exists(spec.Project) {
+			spec.Name = projects.Prefixed(spec.Project, spec.Name)
+		}
+
+		if err := a.volumes.Create(ctx, spec.Spec); err != nil {
 			return nil, rpc.Fail(err.Error())
+		}
+
+		if spec.Project != "" && a.projects.Exists(spec.Project) {
+			if err := a.volumes.SetProject(spec.Name, spec.Project); err != nil {
+				a.logger.Warn("Could not file the new volume under its project",
+					"volume", spec.Name, "project", spec.Project, "error", err)
+			}
 		}
 
 		return map[string]any{"name": spec.Name}, nil

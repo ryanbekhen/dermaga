@@ -16,6 +16,8 @@ import { loadImage } from '../components/ImageArchive';
 import { runTask } from '../services/tasks';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { useActiveProject } from '../hooks/useActiveProject';
+import { builtInProject, unprefixed } from '../utils/projects';
 import { SeverityStrip } from '../components/PackagesPane';
 import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
@@ -34,6 +36,8 @@ import { formatBytes, formatDuration, shortDigest } from '../utils/format';
  */
 interface ImageGroup {
   digest: string;
+  /** The project each tag on this digest is filed under, undefined for none. */
+  projects: (string | undefined)[];
   names: string[];
   tags: { tag: string; reference: string }[];
   platforms: string[];
@@ -52,6 +56,7 @@ function groupByDigest(images: Image[]): ImageGroup[] {
     if (!group) {
       groups.set(key, {
         digest: image.digest,
+        projects: [image.project],
         names: [image.name],
         tags: [{ tag: image.tag, reference: image.reference }],
         platforms: [...image.platforms],
@@ -61,6 +66,7 @@ function groupByDigest(images: Image[]): ImageGroup[] {
       continue;
     }
 
+    if (!group.projects.includes(image.project)) group.projects.push(image.project);
     if (!group.names.includes(image.name)) group.names.push(image.name);
     group.tags.push({ tag: image.tag, reference: image.reference });
     for (const platform of image.platforms) {
@@ -92,6 +98,7 @@ const COLUMNS: Column[] = [
 
 export function ImagesPage() {
   const images = useResourceStore((s) => s.images);
+  const activeProject = useActiveProject();
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const containers = useResourceStore((s) => s.containers);
   const openImage = useUIStore((s) => s.openImage);
@@ -110,7 +117,12 @@ export function ImagesPage() {
 
   const groups = useMemo(() => groupByDigest(images), [images]);
 
-  const visible = groups;
+  // Filed where it was built, so the point of view decides which builds are on
+  // the page and pulled images stay in default. See builtInProject.
+  const visible = useMemo(
+    () => groups.filter((group) => builtInProject(group.projects, activeProject)),
+    [groups, activeProject]
+  );
 
   /**
    * Queues a scan for each selected image.
@@ -234,7 +246,9 @@ export function ImagesPage() {
 
           return [
             <NameCell key="name">
-              <span className="truncate text-sm font-semibold">{group.names.join(', ')}</span>
+              <span className="truncate text-sm font-semibold">
+                {group.names.map((name) => unprefixed(activeProject, name)).join(', ')}
+              </span>
               <InUse by={users} />
             </NameCell>,
             // A tag is as long as whoever built the image decided -- a commit

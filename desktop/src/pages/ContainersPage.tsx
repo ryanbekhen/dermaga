@@ -22,7 +22,9 @@ import { recreateContainer } from '../services/tasks';
 import { StatusText } from '../components/StatusBadge';
 import { useResourceStore } from '../store/resourceStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { useActiveProject } from '../hooks/useActiveProject';
 import { isBuilder } from '../utils/builder';
+import { EVERYTHING, inProject, unprefixed } from '../utils/projects';
 import { PageHeader } from '../components/PageHeader';
 import { FilterToggle } from '../components/FilterToggle';
 import { useUIStore } from '../store/uiStore';
@@ -80,13 +82,22 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const closePortsMenu = useCallback(() => setPortsMenu(null), []);
   const pushToast = useToastStore((s) => s.push);
   const confirmDestructive = useSettingsStore((s) => s.confirmDestructive);
+  const activeProject = useActiveProject();
 
   // What this page is about. Apple's builder is infrastructure rather than
   // somebody's container, so switching it off takes it out of the counting as
   // well as out of the list -- a summary that keeps totalling something it is
   // not showing has numbers nobody can reconcile with what is on screen. It is
   // 2 CPUs and a gigabyte and a half; the difference is not subtle.
-  const mine = showBuilder ? containers : containers.filter((c) => !isBuilder(c));
+  const everything = showBuilder ? containers : containers.filter((c) => !isBuilder(c));
+
+  // Narrowed to the project in force. Everything below counts against this
+  // rather than against the whole list -- a summary that totals what is not on
+  // screen is a summary nobody can reconcile with what they are looking at,
+  // which is the same reason the builder filter takes rows out of the counting
+  // as well as out of the list.
+  const mine = everything.filter((c) => inProject(c, activeProject));
+
 
   const visible = mine.filter((container) => showStopped || container.status === 'running');
 
@@ -100,9 +111,11 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
 
   const emptyMessage = runtimeMissing
     ? 'The Apple Container CLI was not found on this Mac.'
-    : mine.length === 0
-      ? 'No containers yet. Start from a template, or use “New container”.'
-      : 'No running containers. Turn on the “Stopped” filter to see the rest.';
+    : mine.length === 0 && activeProject !== EVERYTHING
+      ? `Nothing in ${activeProject} yet. Anything you create while it is open is filed under it.`
+      : mine.length === 0
+        ? 'No containers yet. Start from a template, or use “New container”.'
+        : 'No running containers. Turn on the “Stopped” filter to see the rest.';
 
   const chosen = mine.filter((c) => selected.has(c.id));
   const startable = chosen.filter((c) => c.status !== 'running');
@@ -281,7 +294,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             // again, a hundred pixels to the left.
             <NameCell key="name">
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-body font-medium">{container.name}</span>
+                {/* Short inside the project that named it. The prefix is what
+                    lets two projects hold a `dashboard`; repeating it on every
+                    row of the one project that already says it is noise. */}
+                <span className="truncate text-body font-medium">
+                  {unprefixed(activeProject, container.name)}
+                </span>
                 <Endpoint
                   container={container}
                   expanded={portsMenu?.id === container.id}
