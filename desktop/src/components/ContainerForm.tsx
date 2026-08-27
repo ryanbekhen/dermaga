@@ -780,10 +780,18 @@ export function ContainerForm({
         ))}
       </Fieldset>
 
-      {/* Rarely set, and when it is set it is `nofile` on something that opens
-          a great many sockets. Its own group rather than a field beside CPUs:
-          it repeats, and a repeating row wedged between two single fields
-          makes the group above it look like it repeats too. */}
+      {/* Rarely set, and not for the reason usually given. `nofile` is what
+          people reach for, and this runtime already hands a container 1,048,576
+          open files -- so the classic "too many open files" does not happen
+          here by default and the flag has nothing to fix. What is actually
+          tight is `nproc`, which a container gets 1503 of and a process pool
+          can reach, and locked memory at 8 MB, which a Redis told to mlock will
+          want. It earns its place downwards too: holding a container to the
+          limits it will meet in production, on a laptop that has none of them.
+
+          Its own group rather than a field beside CPUs: it repeats, and a
+          repeating row wedged between two single fields makes the group above
+          it look like it repeats too. */}
       <Fieldset
         legend="Limits"
         hint="Resource limits, as type=soft or type=soft:hard."
@@ -798,7 +806,7 @@ export function ContainerForm({
               onChange={(e) =>
                 setUlimits(ulimits.map((l, i) => (i === index ? e.target.value : l)))
               }
-              placeholder="nofile=4096:8192"
+              placeholder="nproc=2048"
               aria-label={`Limit ${index + 1}`}
               className="input min-w-36 flex-1 font-mono text-code"
             />
