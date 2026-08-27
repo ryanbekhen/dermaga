@@ -52,6 +52,14 @@ interface Bridge {
   stageUpdate?: (assetUrl: string, version: string) => Promise<StagedUpdate>;
   installUpdate?: (dmgPath: string) => Promise<void>;
   onUpdateProgress?: (callback: (value: { received: number; total: number }) => void) => () => void;
+  panelHeight?: (height: number) => void;
+  closePanel?: () => void;
+  openWindow?: (container?: string) => void;
+  pendingUpdate?: () => Promise<StagedUpdate>;
+  onUpdateStaged?: (callback: (staged: StagedUpdate) => void) => () => void;
+  startContainer?: (id: string, name: string) => Promise<void>;
+  stopContainer?: (id: string, name: string) => Promise<void>;
+  quitApp?: () => void;
 }
 
 /** What the main process found on GitHub, if anything newer is there. */
@@ -163,6 +171,54 @@ export function openNotificationSettings(): Promise<void> {
  */
 export function openExternal(url: string): Promise<void> {
   return bridge().openExternal?.(url) ?? Promise.resolve();
+}
+
+/**
+ * Tells the menu bar panel's window how tall its page turned out to be.
+ *
+ * The panel is a list of whatever is running, so its height is a different
+ * number every time it opens — and only this side can measure it. The Go side
+ * clamps what it is told; this only reports.
+ */
+export function panelHeight(height: number): void {
+  bridge().panelHeight?.(height);
+}
+
+/** Takes the panel down from the inside: Escape, or a row that leads away. */
+export function closePanel(): void {
+  bridge().closePanel?.();
+}
+
+/**
+ * Raises the app's window, on a container when one is named.
+ *
+ * The panel's way out of itself. The window may not exist yet — it is closed
+ * far more often than it is open — so this is an ask rather than a navigation,
+ * and the other side decides what to make.
+ */
+export function openWindow(container?: string): void {
+  bridge().openWindow?.(container);
+}
+
+/**
+ * Starts or stops a container from the menu bar panel.
+ *
+ * Not `api.startContainer`, which would go straight to the agent from here: the
+ * panel can be dismissed while the command is still running, and a failure
+ * nobody is left to read is a failure nobody hears about. This hands it to the
+ * process, which raises the same notification the menu bar's own rows do.
+ */
+export function startContainer(id: string, name: string): Promise<void> {
+  return bridge().startContainer?.(id, name) ?? Promise.resolve();
+}
+
+export function stopContainer(id: string, name: string): Promise<void> {
+  return bridge().stopContainer?.(id, name) ?? Promise.resolve();
+}
+
+/** Closes the app, from the one surface that is on screen when nothing else is. */
+export function quitApp(): void {
+  bridge().quitApp?.();
 }
 
 /**
@@ -348,6 +404,22 @@ export const updates = {
 
   onProgress: (callback: (value: { received: number; total: number }) => void): (() => void) =>
     bridge().onUpdateProgress?.(callback) ?? (() => {}),
+
+  /**
+   * What has already been downloaded and is waiting, if anything.
+   *
+   * The window does the looking and the fetching; this is for the menu bar
+   * panel, which is a different page in a different window and should not run a
+   * second copy of any of that. It asks what is in hand and offers it.
+   */
+  pending: (): Promise<StagedUpdate | null> =>
+    bridge()
+      .pendingUpdate?.()
+      .then((staged) => (staged?.version ? staged : null)) ?? Promise.resolve(null),
+
+  /** And hears about one that lands while it is open. */
+  onStaged: (callback: (staged: StagedUpdate) => void): (() => void) =>
+    bridge().onUpdateStaged?.(callback) ?? (() => {}),
 };
 
 export interface StreamHandlers {

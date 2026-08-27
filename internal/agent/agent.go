@@ -946,6 +946,16 @@ func (a *Agent) registerSettings() {
 			return nil, rpc.Fail(err.Error())
 		}
 
+		// Everybody connected is told, including whoever asked.
+		//
+		// There is one settings file and more than one thing reading it: the
+		// window, and the menu bar item that can now switch project on its
+		// own. Without this the two drift apart the moment either writes --
+		// the menu bar changes the project and the window goes on filtering by
+		// the one it was opened with, which is a filter lying about what it is
+		// hiding.
+		a.server.Notify("settings.changed", map[string]any{"settings": saved, "path": a.settings.Path()})
+
 		return map[string]any{"settings": saved, "path": a.settings.Path()}, nil
 	})
 }

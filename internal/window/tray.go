@@ -1,7 +1,6 @@
 package window
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -10,39 +9,34 @@ import (
 // It reports the state of the container services rather than of Dermaga
 // itself, which is the useful question here: Apple's CLI runs containers
 // through launchd, so they outlive this app -- "is Dermaga running?" answers
-// nothing, while "are the services up, and what is running?" answers the thing
-// people open the window for.
+// nothing, while "are the services up?" answers the thing people open the
+// window for.
+//
+// The item itself holds almost nothing now. Clicking it opens the panel, and
+// the panel is a page of the app: what is running, what is filed under which
+// project, what to start and what to stop. This side is left with the two
+// things a menu bar item says on its own -- a filled mark or a hollow one, and
+// a line of hover text.
+//
+// There was a menu here until the panel could do everything it did. Keeping
+// both meant two lists of the same containers, in two languages, with two sets
+// of rules about which of them to show -- and the second list is the one
+// nobody would remember to change.
 
-// Beyond this the menu becomes a list to scroll rather than a glance.
-const maxTrayContainers = 8
-
-// TrayContainer is the little a menu row needs to know about a container.
-type TrayContainer struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// TrayState is what the menu is drawn from. Running is a tri-state: nil means
+// TrayState is what the item is drawn from. Running is a tri-state: nil means
 // nobody has managed to ask yet, which reads differently from "stopped".
 type TrayState struct {
-	Running    *bool
-	Containers []TrayContainer
-	// Set once an update has been downloaded and found installable. The menu
-	// bar is the only part of Dermaga always on screen, so it is where an app
-	// with no window open can say a newer one is ready.
-	UpdateVersion string
+	Running *bool
 }
 
-// TrayHandlers are supplied by the caller; the menu names actions rather than
-// binding them, so the decisions below can be read without a menu bar to hang
-// them on.
+// TrayHandlers are supplied by the caller; the item names what a click is for
+// rather than binding it.
 type TrayHandlers struct {
-	OnOpen          func()
-	OnOpenContainer func(id string)
-	OnStartServices func()
-	OnOpenProject   func()
-	OnRestartUpdate func()
-	OnQuit          func()
+	// The click, on either button: the panel opens, or closes if it is up.
+	OnToggle func()
+	// Asked before that, because a click that closes the panel is not a click
+	// that should bring the app forward.
+	PanelShown func() bool
 }
 
 // Tray keeps the menu bar item current. The item itself is drawn in
@@ -55,7 +49,7 @@ type Tray struct {
 	state TrayState
 }
 
-// trayLabel is the one line someone reads when they look up at the clock.
+// trayLabel is what the item says when the pointer rests on it.
 func trayLabel(state TrayState) string {
 	if state.Running == nil {
 		return "Checking the services…"
@@ -64,12 +58,7 @@ func trayLabel(state TrayState) string {
 		return "Services stopped"
 	}
 
-	count := len(state.Containers)
-	if count == 1 {
-		return "Services running · 1 container"
-	}
-
-	return fmt.Sprintf("Services running · %d containers", count)
+	return "Services running"
 }
 
 // NewTray brings up the menu bar item.
@@ -80,107 +69,19 @@ func NewTray(handlers TrayHandlers) *Tray {
 	return tray
 }
 
-// Update is called with whatever has just changed; the rest of the state is
-// kept.
-func (t *Tray) Update(running *bool, containers []TrayContainer) {
+// Update is called with whatever has just changed; nil is "unchanged".
+func (t *Tray) Update(running *bool) {
+	t.updateState(running)
+	t.apply()
+}
+
+// updateState is the half of Update that does not need a menu bar, which is
+// the half worth testing.
+func (t *Tray) updateState(running *bool) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if running != nil {
 		t.state.Running = running
 	}
-	if containers != nil {
-		t.state.Containers = containers
-	}
-	t.mu.Unlock()
-
-	t.apply()
-}
-
-// Offer puts a downloaded update in the menu.
-func (t *Tray) Offer(version string) {
-	t.mu.Lock()
-	t.state.UpdateVersion = version
-	t.mu.Unlock()
-
-	t.apply()
-}
-
-// trayItem is one row of the menu, as data.
-//
-// The decisions are kept apart from the menu that carries them -- what counts
-// as worth showing, when Start services is offered, how many rows before the
-// list is cut -- so they can be read and tested without a menu bar to hang
-// them on.
-type trayItem struct {
-	Label     string
-	Action    string
-	ID        string
-	Disabled  bool
-	Separator bool
-}
-
-// trayMenuItems is the menu, as rows. Actions are named rather than bound
-// here; the caller supplies the handlers.
-func trayMenuItems(state TrayState) []trayItem {
-	items := []trayItem{
-		{Label: trayLabel(state), Disabled: true},
-		{Separator: true},
-	}
-
-	if state.Running != nil && *state.Running {
-		switch {
-		case len(state.Containers) == 0:
-			items = append(items, trayItem{Label: "No containers running", Disabled: true})
-
-		default:
-			shown := state.Containers
-			if len(shown) > maxTrayContainers {
-				shown = shown[:maxTrayContainers]
-			}
-
-			for _, container := range shown {
-				items = append(items, trayItem{
-					Label:  container.Name,
-					Action: "open-container",
-					ID:     container.ID,
-				})
-			}
-
-			if hidden := len(state.Containers) - maxTrayContainers; hidden > 0 {
-				items = append(items, trayItem{
-					Label:    fmt.Sprintf("…and %d more", hidden),
-					Disabled: true,
-				})
-			}
-		}
-
-		items = append(items, trayItem{Separator: true})
-	}
-
-	items = append(items, trayItem{Label: "Open Dermaga", Action: "open"})
-
-	// Only the way out of a stopped runtime is offered. Stopping the services
-	// takes every container with it, which is not a thing to put one click
-	// away from the clock.
-	if state.Running != nil && !*state.Running {
-		items = append(items, trayItem{Label: "Start services", Action: "start-services"})
-	}
-
-	// Above the rest, because it is the only row here that expires: a version
-	// already downloaded, needing nothing but the app to close and open again.
-	if state.UpdateVersion != "" {
-		items = append(items, trayItem{
-			Label:  fmt.Sprintf("Restart to update to %s", state.UpdateVersion),
-			Action: "restart-update",
-		})
-	}
-
-	// Where the app came from, one click from the clock. Dermaga is somebody's
-	// weekend rather than a product, and the menu bar is the one part of it
-	// that is always on screen -- so this is where it says so.
-	items = append(items, trayItem{Label: "View on GitHub", Action: "project"})
-
-	return append(items,
-		trayItem{Separator: true},
-		trayItem{Label: "Quit Dermaga", Action: "quit"},
-	)
 }

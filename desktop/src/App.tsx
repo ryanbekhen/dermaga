@@ -23,7 +23,7 @@ import {
 
 import { subscribeToScanner } from './store/scannerStore';
 import { openTaskLog, restoreTasks, watchAnnouncements } from './services/tasks';
-import { useSettingsStore } from './store/settingsStore';
+import { subscribeToSettings, useSettingsStore } from './store/settingsStore';
 import { useEventStream } from './hooks/useEventStream';
 import { useFileDrop } from './hooks/useFileDrop';
 import { useTheme } from './hooks/useTheme';
@@ -66,6 +66,10 @@ export function App() {
 
   // The scanner reports itself; this only opens the ear for it.
   useEffect(() => subscribeToScanner(), []);
+
+  // And the preferences file, which the menu bar writes to as well: switching
+  // project from up there has to reach the window that is already open.
+  useEffect(() => subscribeToSettings(), []);
 
   // What earlier runs built, and what those builds printed. Kept by the agent,
   // because the window is the one thing here that does not survive being shut.

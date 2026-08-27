@@ -33,10 +33,17 @@ type Settings struct {
 	// about how often.
 	NotifyOnUpdate   bool `json:"notifyOnUpdate"`
 	SidebarCollapsed bool `json:"sidebarCollapsed"`
-	// The project the window was last looking through, remembered so it opens
-	// where it was left. Empty means "All". Nothing on the agent's side reads
-	// it -- a project is a point of view, and this is where the window's was.
-	ActiveProject string `json:"activeProject,omitempty"`
+	// The project being looked through, remembered so the window opens where
+	// it was left. Empty means "All".
+	//
+	// Written even when it is empty, which the optional fields below are not,
+	// and that is the difference between a preference and a value. "All" was
+	// the one choice the file could not hold: omitted, it came back as absent,
+	// absent reads as never having chosen, and the next launch opened on
+	// default instead. It is also no longer only the window's -- the menu bar
+	// switches it too -- and a setting two things share cannot mean one thing
+	// on the way out and another on the way back.
+	ActiveProject string `json:"activeProject"`
 	// Where the container templates are fetched from. Empty means Dermaga's
 	// own, which is what almost everybody wants -- but a catalogue is a static
 	// file, so anyone can publish their own and point at it. A team with its

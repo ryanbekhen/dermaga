@@ -760,3 +760,67 @@ func (b *Bridge) InstallUpdate(dmgPath string) error {
 func (b *Bridge) Quit() {
 	b.app.wails.Quit()
 }
+
+// PanelHeight is the menu bar panel reporting how tall its content came out.
+//
+// Only the page can know: the panel holds a list of whatever is running, and
+// what that is changes through the day. Measured there and applied here rather
+// than the window being given a size and the page made to fit it -- a panel
+// with a gap under the last row, or a scrollbar over four items, is a panel
+// that looks like a window that failed to fit.
+func (b *Bridge) PanelHeight(height int) {
+	if panel := b.app.Panel(); panel != nil {
+		panel.Resize(height)
+	}
+}
+
+// OpenWindow raises the app's window, on a container when the panel names one.
+//
+// The panel is a glance; this is what a glance turns into. Hiding the panel is
+// not asked for here -- the window raising itself does that, wherever the ask
+// came from.
+func (b *Bridge) OpenWindow(container string) {
+	if container == "" {
+		b.app.ShowWindow()
+
+		return
+	}
+
+	b.app.OpenContainer(container)
+}
+
+// PendingUpdate is whatever has been downloaded and is waiting for a restart.
+//
+// The panel asks rather than watches, because it is usually made long after the
+// download happened -- and an offer that only arrives with the event that
+// caused it would be missing from every panel opened afterwards.
+func (b *Bridge) PendingUpdate() StagedUpdate {
+	return b.app.stagedUpdate()
+}
+
+// StartContainer and StopContainer are the panel's rows.
+//
+// They go the long way round -- through the process rather than straight to the
+// agent from the page -- for one reason: what happens when it fails. The panel
+// is often the only thing on screen, and it can be dismissed while a stop is
+// still running, so a failure has to be reported by the side that outlives it.
+// This is the same path the menu's own rows take, and it says the same thing in
+// the same place.
+//
+// The error comes back as well, so the row knows when it is finished. What went
+// wrong has already been said by then; the page should not say it again.
+func (b *Bridge) StartContainer(id, name string) error {
+	return b.app.trayContainer("containers.start", "start", id, name)
+}
+
+func (b *Bridge) StopContainer(id, name string) error {
+	return b.app.trayContainer("containers.stop", "stop", id, name)
+}
+
+// ClosePanel takes the panel down from the inside: Escape, or a row that has
+// just sent somebody to the window.
+func (b *Bridge) ClosePanel() {
+	if panel := b.app.Panel(); panel != nil {
+		panel.Hide()
+	}
+}

@@ -37,6 +37,7 @@ type App struct {
 	wails   *application.App
 	bridge  *Bridge
 	tray    *Tray
+	panel   *Panel
 	notify  *notifications.NotificationService
 	dock    *dock.DockService
 	version string
@@ -50,8 +51,9 @@ type App struct {
 	streams map[string]func(method string, params json.RawMessage)
 
 	// The update waiting for a restart, once one has been downloaded and found
-	// installable. The menu bar offers it too: the window is often closed, and
-	// somebody watching from the clock would otherwise never be told.
+	// installable. The menu bar panel offers it too: the window is often
+	// closed, and somebody watching from the clock would otherwise never be
+	// told.
 	staged StagedUpdate
 }
 
@@ -59,12 +61,15 @@ type App struct {
 func (a *App) stage(update StagedUpdate) {
 	a.mu.Lock()
 	a.staged = update
-	tray := a.tray
 	a.mu.Unlock()
 
-	if tray != nil && update.Restartable {
-		tray.Offer(update.Version)
-	}
+	// The panel may be open while this arrives. It reads the same record on
+	// the way up, so this is only for the times it is already there.
+	a.emit("dermaga:update-staged", map[string]any{
+		"path":        update.Path,
+		"version":     update.Version,
+		"restartable": update.Restartable,
+	})
 }
 
 // stagedUpdate is what is waiting, if anything is.
@@ -256,6 +261,14 @@ func (a *App) Agent() *Agent {
 }
 
 // MainWindow is the window, if one is open.
+// Panel is the menu bar panel, once the menu bar item has been brought up.
+func (a *App) Panel() *Panel {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	return a.panel
+}
+
 func (a *App) MainWindow() *application.WebviewWindow {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -327,10 +340,6 @@ func (a *App) onNotify(message Notification) {
 	case "toolchain.news":
 		a.notifyToolchain(message.Params)
 
-	case "events.snapshot":
-		// The menu bar reads the same snapshots the window does, so it stays
-		// right whether or not there is a window to send them to.
-		a.updateTrayFromSnapshot(message.Params)
 	}
 
 	a.emit("dermaga:notify", message)
@@ -607,64 +616,23 @@ func firstLine(message string) string {
 
 // --- the menu bar ---------------------------------------------------------
 
-func (a *App) updateTrayFromSnapshot(params json.RawMessage) {
-	if a.tray == nil {
-		return
-	}
-
-	var snapshot struct {
-		Containers []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Status string `json:"status"`
-		} `json:"containers"`
-	}
-
-	if err := json.Unmarshal(params, &snapshot); err != nil {
-		return
-	}
-
-	running := make([]TrayContainer, 0, len(snapshot.Containers))
-	for _, container := range snapshot.Containers {
-		if container.Status == "running" {
-			running = append(running, TrayContainer{ID: container.ID, Name: container.Name})
-		}
-	}
-
-	a.tray.Update(nil, running)
-}
-
 // startTray brings up the menu bar item and keeps it current.
 //
 // This side subscribes to the agent in its own right rather than relying on
 // the window having done so, because the whole point of the menu bar is to be
 // right when there is no window.
 func (a *App) startTray() {
-	a.tray = NewTray(TrayHandlers{
-		OnOpen:          a.ShowWindow,
-		OnOpenContainer: a.OpenContainer,
-		OnStartServices: func() {
-			go func() {
-				if err := a.startServices(); err != nil {
-					log.Println("[dermaga] tray could not start services:", err)
-				}
-				a.refreshTrayServices()
-			}()
-		},
-		OnOpenProject: a.OpenProjectPage,
-		OnRestartUpdate: func() {
-			staged := a.stagedUpdate()
-			if staged.Path == "" {
-				return
-			}
+	// What the menu bar item opens. Made first because the item's only handler
+	// is a click that toggles it.
+	panel := newPanel(a)
 
-			go func() {
-				if err := a.bridge.InstallUpdate(staged.Path); err != nil {
-					log.Println("[dermaga] the update could not be installed:", err)
-				}
-			}()
-		},
-		OnQuit: func() { a.wails.Quit() },
+	a.mu.Lock()
+	a.panel = panel
+	a.mu.Unlock()
+
+	a.tray = NewTray(TrayHandlers{
+		OnToggle:   panel.Toggle,
+		PanelShown: panel.Shown,
 	})
 
 	if agent := a.Agent(); agent != nil {
@@ -674,6 +642,13 @@ func (a *App) startTray() {
 	}
 
 	a.refreshTrayServices()
+
+	// The panel's window, made while nobody is waiting for it. The first click
+	// on the menu bar item is the one that would otherwise pay for it.
+	go func() {
+		time.Sleep(2 * time.Second)
+		panel.Warm()
+	}()
 
 	go func() {
 		for range time.Tick(20 * time.Second) {
@@ -690,7 +665,38 @@ func (a *App) refreshTrayServices() {
 	}
 
 	running := a.servicesRunning()
-	a.tray.Update(&running, nil)
+	a.tray.Update(&running)
+}
+
+// trayContainer starts or stops one container from the menu bar.
+//
+// Nothing here waits for the menu to be right afterwards: the agent pushes a
+// snapshot the moment the state actually changes, and the menu is drawn from
+// that. What is worth waiting for is the failure. This is pressed precisely
+// when there is no window, so an error that only reached the log would be an
+// action that appeared to do nothing at all.
+func (a *App) trayContainer(method, verb, id, name string) error {
+	agent := a.Agent()
+	if agent == nil {
+		return ErrNotRunning
+	}
+
+	_, err := agent.Invoke(method, map[string]any{"id": id})
+	if err == nil {
+		return nil
+	}
+
+	log.Println("[dermaga] tray could not "+verb, name+":", err)
+
+	a.announce(announcement{
+		ID:        "tray-" + verb + "-" + id,
+		Title:     "Could not " + verb + " " + name,
+		Body:      err.Error(),
+		Failed:    true,
+		Container: id,
+	})
+
+	return err
 }
 
 func (a *App) servicesRunning() bool {
@@ -733,20 +739,25 @@ func (a *App) servicesRunning() bool {
 //
 // "system" is what the setting says by default, and the answer to that lives
 // with macOS rather than with us.
-func paper() application.RGBA {
-	dark := false
-
+// darkMode is which way the app is about to paint itself.
+//
+// The setting first, and macOS only when the setting defers to it -- which is
+// what "system" means and is where the answer actually lives.
+func darkMode() bool {
 	switch settings.NewStore(slog.New(slog.DiscardHandler)).Load().Theme {
 	case "dark":
-		dark = true
+		return true
 	case "light":
-		dark = false
-	default:
-		out, err := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle").Output()
-		dark = err == nil && strings.Contains(string(out), "Dark")
+		return false
 	}
 
-	if dark {
+	out, err := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle").Output()
+
+	return err == nil && strings.Contains(string(out), "Dark")
+}
+
+func paper() application.RGBA {
+	if darkMode() {
 		// ink-950, which is what the page paints itself in dark mode.
 		return application.NewRGB(30, 26, 28)
 	}
@@ -972,6 +983,13 @@ func (a *App) createWindow() *application.WebviewWindow {
 // ShowWindow puts the window in front, creating it if this launch never made
 // one.
 func (a *App) ShowWindow() {
+	// Whatever asked for the window, the panel is done: it is a glance, and
+	// the window is what a glance turns into. Leaving it up would also leave
+	// it floating over the window it just opened.
+	if panel := a.Panel(); panel != nil {
+		panel.Hide()
+	}
+
 	window := a.MainWindow()
 	if window == nil {
 		window = a.createWindow()
@@ -1004,19 +1022,6 @@ func (a *App) showDockIcon() {
 
 func (a *App) hideDockIcon() {
 	go a.dock.HideAppIcon()
-}
-
-// OpenProjectPage opens the repository in the user's browser.
-//
-// The address is built from the same constant the update check reads releases
-// from, so the menu bar can never point somewhere the app no longer updates
-// from.
-func (a *App) OpenProjectPage() {
-	url := "https://github.com/" + updateRepo
-
-	if err := exec.Command("open", url).Run(); err != nil {
-		log.Println("[dermaga] could not open", url+":", err)
-	}
 }
 
 // OpenContainer opens a container, from wherever the ask came: a notification

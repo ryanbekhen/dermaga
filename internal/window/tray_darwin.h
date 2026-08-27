@@ -1,17 +1,16 @@
 #ifndef DERMAGA_TRAY_H
 #define DERMAGA_TRAY_H
 
-// One row of the menu, flattened to something C can carry.
-typedef struct {
-	const char *title;
-	int tag;
-	int enabled;
-	int separator;
-} DermagaTrayItem;
+// trayApply draws the menu bar item: its icon and its hover text. Creates the
+// item on the first call.
+void trayApply(const unsigned char *icon, int iconLength, const char *tooltip);
 
-// trayApply draws the menu bar item: its icon, its tooltip and its whole menu,
-// in one go. Creates the item on the first call.
-void trayApply(const unsigned char *icon, int iconLength, const char *tooltip,
-               DermagaTrayItem *items, int count);
+// trayPositionWindow puts a window under the menu bar item, on the screen the
+// item is on, `gap` points below the menu bar.
+void trayPositionWindow(void *nsWindow, int gap);
+
+// trayHighlight draws the menu bar item as pressed, for as long as the panel
+// hanging from it is up.
+void trayHighlight(int on);
 
 #endif

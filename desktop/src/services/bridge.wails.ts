@@ -168,6 +168,24 @@ window.dermaga = {
     ),
   resolveBuildDrop: (paths) => call('ResolveBuildDrop', paths),
 
+  panelHeight: (height) => {
+    void call('PanelHeight', height);
+  },
+  closePanel: () => {
+    void call('ClosePanel');
+  },
+  openWindow: (container) => {
+    void call('OpenWindow', container ?? '');
+  },
+  pendingUpdate: () => call('PendingUpdate'),
+  onUpdateStaged: (callback) => on('dermaga:update-staged', callback),
+
+  startContainer: (id, name) => call('StartContainer', id, name),
+  stopContainer: (id, name) => call('StopContainer', id, name),
+  quitApp: () => {
+    void call('Quit');
+  },
+
   checkUpdate: () => call('CheckUpdate'),
   stageUpdate: (assetUrl, version) => call('StageUpdate', assetUrl, version),
   installUpdate: (dmgPath) => call('InstallUpdate', dmgPath),

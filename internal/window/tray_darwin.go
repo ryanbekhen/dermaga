@@ -14,14 +14,13 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/window/assets"
 )
 
-// The one menu bar item, and the rows it is currently showing.
+// The one menu bar item.
 //
 // A package variable because there is exactly one of these for the life of the
-// app, and because AppKit calls back with a number rather than a pointer: the
-// row that was clicked has to be found again from here.
+// app, and because AppKit calls back into C functions rather than into
+// anything holding a pointer: the click has to find its way home from here.
 var (
 	trayMu      sync.Mutex
-	trayRows    []trayItem
 	trayOwner   *Tray
 	trayIconRun = assets.TrayRunning
 )
@@ -33,46 +32,20 @@ func (t *Tray) apply() {
 	t.mu.Unlock()
 
 	// Filled while the services are up, hollow when they are not: a broken
-	// runtime is visible without opening the menu.
+	// runtime is visible without opening anything.
 	icon := trayIconRun
 	if state.Running != nil && !*state.Running {
 		icon = assets.TrayStopped
 	}
 
-	rows := trayMenuItems(state)
-
 	trayMu.Lock()
-	trayRows = rows
 	trayOwner = t
 	trayMu.Unlock()
-
-	items := make([]C.DermagaTrayItem, len(rows))
-	for i, row := range rows {
-		title := C.CString(row.Label)
-		defer C.free(unsafe.Pointer(title))
-
-		items[i] = C.DermagaTrayItem{
-			title: title,
-			// Tags start at one: nothing should answer to a row that was never
-			// given a number.
-			tag:       C.int(i + 1),
-			enabled:   boolToC(!row.Disabled),
-			separator: boolToC(row.Separator),
-		}
-	}
 
 	tooltip := C.CString("Dermaga — " + trayLabel(state))
 	defer C.free(unsafe.Pointer(tooltip))
 
-	var first *C.DermagaTrayItem
-	if len(items) > 0 {
-		first = &items[0]
-	}
-
-	C.trayApply(
-		(*C.uchar)(unsafe.Pointer(&icon[0])), C.int(len(icon)),
-		tooltip, first, C.int(len(items)),
-	)
+	C.trayApply((*C.uchar)(unsafe.Pointer(&icon[0])), C.int(len(icon)), tooltip)
 }
 
 func boolToC(value bool) C.int {
@@ -83,50 +56,47 @@ func boolToC(value bool) C.int {
 	return 0
 }
 
-// dermagaTrayClicked is AppKit reporting a row.
+// dermagaTrayToggled is AppKit reporting a click.
 //
-//export dermagaTrayClicked
-func dermagaTrayClicked(tag C.int) {
+//export dermagaTrayToggled
+func dermagaTrayToggled() {
 	trayMu.Lock()
-	rows, tray := trayRows, trayOwner
+	tray := trayOwner
 	trayMu.Unlock()
 
-	index := int(tag) - 1
-	if tray == nil || index < 0 || index >= len(rows) {
+	if tray == nil || tray.handlers.OnToggle == nil {
 		return
 	}
 
-	row := rows[index]
-
 	// Off the main thread before anything is done about it. This is called
-	// with AppKit's own stack underneath, and every handler here goes on to
-	// ask the agent something or to ask Wails for a window -- both of which
-	// want the main thread back before they will answer.
-	go tray.run(row.Action, row.ID)
+	// with AppKit's own stack underneath, and showing the panel asks Wails for
+	// a window -- which wants the main thread back before it will answer.
+	go tray.handlers.OnToggle()
 }
 
-// run does what the row said.
-func (t *Tray) run(action, id string) {
-	switch action {
-	case "open":
-		t.call(t.handlers.OnOpen)
-	case "open-container":
-		if t.handlers.OnOpenContainer != nil {
-			t.handlers.OnOpenContainer(id)
-		}
-	case "start-services":
-		t.call(t.handlers.OnStartServices)
-	case "project":
-		t.call(t.handlers.OnOpenProject)
-	case "restart-update":
-		t.call(t.handlers.OnRestartUpdate)
-	case "quit":
-		t.call(t.handlers.OnQuit)
+// dermagaPanelShown lets the click handler ask whether the panel is already
+// up, which is the difference between a click that opens one and a click that
+// closes it -- and only the first is a reason to bring the app forward.
+//
+//export dermagaPanelShown
+func dermagaPanelShown() C.int {
+	trayMu.Lock()
+	tray := trayOwner
+	trayMu.Unlock()
+
+	if tray == nil || tray.handlers.PanelShown == nil {
+		return 0
 	}
+
+	return boolToC(tray.handlers.PanelShown())
 }
 
-func (t *Tray) call(handler func()) {
-	if handler != nil {
-		handler()
-	}
+// trayPositionWindow puts a window under the menu bar item.
+func trayPositionWindow(nsWindow unsafe.Pointer, gap int) {
+	C.trayPositionWindow(nsWindow, C.int(gap))
+}
+
+// traySetHighlighted draws the item as pressed while the panel is up.
+func traySetHighlighted(on bool) {
+	C.trayHighlight(boolToC(on))
 }
