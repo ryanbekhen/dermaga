@@ -309,6 +309,14 @@ type BuildOptions struct {
 	Platform       string   `json:"platform"`
 	BuildArgs      []string `json:"buildArgs"`
 	NoCache        bool     `json:"noCache"`
+	// Forward the SSH agent into the build.
+	//
+	// What a Dockerfile needs to reach a private repository -- `go mod
+	// download`, `composer install`, `npm i` against a private registry. The
+	// keys never enter the image: the agent is reached through a socket for as
+	// long as the step runs, which is why this exists instead of copying a key
+	// in and hoping to delete it in a later layer.
+	SSH bool `json:"ssh,omitempty"`
 	// The project to file the built image under. Not a flag -- the runtime has
 	// no idea projects exist -- it is written to Dermaga's own record for the
 	// tag being built. See projects.go.

@@ -252,3 +252,99 @@ func TestRehearsalArgsKeepWhatMatters(t *testing.T) {
 		}
 	}
 }
+
+// The three flags the runtime has always taken and Dermaga never offered.
+// Checked against the CLI first: it accepts all three and reports all three
+// back, so they survive an edit rather than emptying themselves on one.
+
+func TestArgsCarryShmSize(t *testing.T) {
+	args := ContainerSpec{Image: "redis", ShmSize: "512m"}.Args()
+
+	if !slices.Contains(args, "--shm-size") {
+		t.Fatalf("no --shm-size: %v", args)
+	}
+	if at := slices.Index(args, "--shm-size"); args[at+1] != "512m" {
+		t.Fatalf("want 512m, got %q", args[at+1])
+	}
+}
+
+func TestArgsCarryEveryUlimit(t *testing.T) {
+	args := ContainerSpec{
+		Image:   "redis",
+		Ulimits: []string{"nofile=4096:8192", "nproc=512"},
+	}.Args()
+
+	if got := strings.Count(strings.Join(args, " "), "--ulimit"); got != 2 {
+		t.Fatalf("want two limits, got %d: %v", got, args)
+	}
+}
+
+// A row added to the form and left empty is not a limit.
+func TestArgsSkipAnEmptyUlimit(t *testing.T) {
+	args := ContainerSpec{Image: "redis", Ulimits: []string{"  "}}.Args()
+
+	if slices.Contains(args, "--ulimit") {
+		t.Fatalf("an empty row became a limit: %v", args)
+	}
+}
+
+// A tmpfs has a flag of its own and takes only the path: there is nothing on
+// the host to name, which is the point of one.
+func TestArgsWriteATmpfsAsItsOwnFlag(t *testing.T) {
+	args := ContainerSpec{
+		Image:  "redis",
+		Mounts: []SpecMount{{Type: "tmpfs", Source: "tmpfs", Target: "/scratch"}},
+	}.Args()
+
+	at := slices.Index(args, "--tmpfs")
+	if at < 0 || args[at+1] != "/scratch" {
+		t.Fatalf("want --tmpfs /scratch: %v", args)
+	}
+	if strings.Contains(strings.Join(args, " "), "type=tmpfs") {
+		t.Fatalf("a tmpfs must not go through --mount: %v", args)
+	}
+}
+
+func TestArgsStillWriteVolumesAndBindsThroughMount(t *testing.T) {
+	args := ContainerSpec{
+		Image: "redis",
+		Mounts: []SpecMount{
+			{Type: "volume", Source: "data", Target: "/data"},
+			{Type: "bind", Source: "/tmp/a", Target: "/a"},
+		},
+	}.Args()
+
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"type=volume,source=data", "type=bind,source=/tmp/a"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q: %s", want, joined)
+		}
+	}
+}
+
+func TestValidateRefusesAMalformedUlimit(t *testing.T) {
+	for _, limit := range []string{"nofile", "nofile=", "=4096", "nofile=abc", "nofile=4096:xyz"} {
+		spec := ContainerSpec{Image: "redis", Ulimits: []string{limit}}
+		if err := spec.Validate(); err == nil {
+			t.Fatalf("%q should have been refused", limit)
+		}
+	}
+}
+
+// The runtime refuses this as well, but only once the image is down.
+func TestValidateRefusesAHardLimitBelowTheSoftOne(t *testing.T) {
+	spec := ContainerSpec{Image: "redis", Ulimits: []string{"nofile=8192:4096"}}
+
+	if err := spec.Validate(); err == nil {
+		t.Fatal("a hard limit below the soft one should have been refused")
+	}
+}
+
+func TestValidateAllowsTheShapesPeopleType(t *testing.T) {
+	for _, limit := range []string{"nofile=4096", "nofile=4096:8192", " nproc = 512 "} {
+		spec := ContainerSpec{Image: "redis", Ulimits: []string{limit}}
+		if err := spec.Validate(); err != nil {
+			t.Fatalf("%q should be allowed: %v", limit, err)
+		}
+	}
+}

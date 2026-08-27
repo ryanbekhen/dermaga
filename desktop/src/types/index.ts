@@ -90,6 +90,8 @@ export interface Container {
   mounts: Mount[];
   labels: Record<string, string>;
   cpuAllocation?: number;
+  shmSize?: string;
+  ulimits?: string[];
   memoryAllocation?: string;
   environmentVariables?: string[];
   /** Percentage of the container's own CPU allocation, 0-100. */
@@ -288,6 +290,14 @@ export interface ContainerSpec {
   labels?: Record<string, string>;
   cpus?: number;
   memory?: string;
+  /**
+   * The size of /dev/shm, in the size syntax the CLI takes — 64m, 1g. The
+   * default is small enough that Postgres and headless Chrome both fall over
+   * on it, and the way they fall over says nothing about shared memory.
+   */
+  shmSize?: string;
+  /** Resource limits, one per entry, as `<type>=<soft>[:<hard>]`. */
+  ulimits?: string[];
   /** Every network to attach at creation; empty means the default network. */
   networks?: string[];
   workdir?: string;
@@ -406,6 +416,9 @@ export interface BuildSpec {
   target?: string;
   platform?: string;
   buildArgs?: string[];
+  /** Forward the SSH agent into the build, for a Dockerfile that reaches a
+   *  private repository. The keys never enter the image. */
+  ssh?: boolean;
   /** The project to file the built image under. Not a build flag. */
   project?: string;
   noCache?: boolean;

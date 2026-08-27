@@ -49,6 +49,11 @@ func buildCommandArgs(opts BuildOptions) []string {
 	if opts.NoCache {
 		args = append(args, "--no-cache")
 	}
+	// `default` is the only form the CLI takes: the agent this Mac already has,
+	// rather than a named key. Nothing here has to hold a key or ask for one.
+	if opts.SSH {
+		args = append(args, "--ssh", "default")
+	}
 
 	// The context directory is positional and has to come last.
 	return append(args, opts.Context)

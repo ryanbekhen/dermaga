@@ -47,11 +47,17 @@ type Container struct {
 	CapAdd           []string           `json:"capAdd"`
 	CapDrop          []string           `json:"capDrop"`
 	Sysctls          map[string]string  `json:"sysctls"`
-	Rosetta          bool               `json:"rosetta"`
-	Virtualization   bool               `json:"virtualization"`
-	SSH              bool               `json:"ssh"`
-	ReadOnlyRoot     bool               `json:"readOnlyRoot"`
-	UseInit          bool               `json:"useInit"`
+	// The size of /dev/shm, in the syntax it is set in. Empty means whatever
+	// the runtime gives by default -- which is small, and is what Postgres and
+	// headless Chrome both run out of.
+	ShmSize string `json:"shmSize,omitempty"`
+	// Resource limits, in the syntax they are set in: nofile=4096:8192.
+	Ulimits        []string `json:"ulimits,omitempty"`
+	Rosetta        bool     `json:"rosetta"`
+	Virtualization bool     `json:"virtualization"`
+	SSH            bool     `json:"ssh"`
+	ReadOnlyRoot   bool     `json:"readOnlyRoot"`
+	UseInit        bool     `json:"useInit"`
 	// The image this container is actually made of, and whether the tag it was
 	// created from still points at it.
 	//
@@ -177,6 +183,14 @@ type cliContainer struct {
 					GID int `json:"gid"`
 				} `json:"id"`
 			} `json:"user"`
+			// Resource limits, reported in a different shape from the one they
+			// are set in: `--ulimit nofile=4096:8192` comes back as
+			// RLIMIT_NOFILE with the two halves apart. See ulimitOf.
+			Rlimits []struct {
+				Limit string `json:"limit"`
+				Soft  uint64 `json:"soft"`
+				Hard  uint64 `json:"hard"`
+			} `json:"rlimits"`
 		} `json:"initProcess"`
 		Mounts []struct {
 			Source      string   `json:"source"`
@@ -203,6 +217,9 @@ type cliContainer struct {
 			CPUs          int   `json:"cpus"`
 			MemoryInBytes int64 `json:"memoryInBytes"`
 		} `json:"resources"`
+		// Beside resources rather than inside it, which is not where anybody
+		// looks first, and absent entirely unless it was set.
+		ShmSize  int64 `json:"shmSize"`
 		Platform struct {
 			Architecture string `json:"architecture"`
 			OS           string `json:"os"`
@@ -634,6 +651,8 @@ func toContainer(r cliContainer) Container {
 		CapAdd:         orEmpty(cfg.CapAdd),
 		CapDrop:        orEmpty(cfg.CapDrop),
 		Sysctls:        cfg.Sysctls,
+		ShmSize:        formatMebibytes(cfg.ShmSize),
+		Ulimits:        ulimitsOf(cfg.InitProcess.Rlimits),
 		Rosetta:        cfg.Rosetta,
 		Virtualization: cfg.Virtualization,
 		SSH:            cfg.SSH,
@@ -926,4 +945,45 @@ func projectLabel(labels map[string]string) string {
 	}
 
 	return name
+}
+
+// ulimitsOf turns the limits the runtime reports back into the syntax they are
+// set in.
+//
+// They go in as `nofile=4096:8192` and come back as RLIMIT_NOFILE with the two
+// halves apart, so this is the same shape of translation mountKind does for
+// virtiofs: the runtime's vocabulary read into the one the form and the flag
+// share. Without it an edit would offer no limits on a container that has them,
+// and recreating would drop them.
+//
+// A limit whose soft and hard halves are equal is written short -- `nofile=4096`
+// -- because that is how somebody types it when they do not care about the
+// distinction, and reading back something longer than what was typed makes it
+// look as though the app changed it.
+func ulimitsOf(reported []struct {
+	Limit string `json:"limit"`
+	Soft  uint64 `json:"soft"`
+	Hard  uint64 `json:"hard"`
+}) []string {
+	limits := make([]string, 0, len(reported))
+
+	for _, r := range reported {
+		name := strings.ToLower(strings.TrimPrefix(r.Limit, "RLIMIT_"))
+		if name == "" {
+			continue
+		}
+
+		if r.Soft == r.Hard {
+			limits = append(limits, fmt.Sprintf("%s=%d", name, r.Soft))
+			continue
+		}
+
+		limits = append(limits, fmt.Sprintf("%s=%d:%d", name, r.Soft, r.Hard))
+	}
+
+	if len(limits) == 0 {
+		return nil
+	}
+
+	return limits
 }

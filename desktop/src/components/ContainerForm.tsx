@@ -131,6 +131,10 @@ export function ContainerForm({
   const [command, setCommand] = useState((base.command ?? []).join(' '));
   const [cpus, setCpus] = useState(base.cpus ?? 1);
   const [memory, setMemory] = useState(base.memory ?? '512m');
+  const [shmSize, setShmSize] = useState(base.shmSize ?? '');
+  // One per row, the same shape the ports and mounts rows have. Empty rows are
+  // dropped on the way out; a row filled in wrongly is refused with a reason.
+  const [ulimits, setUlimits] = useState<string[]>(base.ulimits ?? []);
   const [attached, setAttached] = useState<string[]>(base.networks ?? []);
   const [workdir, setWorkdir] = useState(base.workdir ?? '');
   const [user, setUser] = useState(base.user ?? '');
@@ -222,9 +226,11 @@ export function ContainerForm({
     command: command.trim() ? command.trim().split(/\s+/) : undefined,
     env: parseEnv(envText),
     ports: ports.filter((p) => p.host && p.container),
-    mounts: mounts.filter((m) => m.source && m.target),
+    mounts: mounts.filter((m) => (m.type === 'tmpfs' ? m.target : m.source && m.target)),
     cpus: Number(cpus) || undefined,
     memory: memory.trim() || undefined,
+    shmSize: shmSize.trim() || undefined,
+    ulimits: ulimits.map((l) => l.trim()).filter(Boolean),
     networks: attached.length > 0 ? attached : undefined,
     workdir: workdir.trim() || undefined,
     user: user.trim() || undefined,
@@ -256,12 +262,46 @@ export function ContainerForm({
 
   const mountProblem = () => {
     for (const [index, entry] of mounts.entries()) {
+      // A tmpfs is only a path inside the container -- asking for a source
+      // would be asking for something that does not exist.
+      if (entry.type === 'tmpfs') {
+        if (!entry.target) continue;
+
+        const problem = absolutePath(entry.target, 'A path inside the container');
+        if (problem) return `Mount ${index + 1}: ${lower(problem)}`;
+        continue;
+      }
+
       if (!entry.source && !entry.target) continue;
 
       const problem =
         required(entry.source, entry.type === 'bind' ? 'A path on this Mac' : 'A volume name') ??
         absolutePath(entry.target, 'A path inside the container');
       if (problem) return `Mount ${index + 1}: ${lower(problem)}`;
+    }
+
+    return null;
+  };
+
+  // The same shape the agent checks, said here first: the runtime reports a
+  // malformed limit only after the image is down, in its own words, about a
+  // flag the person never typed.
+  const ulimitProblem = () => {
+    for (const [index, entry] of ulimits.entries()) {
+      const limit = entry.trim();
+      if (!limit) continue;
+
+      const [name, values] = limit.split('=', 2);
+      const halves = (values ?? '').split(':');
+      const numbers = halves.every((half) => /^\s*\d+\s*$/.test(half));
+
+      if (!name?.trim() || !values?.trim() || halves.length > 2 || !numbers) {
+        return `Limit ${index + 1}: needs the shape type=soft or type=soft:hard`;
+      }
+
+      if (halves.length === 2 && Number(halves[1]) < Number(halves[0])) {
+        return `Limit ${index + 1}: the hard limit is below the soft one`;
+      }
     }
 
     return null;
@@ -278,6 +318,8 @@ export function ContainerForm({
     user: userOf(user),
     ports: portProblem(),
     mounts: mountProblem(),
+    shmSize: shmSize.trim() ? sizeOf(shmSize, 'Shared memory', 0) : null,
+    ulimits: ulimitProblem(),
     env: envTextOf(envText),
     // The record is kept against the container's name, so there has to be one.
     // Left blank, the CLI invents a name this side never learns.
@@ -508,6 +550,21 @@ export function ContainerForm({
             className="input"
           />
         </Field>
+
+        {/* Beside memory, because it is memory: /dev/shm is a slice of it, and
+            the default is small. Postgres asks for shared buffers it cannot
+            get and reports a failure about the database; headless Chrome
+            crashes the tab. Neither says anything about shared memory, so this
+            is the field that is looked for only once somebody has already lost
+            an afternoon. */}
+        <Field label="Shared memory" hint="/dev/shm. Left empty, the runtime decides." {...form.field('shmSize')}>
+          <input
+            value={shmSize}
+            onChange={(e) => setShmSize(e.target.value)}
+            placeholder="64m"
+            className="input"
+          />
+        </Field>
       </Fieldset>
 
       {/* What runs inside it, and as whom. All four override something the
@@ -670,24 +727,35 @@ export function ContainerForm({
             >
               <option value="volume">volume</option>
               <option value="bind">bind</option>
+              <option value="tmpfs">tmpfs</option>
             </select>
-            <Autocomplete
-              value={mount.source}
-              onChange={(next) =>
-                setMounts(mounts.map((m, i) => (i === index ? { ...m, source: next } : m)))
-              }
-              // Volumes are a list to pick from; a path on this Mac is not,
-              // and a field that suggests nothing simply does not suggest.
-              options={
-                mount.type === 'volume'
-                  ? volumes.map((v) => ({ value: v.name, hint: formatBytes(v.usedBytes) }))
-                  : []
-              }
-              placeholder={mount.type === 'volume' ? 'volume name' : '/host/path'}
-              aria-label={mount.type === 'volume' ? 'Volume name' : 'Path on this Mac'}
-              className="min-w-36 flex-1"
-              mono
-            />
+            {/* A tmpfs has no host side. There is nothing to name and nothing
+                to pick from -- it is memory, thrown away with the container --
+                so the row says so where the source would be rather than
+                offering a box that does nothing. */}
+            {mount.type === 'tmpfs' ? (
+              <span className="min-w-36 flex-1 self-center text-small text-ink-500 dark:text-ink-400">
+                in memory, gone with the container
+              </span>
+            ) : (
+              <Autocomplete
+                value={mount.source}
+                onChange={(next) =>
+                  setMounts(mounts.map((m, i) => (i === index ? { ...m, source: next } : m)))
+                }
+                // Volumes are a list to pick from; a path on this Mac is not,
+                // and a field that suggests nothing simply does not suggest.
+                options={
+                  mount.type === 'volume'
+                    ? volumes.map((v) => ({ value: v.name, hint: formatBytes(v.usedBytes) }))
+                    : []
+                }
+                placeholder={mount.type === 'volume' ? 'volume name' : '/host/path'}
+                aria-label={mount.type === 'volume' ? 'Volume name' : 'Path on this Mac'}
+                className="min-w-36 flex-1"
+                mono
+              />
+            )}
             <span className="text-xs text-ink-500">→</span>
             <input
               value={mount.target}
@@ -699,12 +767,40 @@ export function ContainerForm({
               placeholder="/container/path"
               className="input min-w-36 flex-1"
             />
-            <Checkbox
-              checked={mount.readOnly}
-              onChange={(value) =>
-                setMounts(mounts.map((m, i) => (i === index ? { ...m, readOnly: value } : m)))
+            {mount.type !== 'tmpfs' && (
+              <Checkbox
+                checked={mount.readOnly}
+                onChange={(value) =>
+                  setMounts(mounts.map((m, i) => (i === index ? { ...m, readOnly: value } : m)))
+                }
+                label="ro"
+              />
+            )}
+          </Row>
+        ))}
+      </Fieldset>
+
+      {/* Rarely set, and when it is set it is `nofile` on something that opens
+          a great many sockets. Its own group rather than a field beside CPUs:
+          it repeats, and a repeating row wedged between two single fields
+          makes the group above it look like it repeats too. */}
+      <Fieldset
+        legend="Limits"
+        hint="Resource limits, as type=soft or type=soft:hard."
+        addLabel="Add limit"
+        {...form.field('ulimits')}
+        onAdd={() => setUlimits([...ulimits, ''])}
+      >
+        {ulimits.map((limit, index) => (
+          <Row key={index} onRemove={() => setUlimits(ulimits.filter((_, i) => i !== index))}>
+            <input
+              value={limit}
+              onChange={(e) =>
+                setUlimits(ulimits.map((l, i) => (i === index ? e.target.value : l)))
               }
-              label="ro"
+              placeholder="nofile=4096:8192"
+              aria-label={`Limit ${index + 1}`}
+              className="input min-w-36 flex-1 font-mono text-code"
             />
           </Row>
         ))}
@@ -825,6 +921,7 @@ export function summarise(spec: ContainerSpec, autoBoot: boolean): string {
   const limits = [
     spec.cpus ? `${spec.cpus} CPU${spec.cpus === 1 ? '' : 's'}` : null,
     spec.memory ? `${formatMemory(spec.memory)} of memory` : null,
+    spec.shmSize ? `${formatMemory(spec.shmSize)} of that shared` : null,
   ].filter(Boolean);
 
   const sentences = [
@@ -842,11 +939,26 @@ export function summarise(spec: ContainerSpec, autoBoot: boolean): string {
     );
   }
 
-  const mounts = spec.mounts ?? [];
+  // Said apart from the rest, because a tmpfs is the one mount that keeps
+  // nothing: reading it back beside a volume as "source → target" would put a
+  // word where there is no source and imply the data survives.
+  const mounts = (spec.mounts ?? []).filter((m) => m.type !== 'tmpfs');
   if (mounts.length > 0) {
     sentences.push(
       `${list(mounts.map((m) => `${m.source} → ${m.target}`))} ${mounts.length === 1 ? 'is' : 'are'} mounted into it.`
     );
+  }
+
+  const scratch = (spec.mounts ?? []).filter((m) => m.type === 'tmpfs');
+  if (scratch.length > 0) {
+    sentences.push(
+      `${list(scratch.map((m) => m.target))} ${scratch.length === 1 ? 'is' : 'are'} in memory, and ${scratch.length === 1 ? 'goes' : 'go'} when the container does.`
+    );
+  }
+
+  const ulimits = (spec.ulimits ?? []).filter(Boolean);
+  if (ulimits.length > 0) {
+    sentences.push(`Its limits are set: ${list(ulimits)}.`);
   }
 
   if (spec.networks && spec.networks.length > 0) {

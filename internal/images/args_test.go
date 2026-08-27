@@ -108,3 +108,23 @@ func TestSaveNamesThePlatformOnlyWhenOneWasChosen(t *testing.T) {
 	same(t, saveCommandArgs("nginx", "linux/arm64", "/tmp/nginx.tar"),
 		[]string{"image", "save", "nginx", "--output", "/tmp/nginx.tar", "--platform", "linux/arm64"})
 }
+
+// What a Dockerfile needs to reach a private repository. `default` is the only
+// form the CLI takes -- the agent this Mac already has, rather than a named
+// key -- so nothing here holds a key or asks for one.
+func TestBuildArgsForwardTheSSHAgent(t *testing.T) {
+	args := buildCommandArgs(BuildOptions{Context: ".", SSH: true})
+
+	at := slices.Index(args, "--ssh")
+	if at < 0 || args[at+1] != "default" {
+		t.Fatalf("want --ssh default: %v", args)
+	}
+}
+
+func TestBuildArgsLeaveTheAgentAloneByDefault(t *testing.T) {
+	args := buildCommandArgs(BuildOptions{Context: "."})
+
+	if slices.Contains(args, "--ssh") {
+		t.Fatalf("the agent must not be forwarded unless asked: %v", args)
+	}
+}

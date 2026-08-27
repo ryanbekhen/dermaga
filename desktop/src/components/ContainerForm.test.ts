@@ -114,3 +114,54 @@ describe('the question the button asks', () => {
     expect(question.body).toContain('2 CPUs and 2 GB of memory');
   });
 });
+
+describe('what the dialog says about the settings the runtime always took', () => {
+  it('reads shared memory back beside the other two limits', () => {
+    const said = summarise(spec({ cpus: 2, memory: '1g', shmSize: '512m' }), false);
+
+    expect(said).toContain('512 MB of that shared');
+  });
+
+  // A tmpfs keeps nothing, so it is said apart from the mounts that do. Read
+  // back as "source → target" it would put a word where there is no source and
+  // imply the data survives.
+  it('says a tmpfs goes with the container', () => {
+    const said = summarise(
+      spec({ mounts: [{ type: 'tmpfs', source: 'tmpfs', target: '/scratch' }] }),
+      false
+    );
+
+    expect(said).toContain('/scratch');
+    expect(said).toContain('goes when the container does');
+    expect(said).not.toContain('mounted into it');
+  });
+
+  it('keeps volumes and binds in the sentence about mounting', () => {
+    const said = summarise(
+      spec({
+        mounts: [
+          { type: 'volume', source: 'data', target: '/data' },
+          { type: 'tmpfs', source: 'tmpfs', target: '/scratch' },
+        ],
+      }),
+      false
+    );
+
+    expect(said).toContain('data → /data');
+    expect(said).toContain('is mounted into it');
+    expect(said).toContain('/scratch');
+  });
+
+  it('reads the limits back', () => {
+    const said = summarise(spec({ ulimits: ['nofile=4096:8192'] }), false);
+
+    expect(said).toContain('nofile=4096:8192');
+  });
+
+  it('says nothing about limits that were not set', () => {
+    const said = summarise(spec(), false);
+
+    expect(said).not.toContain('Its limits are set');
+    expect(said).not.toContain('shared');
+  });
+});

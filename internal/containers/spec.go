@@ -30,6 +30,12 @@ type ContainerSpec struct {
 	Labels     map[string]string `json:"labels,omitempty"`
 	CPUs       int               `json:"cpus,omitempty"`
 	Memory     string            `json:"memory,omitempty"`
+	// The size of /dev/shm, in the size syntax the CLI takes -- 64m, 1g. The
+	// default is small enough that Postgres and headless Chrome both fall over
+	// on it, and the way they fall over says nothing about shared memory.
+	ShmSize string `json:"shmSize,omitempty"`
+	// Resource limits, one per entry, as `<type>=<soft>[:<hard>]`.
+	Ulimits []string `json:"ulimits,omitempty"`
 	// Every network the container is attached to. `container run` takes one
 	// --network per attachment, and a container with none lands on the
 	// built-in default network.
@@ -101,6 +107,18 @@ func (s ContainerSpec) Validate() error {
 		}
 	}
 
+	// Caught here rather than by the runtime, which reports a malformed limit
+	// after the image has been pulled -- and reports it in its own words, about
+	// a flag the person never typed.
+	for _, limit := range s.Ulimits {
+		if strings.TrimSpace(limit) == "" {
+			continue
+		}
+		if err := validUlimit(limit); err != nil {
+			return err
+		}
+	}
+
 	// The runtime rejects anything under 200 MiB, but only after pulling the
 	// image -- catching it here saves the wait.
 	if mib := cli.Mebibytes(s.Memory); s.Memory != "" && mib > 0 && mib < 200 {
@@ -122,6 +140,14 @@ func (s ContainerSpec) Args() []string {
 	}
 	if s.Memory != "" {
 		args = append(args, "--memory", s.Memory)
+	}
+	if s.ShmSize != "" {
+		args = append(args, "--shm-size", s.ShmSize)
+	}
+	for _, limit := range s.Ulimits {
+		if strings.TrimSpace(limit) != "" {
+			args = append(args, "--ulimit", limit)
+		}
 	}
 	for _, n := range s.Networks {
 		if n != "" {
@@ -198,6 +224,15 @@ func (s ContainerSpec) Args() []string {
 		args = append(args, "--publish", spec)
 	}
 	for _, m := range s.Mounts {
+		// A tmpfs has a flag of its own and takes only the path it appears at:
+		// there is nothing on the host to name, which is the whole point of one.
+		if m.Type == "tmpfs" {
+			if m.Target != "" {
+				args = append(args, "--tmpfs", m.Target)
+			}
+			continue
+		}
+
 		// The explicit --mount form is unambiguous about volume vs bind, which
 		// the shorthand -v is not.
 		kind := m.Type
@@ -244,6 +279,8 @@ func SpecOf(c *Container) ContainerSpec {
 		Labels:         c.Labels,
 		CPUs:           c.CPUAllocation,
 		Memory:         c.MemoryAllocation,
+		ShmSize:        c.ShmSize,
+		Ulimits:        append([]string(nil), c.Ulimits...),
 		Networks:       append([]string(nil), c.Networks...),
 		WorkDir:        c.WorkingDir,
 		User:           c.User,
@@ -475,4 +512,40 @@ func rehearsalArgs(spec ContainerSpec) []string {
 	args[0] = "create"
 
 	return args
+}
+
+// validUlimit checks the shape `<type>=<soft>[:<hard>]`.
+//
+// The type is not checked against a list. The runtime knows which limits it
+// supports and that list is its to change; refusing `nofile` here because this
+// file had not heard of it would be the app getting in the way of the runtime
+// growing.
+func validUlimit(limit string) error {
+	name, values, found := strings.Cut(limit, "=")
+	if !found || strings.TrimSpace(name) == "" || strings.TrimSpace(values) == "" {
+		return fmt.Errorf("limit %q must be <type>=<soft>[:<hard>]", limit)
+	}
+
+	soft, hard, split := strings.Cut(values, ":")
+
+	softN, err := strconv.Atoi(strings.TrimSpace(soft))
+	if err != nil || softN < 0 {
+		return fmt.Errorf("limit %q: %q is not a number", limit, soft)
+	}
+
+	if !split {
+		return nil
+	}
+
+	hardN, err := strconv.Atoi(strings.TrimSpace(hard))
+	if err != nil || hardN < 0 {
+		return fmt.Errorf("limit %q: %q is not a number", limit, hard)
+	}
+
+	// The runtime refuses this too, but only once the image is down.
+	if hardN < softN {
+		return fmt.Errorf("limit %q: the hard limit is below the soft one", limit)
+	}
+
+	return nil
 }

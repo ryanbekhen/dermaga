@@ -497,3 +497,45 @@ func TestMountKindPassesThroughWhatItDoesNotKnow(t *testing.T) {
 		t.Fatalf("want tmpfs, got %q", got)
 	}
 }
+
+// Limits go in as `nofile=4096:8192` and come back as RLIMIT_NOFILE with the
+// halves apart. Without translating them back, an edit would show no limits on
+// a container that has them -- and recreating from that form would drop them.
+type rlimit = struct {
+	Limit string `json:"limit"`
+	Soft  uint64 `json:"soft"`
+	Hard  uint64 `json:"hard"`
+}
+
+func TestUlimitsOfReadsTheRuntimeShapeBack(t *testing.T) {
+	got := ulimitsOf([]rlimit{{Limit: "RLIMIT_NOFILE", Soft: 4096, Hard: 8192}})
+
+	if len(got) != 1 || got[0] != "nofile=4096:8192" {
+		t.Fatalf("want nofile=4096:8192, got %v", got)
+	}
+}
+
+// Written the way somebody types it when they do not care about the
+// distinction. Reading back something longer than what was typed looks as
+// though the app changed it.
+func TestUlimitsOfWritesAnEqualPairShort(t *testing.T) {
+	got := ulimitsOf([]rlimit{{Limit: "RLIMIT_NPROC", Soft: 512, Hard: 512}})
+
+	if len(got) != 1 || got[0] != "nproc=512" {
+		t.Fatalf("want nproc=512, got %v", got)
+	}
+}
+
+func TestUlimitsOfOnNothing(t *testing.T) {
+	if got := ulimitsOf(nil); got != nil {
+		t.Fatalf("want nothing, got %v", got)
+	}
+}
+
+func TestUlimitsOfSkipsALimitWithNoName(t *testing.T) {
+	got := ulimitsOf([]rlimit{{Limit: "RLIMIT_", Soft: 1, Hard: 1}})
+
+	if got != nil {
+		t.Fatalf("a nameless limit should be skipped, got %v", got)
+	}
+}

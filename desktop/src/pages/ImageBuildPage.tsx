@@ -117,6 +117,7 @@ function BuildForm({
   const [target, setTarget] = useState('');
   const [buildArgs, setBuildArgs] = useState('');
   const [noCache, setNoCache] = useState(false);
+  const [ssh, setSsh] = useState(false);
 
   // Builds run inside a buildkit container that does not exist until something
   // starts it. Knowing up front means the first build can start it rather than
@@ -188,6 +189,7 @@ function BuildForm({
       .map((line) => line.trim())
       .filter(Boolean),
     noCache,
+    ssh,
     // An image built while a project is open is that project's. Nothing to
     // choose here: the switcher already answered it, and a second place to
     // answer the same question is a second place for the two to disagree.
@@ -425,6 +427,15 @@ function BuildForm({
         </Field>
 
         <Checkbox checked={noCache} onChange={setNoCache} label="Build without the cache" />
+        {/* What a Dockerfile needs to reach a private repository. The agent is
+            reached through a socket while a step runs and nothing is written
+            into the image, which is the difference between this and copying a
+            key in and hoping a later layer removes it. */}
+        <Checkbox
+          checked={ssh}
+          onChange={setSsh}
+          label="Forward the SSH agent, for private repositories"
+        />
       </Fieldset>
 
       {confirming && (
@@ -553,6 +564,11 @@ export function asked(
   }
 
   if (spec.noCache) sentences.push('The cache is not used, so every step runs again.');
+  if (spec.ssh) {
+    sentences.push(
+      'This Mac\u2019s SSH agent is reachable from the build, so a step can clone a private repository. No key is written into the image.'
+    );
+  }
   if (startingBuilder) {
     sentences.push('The build container is not running yet, so it is started first.');
   }
