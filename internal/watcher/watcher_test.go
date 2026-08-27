@@ -9,7 +9,10 @@ import (
 
 	"github.com/ryanbekhen/dermaga/internal/containers"
 	"github.com/ryanbekhen/dermaga/internal/images"
+	"github.com/ryanbekhen/dermaga/internal/machines"
+	"github.com/ryanbekhen/dermaga/internal/networks"
 	"github.com/ryanbekhen/dermaga/internal/system"
+	"github.com/ryanbekhen/dermaga/internal/volumes"
 )
 
 // A pass that cannot list containers still reports why.
@@ -99,5 +102,77 @@ func TestAFailedImageListingMarksNothing(t *testing.T) {
 
 	if list[0].ImageMoved {
 		t.Error("marked a container from an image listing that never arrived")
+	}
+}
+
+// The sequence a user reported: Apple's CLI updated, the services stopped,
+// started again from inside the app -- and the container list came back empty.
+//
+// It is here because the watcher was the first suspect and turned out to be
+// innocent, which is worth keeping proof of. The list was empty in the window
+// because every container was stopped and the stopped filter was off, not
+// because the data never arrived.
+//
+// What it does check is the awkward middle: `container system start` returns
+// once launchd has the job, which is before the API server answers, so the
+// pass that the start pokes still cannot list anything. The pass after it can,
+// and that one has to reach the window.
+func TestTheListComesBackAfterTheServicesDo(t *testing.T) {
+	up := false
+	answering := false
+
+	w := New(Sources{
+		Containers: func(context.Context) ([]containers.Container, error) {
+			if !answering {
+				return nil, errors.New("cannot connect to the container service")
+			}
+			return []containers.Container{{ID: "redis"}, {ID: "mysql"}}, nil
+		},
+		System: func(context.Context) (*system.Status, error) {
+			return &system.Status{Running: up}, nil
+		},
+		Machines: func(context.Context) ([]machines.Machine, error) { return nil, nil },
+		Images:   func(context.Context) ([]images.Image, error) { return nil, nil },
+		Volumes:  func(context.Context) ([]volumes.Volume, error) { return nil, nil },
+		Networks: func(context.Context) ([]networks.Network, error) { return nil, nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	id, updates, _, _ := w.Subscribe()
+	defer w.Unsubscribe(id)
+
+	// The agent came up while the services were down, so nothing was ever
+	// listed and there is no good state to fall back on.
+	w.refresh(context.Background())
+
+	// The Start button: the command returned, the watcher was poked, and the
+	// API server is not answering yet.
+	up = true
+	w.refresh(context.Background())
+
+	// The tick two seconds later.
+	answering = true
+	w.refresh(context.Background())
+
+	var last Snapshot
+	pushed := 0
+	for {
+		select {
+		case s := <-updates:
+			last = s
+			pushed++
+			continue
+		default:
+		}
+		break
+	}
+
+	if pushed == 0 {
+		t.Fatal("nothing was pushed, so the window would still be showing the empty list")
+	}
+	if len(last.Containers) != 2 {
+		t.Fatalf("the list did not come back: got %d containers", len(last.Containers))
+	}
+	if last.System == nil || !last.System.Running {
+		t.Fatal("the services came up and the snapshot did not say so")
 	}
 }

@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import {
   ChevronRight,
   CircleFadingArrowUp,
-  Hammer,
   LayoutGrid,
   Play,
   Plus,
@@ -26,6 +25,7 @@ import { useActiveProject } from '../hooks/useActiveProject';
 import { isBuilder } from '../utils/builder';
 import { EVERYTHING, inProject, unprefixed } from '../utils/projects';
 import { PageHeader } from '../components/PageHeader';
+import { FilterMenu } from '../components/FilterMenu';
 import { FilterToggle } from '../components/FilterToggle';
 import { useUIStore } from '../store/uiStore';
 import type { Container } from '../types';
@@ -101,6 +101,16 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
 
   const visible = mine.filter((container) => showStopped || container.status === 'running');
 
+  // What the two switches are holding back, and only them. Counted against
+  // everything the project holds rather than against `everything`, which has
+  // already had the builder taken out of it -- measuring the difference after
+  // one of the two filters has run would report that filter as hiding nothing.
+  // The project's own narrowing is not counted either: it is not what this
+  // button controls, and a number that moves when a switch is not touched is a
+  // number nobody can act on.
+  const inScope = containers.filter((container) => inProject(container, activeProject));
+  const filteredOut = inScope.length - visible.length;
+
   // Counted against everything in scope, listed or not -- the stopped filter
   // hides rows without changing what exists, and "3 of 4 running" is the one
   // line that says something is out of sight.
@@ -115,7 +125,11 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
       ? `Nothing in ${activeProject} yet. Anything you create while it is open is filed under it.`
       : mine.length === 0
         ? 'No containers yet. Start from a template, or use “New container”.'
-        : 'No running containers. Turn on the “Stopped” filter to see the rest.';
+        : // Named by where it is rather than by what it is called: the filters
+          // are behind an unlabelled button now, and telling somebody to turn
+          // on a switch without saying where it lives is how an empty list
+          // stays empty.
+          'No running containers. The stopped ones are hidden — the filters button, beside “New container”, brings them back.';
 
   const chosen = mine.filter((c) => selected.has(c.id));
   const startable = chosen.filter((c) => c.status !== 'running');
@@ -232,26 +246,23 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             </SelectionActions>
           ) : (
             <>
-              {/* The two filters, beside the actions rather than on a strip of
-                  their own. A whole band of chrome for two switches was a band
-                  the eye had to cross on the way from the heading to the list,
-                  every time, to read the same two words. */}
-              <FilterToggle
-                iconOnly
-                checked={showStopped}
-                onChange={setShowStopped}
-                label="Stopped"
-                icon={Square}
-                title="Show containers that are not running"
-              />
-              <FilterToggle
-                iconOnly
-                checked={showBuilder}
-                onChange={setShowBuilder}
-                label="Builder"
-                icon={Hammer}
-                title="Show Apple's builder container, which `container build` makes and manages"
-              />
+              {/* Behind one button rather than beside the actions. As words
+                  they crowded the row the page is opened to press, and as
+                  glyphs one of them was mistaken for the Stop button next to
+                  it. The button counts what they are holding back, so folding
+                  them away does not hide the fact that something is. */}
+              <FilterMenu hidden={filteredOut}>
+                <FilterToggle
+                  checked={showStopped}
+                  onChange={setShowStopped}
+                  label="Show containers that are not running"
+                />
+                <FilterToggle
+                  checked={showBuilder}
+                  onChange={setShowBuilder}
+                  label="Show Apple's builder container"
+                />
+              </FilterMenu>
 
               <button
                 onClick={browseTemplates}
