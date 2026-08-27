@@ -316,6 +316,14 @@ export function ContainerForm({
 
     // Recreating closes at once and reports itself in the strip: it is started
     // from a container that is already on screen somewhere behind this.
+    //
+    // The question about leaving is dropped first. FormPage arms it the moment
+    // anything is typed into the page, and closing here *is* the save -- so
+    // without this the recreate that was just asked for, confirmed, and started
+    // is answered with "Leave without saving?", about work that is already on
+    // its way. The create branch above does the same thing for the same reason;
+    // this one was missed.
+    askBeforeLeaving(null);
     onClose();
     startTask({ id, kind: 'container', label, step: 'Recreating…' });
 
@@ -392,7 +400,15 @@ export function ContainerForm({
             These are the changes from an edit that did not finish
             {resumed.reason ? `: ${resumed.reason}` : '.'}
           </p>
-          <button onClick={onDiscardResumed} className="btn-ghost">
+          {/* Throwing the unfinished edit away is an answer to the question
+              about leaving, not a reason to be asked it again on the way out. */}
+          <button
+            onClick={() => {
+              askBeforeLeaving(null);
+              onDiscardResumed?.();
+            }}
+            className="btn-ghost"
+          >
             Discard them and start from the container
           </button>
         </div>
