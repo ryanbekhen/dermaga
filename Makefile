@@ -128,7 +128,10 @@ verify-dist:
 	@test -f "$(DMG)" || { echo "FAIL: no DMG at $(DMG)"; exit 1; }
 	@sh scripts/check-signature.sh "$(APP)" "$(DMG)" $(SIGNING) || exit 1
 	@sh scripts/check-version.sh "$(APP)" "$(VERSION)" || exit 1
-	@echo "verify-dist: binary, agent, icon, no inline scripts, DMG"
+	@# The end of the chain that puts the release's names on the What's new
+	@# page. Every step of it used to be able to fail without saying so.
+	@sh scripts/check-credit.sh internal/window/assets/dist "$(VERSION)" || exit 1
+	@echo "verify-dist: binary, agent, icon, no inline scripts, DMG, credit"
 
 ## Install the built app locally, clearing the quarantine flag that Gatekeeper
 ## sets on anything downloaded.
