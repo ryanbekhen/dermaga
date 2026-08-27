@@ -78,7 +78,18 @@ changelog:
 ## disturbs the Dermaga you have installed.
 ##
 ## Ctrl-C stops both.
-dev: agent icon notices changelog internal/window/assets/dist/index.html
+# desktop-deps first, and that is the whole of the fix for a failure worth
+# naming. `bunx` runs a tool from node_modules when it is there and downloads it
+# into a temporary directory when it is not -- and a download interrupted
+# halfway leaves a package folder that exists and is empty, which nothing
+# repairs on its own. It surfaces as `Cannot find package 'string-width'` from
+# three levels inside a tool nobody was thinking about, days later.
+#
+# concurrently, wait-on and vite are all in devDependencies now, so this line
+# guarantees they are present and bunx never reaches for the network. Running
+# them from node_modules/.bin directly does not work: their shebang asks for
+# node, which a machine with only bun on it does not have.
+dev: desktop-deps agent icon notices changelog internal/window/assets/dist/index.html
 	VERSION=$(VERSION) ./scripts/bundle.sh --dev
 	cd desktop && bunx concurrently -k -n vite,dermaga -c cyan,magenta \
 		"bunx vite" \
