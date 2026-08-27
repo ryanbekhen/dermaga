@@ -163,8 +163,26 @@ credited() {
 		"$((total - 25))"
 }
 
+# Whoever GitHub could not put a name to. Cached as `-` while the log was
+# walked, one row per author rather than per commit.
+unknown() {
+	grep '\t-$' "$known" 2>/dev/null | cut -f1 || true
+}
+
 if [ "$only_who" = true ]; then
 	credited
+
+	# A partial answer is the shape this went wrong in before, one level down.
+	# The release that shipped uncredited had *nobody* to name; a release with
+	# two contributors where one lookup fails names one of them and reads
+	# exactly like a release with one contributor. Nothing downstream can tell
+	# those apart, so it is said here, and said loudly enough to stop a release.
+	missing=$(unknown)
+	if [ -n "$missing" ]; then
+		echo "release-notes: no GitHub handle for:" >&2
+		printf '  %s\n' $missing >&2
+		exit 3
+	fi
 
 	exit 0
 fi

@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.13.0] — 2026-08-26
 
+This release carries work from @ryanbekhen.
+
 ### Added
 
 - **Dermaga says when Apple's `container` CLI wants updating, without being asked.** A dot on the
