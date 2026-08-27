@@ -2,6 +2,7 @@ package containers
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -183,4 +184,71 @@ func TestANetworkThatIsBlankIsNotAsked(t *testing.T) {
 	args := ContainerSpec{Image: "alpine", Networks: []string{"frontend", ""}}.Args()
 
 	same(t, valuesOf(args, "--network"), []string{"frontend"})
+}
+
+// The rehearsal is what stands between an edit and a container that is gone,
+// so what it sends has to be checkable without a runtime to send it to.
+func TestRehearsalArgsCreateRatherThanRun(t *testing.T) {
+	args := rehearsalArgs(ContainerSpec{Name: "dashboard", Image: "linxpay-dash:dev"})
+
+	if args[0] != "create" {
+		t.Fatalf("want create, got %q", args[0])
+	}
+	for _, arg := range args {
+		if arg == "run" {
+			t.Fatal("the rehearsal must never run the container")
+		}
+	}
+}
+
+// A name of its own: the container being replaced still holds its own.
+func TestRehearsalArgsTakeADifferentName(t *testing.T) {
+	args := rehearsalArgs(ContainerSpec{Name: "dashboard", Image: "x"})
+
+	var name string
+	for i, arg := range args {
+		if arg == "--name" && i+1 < len(args) {
+			name = args[i+1]
+		}
+	}
+
+	if name == "dashboard" {
+		t.Fatal("the rehearsal must not take the name it is standing in for")
+	}
+	if name != "dashboard-dermaga-rehearsal" {
+		t.Fatalf("unexpected rehearsal name %q", name)
+	}
+}
+
+// The host cannot give the same port twice, and the real container is about to
+// want it back.
+func TestRehearsalArgsPublishNothing(t *testing.T) {
+	args := rehearsalArgs(ContainerSpec{
+		Name:  "dashboard",
+		Image: "x",
+		Ports: []Port{{Host: "8080", Container: "80"}},
+	})
+
+	for _, arg := range args {
+		if arg == "--publish" {
+			t.Fatal("a rehearsal must not take a port")
+		}
+	}
+}
+
+// Everything else has to be the real thing, or it is not a rehearsal of it.
+func TestRehearsalArgsKeepWhatMatters(t *testing.T) {
+	args := rehearsalArgs(ContainerSpec{
+		Name:     "dashboard",
+		Image:    "linxpay-dash:dev",
+		Networks: []string{"default", "linxpay"},
+		Mounts:   []SpecMount{{Type: "bind", Source: "/tmp/a", Target: "/var/www"}},
+	})
+
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"linxpay-dash:dev", "--network default", "--network linxpay", "type=bind"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("rehearsal dropped %q: %s", want, joined)
+		}
+	}
 }

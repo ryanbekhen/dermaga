@@ -326,6 +326,32 @@ func (cm *Manager) Update(ctx context.Context, id string, spec ContainerSpec) (*
 	// can fail, and when it does the changes are still on disk to come back to.
 	cm.pending.Begin(id, spec, previous)
 
+	// Tried before anything is taken apart.
+	//
+	// A recreate has to delete before it can run: a container's name is its id
+	// here, and this runtime has no rename to move the old one aside with. So
+	// there is a moment with nothing in it, and anything the new spec gets
+	// wrong used to be discovered inside that moment, with the container
+	// already gone.
+	//
+	// `container create` answers the cheap half of "will this work" without
+	// starting anything: it resolves the image -- reaching the registry if it
+	// has to, which is where a reference that only ever existed on this Mac is
+	// refused -- and it checks every bind mount source. On an image that is
+	// already here it costs about seventy milliseconds.
+	//
+	// What it does not do is unpack. The fetching and unpacking a container
+	// does on its way up all happen at start, so an image whose content is
+	// incomplete still passes this and still fails afterwards -- with the old
+	// container gone, exactly as before. This narrows the window; it does not
+	// close it, and nothing available on this runtime does.
+	if err := cm.rehearse(ctx, spec); err != nil {
+		failure := fmt.Errorf("%w; %s was left as it was", err, id)
+		cm.pending.Failed(id, failure)
+
+		return nil, failure
+	}
+
 	if wasRunning {
 		if _, err := cm.runner.Run(ctx, "stop", id); err != nil {
 			failure := fmt.Errorf("could not stop %s: %w", id, err)
@@ -389,4 +415,57 @@ func (cm *Manager) Recreate(ctx context.Context, id string) (*Container, error) 
 	}
 
 	return cm.Update(ctx, id, SpecOf(existing))
+}
+
+// rehearse makes the container the spec describes, under a name of its own,
+// and throws it away.
+//
+// It proves what `container create` proves and no more: the image reference
+// resolves to something this Mac can get, and every bind mount source is
+// really there. Both of those are ordinary ways an edit goes wrong -- an image
+// deleted since, a project folder moved -- and both used to be found only after
+// the old container had been destroyed.
+//
+// It proves nothing about starting. Layers are unpacked at start, so an image
+// missing content passes here; so does a bad entrypoint. Start is deliberately
+// not taken: the container being replaced is still running, and two of them
+// racing over the same data is a worse failure than the one this prevents.
+func (cm *Manager) rehearse(ctx context.Context, spec ContainerSpec) error {
+	if _, err := cm.runner.Run(ctx, rehearsalArgs(spec)...); err != nil {
+		return fmt.Errorf("could not build %s from %s: %w", spec.Name, spec.Image, err)
+	}
+
+	if _, err := cm.runner.Run(ctx, "delete", "--force", rehearsalName(spec.Name)); err != nil {
+		// It exists and is not running. Left behind it is untidy rather than
+		// harmful, and refusing the edit over it would be refusing to do the
+		// thing that has just been proved safe.
+		cm.logger.Warn("Could not remove the rehearsal container",
+			"name", rehearsalName(spec.Name), "error", err)
+	}
+
+	return nil
+}
+
+// rehearsalName is what the throwaway is called. Suffixed rather than
+// prefixed, so it sorts beside the container it is standing in for anywhere one
+// is ever seen.
+func rehearsalName(name string) string {
+	return name + "-dermaga-rehearsal"
+}
+
+// rehearsalArgs is the rehearsal's command, built apart from the call that runs
+// it so what reaches the CLI can be checked without the CLI being installed.
+//
+// `create` rather than `run`, a name of its own, and no published ports: the
+// host cannot hand out the same port twice, and the container this is standing
+// in for is about to want its own back.
+func rehearsalArgs(spec ContainerSpec) []string {
+	probe := spec
+	probe.Name = rehearsalName(spec.Name)
+	probe.Ports = nil
+
+	args := probe.Args()
+	args[0] = "create"
+
+	return args
 }
