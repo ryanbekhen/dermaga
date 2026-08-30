@@ -1083,31 +1083,6 @@ func (a *Agent) registerContainers() {
 		return map[string]any{"id": args.ID, "autoBoot": args.AutoBoot}, nil
 	})
 
-	// Filing a container under a project. A write to Dermaga's own record --
-	// see containers.setAutoBoot above, which this is the twin of. The
-	// container is not stopped, recreated or even told.
-	a.server.Register("containers.setProject", func(_ context.Context, params json.RawMessage) (any, error) {
-		args, err := decodeParams[struct {
-			ID      string `json:"id"`
-			Project string `json:"project"`
-		}](params)
-		if err != nil {
-			return nil, err
-		}
-
-		// An unknown name would file a container somewhere that is not on the
-		// list, which reads as the container having vanished.
-		if !a.projects.Exists(args.Project) {
-			return nil, rpc.Fail(fmt.Sprintf("there is no project called %q", args.Project))
-		}
-
-		if err := a.containers.SetProject(args.ID, args.Project); err != nil {
-			return nil, rpc.Fail(err.Error())
-		}
-
-		return map[string]any{"id": args.ID, "project": args.Project}, nil
-	})
-
 	// Moving an image between projects, for the one built somewhere else or
 	// pulled and then adopted.
 	a.server.Register("images.setProject", func(_ context.Context, params json.RawMessage) (any, error) {
