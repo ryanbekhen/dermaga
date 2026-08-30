@@ -339,17 +339,6 @@ export const api = {
     await invoke('containers.setAutoBoot', { id, autoBoot });
   },
 
-  /**
-   * Files a container under a project, or under none when given "default".
-   *
-   * The twin of setAutoBoot, and cheap for the same reason: it writes a record
-   * Dermaga keeps rather than a label the runtime keeps, so the container is
-   * not stopped and not recreated.
-   */
-  async setProject(id: string, project: string): Promise<void> {
-    await invoke('containers.setProject', { id, project });
-  },
-
   /** Files a volume under a project; a write to Dermaga's own record. */
   async setVolumeProject(name: string, project: string): Promise<void> {
     await invoke('volumes.setProject', { name, project });
