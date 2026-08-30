@@ -7,6 +7,29 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.17.0] — 2026-08-30
+
+### Changed
+
+- **Starting with Dermaga is a switch in a menu now, not an icon in the row.** It wore a power
+  symbol, sitting between Restart and Edit on a container's page, and a power symbol in a row of
+  verbs reads as *turn this container off* — which is the opposite of what pressing it does. This is
+  the second time the same shape has caught somebody out: the stopped filter on the containers list
+  wore a square next to the Stop button and was pressed as one. A setting cannot be told from an
+  action when both are bare glyphs. It has moved behind the same button the list's filters use,
+  where there is room to say what it does in a sentence — "Start this container when Dermaga starts"
+  — and where the next option belonging to a container can go without the row growing another glyph.
+
+### Removed
+
+- **A container can no longer be filed under a different project after it was made.** The folder
+  button on a container's page is gone, along with the `containers.setProject` call behind it. A
+  container's project is settled when it is created and stays what it was: its name and its network
+  are fixed at that moment — this runtime renames nothing — so filing it elsewhere afterwards moved
+  the record and nothing else, leaving the name saying one project while the list showed another.
+  Nothing on disk changes and nothing is lost; the project is still recorded for every container,
+  still what the lists filter by, and still what the create form asks for.
+
 ## [v1.16.0] — 2026-08-28
 
 This release carries work from @ryanbekhen.
