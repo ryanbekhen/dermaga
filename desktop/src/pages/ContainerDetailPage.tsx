@@ -13,9 +13,9 @@ import {
   Info,
   Pencil,
   Play,
-  Power,
   RotateCw,
   ScrollText,
+  SlidersHorizontal,
   Square,
   TerminalSquare,
   Zap,
@@ -38,6 +38,8 @@ import {
 import { SegmentedControl } from '../components/SegmentedControl';
 import type { TabDefinition } from '../components/Tabs';
 import { Button, IconButton } from '../components/Button';
+import { MenuButton } from '../components/MenuButton';
+import { MenuToggle } from '../components/MenuToggle';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Facts, Flags, Row, Section } from '../components/DetailRow';
 import { api } from '../services/api';
@@ -312,44 +314,6 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
             }
           />
 
-          {/* A write, not a recreate. This was a label until 1.11.0, and a
-              label can only be set by `container run` -- so the only way to
-              tick it was to destroy the container and make another. It is a
-              record Dermaga keeps now, which is what makes it a button here
-              rather than a checkbox buried in a form that rebuilds. */}
-          <IconButton
-            icon={Power}
-            busy={marking}
-            disabled={busy}
-            className={
-              container.autoBoot
-                ? 'text-emerald-700 dark:text-emerald-500'
-                : 'text-ink-500 dark:text-ink-500'
-            }
-            title={
-              container.autoBoot
-                ? 'Starts with Dermaga — press to stop'
-                : 'Start this container when Dermaga starts'
-            }
-            aria-label={container.autoBoot ? 'Stop starting with Dermaga' : 'Start with Dermaga'}
-            onClick={() => {
-              setMarking(true);
-              void api
-                .setAutoBoot(container.id, !container.autoBoot)
-                .then(() =>
-                  pushToast(
-                    container.autoBoot
-                      ? `${container.name} no longer starts with Dermaga`
-                      : `${container.name} will start with Dermaga`
-                  )
-                )
-                .catch((err: unknown) =>
-                  pushToast(err instanceof Error ? err.message : 'Could not change that', 'error')
-                )
-                .finally(() => setMarking(false));
-            }}
-          />
-
           <IconButton
             icon={Pencil}
             busy={loadingSpec}
@@ -392,6 +356,43 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
             aria-label="Remove"
             onClick={() => (confirmDestructive ? setConfirmingRemove(true) : remove())}
           />
+
+          {/* Away from the verbs, and behind a button rather than beside them.
+              Autoboot was an icon in this row until now and wore a power
+              symbol, which next to Start and Restart reads as *turn this
+              container off* -- it is the one switch in a row of things that
+              do something, and nothing about a bare glyph says which of the
+              two it is. In here it gets a sentence, and the next switch that
+              belongs to a container has somewhere to go.
+
+              A write, not a recreate. This was a label until 1.11.0, and a
+              label can only be set by `container run` -- so the only way to
+              tick it was to destroy the container and make another. It is a
+              record Dermaga keeps now, which is what makes it a switch here
+              rather than a checkbox buried in a form that rebuilds. */}
+          <MenuButton icon={SlidersHorizontal} label="Options for this container" title="Options">
+            <MenuToggle
+              checked={container.autoBoot ?? false}
+              busy={marking}
+              label="Start this container when Dermaga starts"
+              onChange={(next) => {
+                setMarking(true);
+                void api
+                  .setAutoBoot(container.id, next)
+                  .then(() =>
+                    pushToast(
+                      next
+                        ? `${container.name} will start with Dermaga`
+                        : `${container.name} no longer starts with Dermaga`
+                    )
+                  )
+                  .catch((err: unknown) =>
+                    pushToast(err instanceof Error ? err.message : 'Could not change that', 'error')
+                  )
+                  .finally(() => setMarking(false));
+              }}
+            />
+          </MenuButton>
         </>
       }
     >

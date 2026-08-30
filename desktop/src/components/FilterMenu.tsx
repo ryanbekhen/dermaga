@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
+import { MenuButton } from './MenuButton';
 
 /**
  * The switches that narrow a list, behind one button.
@@ -20,58 +21,15 @@ import { SlidersHorizontal } from 'lucide-react';
  * the quieter case, where some rows are held back and the list is not empty.
  */
 export function FilterMenu({ hidden, children }: { hidden: number; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onDown = (event: MouseEvent) => {
-      if (!box.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const said = `${hidden} ${hidden === 1 ? 'container is' : 'containers are'}`;
 
   return (
-    <div ref={box} className="relative">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={
-          hidden > 0
-            ? `Filters — ${hidden} ${hidden === 1 ? 'container is' : 'containers are'} hidden`
-            : 'Filters'
-        }
-        title={
-          hidden > 0
-            ? `${hidden} ${hidden === 1 ? 'container is' : 'containers are'} hidden by a filter`
-            : 'Filters'
-        }
-        onClick={() => setOpen((was) => !was)}
-        className={`btn-plain ${open ? 'bg-ink-200 text-ink-900 dark:bg-ink-800 dark:text-ink-100' : ''}`}
-      >
-        <SlidersHorizontal size={16} aria-hidden />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-10 z-30 w-72 rounded-xl border border-ink-200 bg-white p-1.5 shadow-panel dark:border-ink-800 dark:bg-ink-900"
-        >
-          {children}
-        </div>
-      )}
-    </div>
+    <MenuButton
+      icon={SlidersHorizontal}
+      label={hidden > 0 ? `Filters — ${said} hidden` : 'Filters'}
+      title={hidden > 0 ? `${said} hidden by a filter` : 'Filters'}
+    >
+      {children}
+    </MenuButton>
   );
 }
