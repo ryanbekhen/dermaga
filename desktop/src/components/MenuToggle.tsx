@@ -1,7 +1,7 @@
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 
 /**
- * One switch inside the filter menu.
+ * One switch inside a MenuButton's panel.
  *
  * These used to live in Settings, which put them a page away from the thing
  * they change and made them read as preferences: something to decide once and
@@ -19,21 +19,29 @@ import { Check } from 'lucide-react';
  * wrong. Room came from folding them into a menu instead, which cost nothing
  * that had to be read.
  */
-export function FilterToggle({
+export function MenuToggle({
   checked,
   onChange,
   label,
+  busy = false,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   /** What the switch does, said as a sentence rather than named as a noun. */
   label: string;
+  /**
+   * For a switch that is a round trip to the agent rather than a setting held
+   * here: the tick becomes a spinner until the answer comes back.
+   */
+  busy?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-busy={busy || undefined}
+      disabled={busy}
       onClick={() => onChange(!checked)}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-item transition-colors ${
         checked
@@ -46,7 +54,11 @@ export function FilterToggle({
           space is held when it is absent so the labels do not shift as the
           switches are thrown. */}
       <span className="flex w-3.5 shrink-0 justify-center">
-        {checked && <Check size={13} aria-hidden />}
+        {busy ? (
+          <Loader2 size={13} className="animate-spin" aria-hidden />
+        ) : (
+          checked && <Check size={13} aria-hidden />
+        )}
       </span>
       <span className="min-w-0 flex-1">{label}</span>
     </button>

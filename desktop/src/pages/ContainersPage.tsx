@@ -26,7 +26,7 @@ import { isBuilder } from '../utils/builder';
 import { EVERYTHING, inProject, unprefixed } from '../utils/projects';
 import { PageHeader } from '../components/PageHeader';
 import { FilterMenu } from '../components/FilterMenu';
-import { FilterToggle } from '../components/FilterToggle';
+import { MenuToggle } from '../components/MenuToggle';
 import { useUIStore } from '../store/uiStore';
 import type { Container } from '../types';
 import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../utils/format';
@@ -252,12 +252,12 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                   it. The button counts what they are holding back, so folding
                   them away does not hide the fact that something is. */}
               <FilterMenu hidden={filteredOut}>
-                <FilterToggle
+                <MenuToggle
                   checked={showStopped}
                   onChange={setShowStopped}
                   label="Show containers that are not running"
                 />
-                <FilterToggle
+                <MenuToggle
                   checked={showBuilder}
                   onChange={setShowBuilder}
                   label="Show Apple's builder container"
