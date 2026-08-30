@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.17.0] — 2026-08-30
 
+This release carries work from @ryanbekhen.
+
 ### Changed
 
 - **Starting with Dermaga is a switch in a menu now, not an icon in the row.** It wore a power
