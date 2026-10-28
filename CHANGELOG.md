@@ -7,6 +7,21 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.17.1] — 2026-10-28
+
+### Fixed
+
+- **"Could not scan" kept coming back for images that had nothing wrong with them.** Trivy keeps its
+  vulnerability database in `~/Library/Caches`, which cleaners and macOS itself are free to empty.
+  When it went, Dermaga still believed it was there, so every change to the image list set off
+  another round of scans against nothing and another warning for each image. The database is now
+  checked before anything is scanned and downloaded again when it is missing. If that download
+  fails, it is the one thing reported.
+- **A database download that never finished stopped scanning altogether.** Downloads and scans
+  take turns on the same worker, and the download had no time limit. One was found still waiting
+  after a week, and nothing had been scanned since. It now gives up after twenty minutes and tries
+  again on the next hourly check.
+
 ## [v1.17.0] — 2026-08-30
 
 This release carries work from @ryanbekhen.
