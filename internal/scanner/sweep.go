@@ -38,7 +38,7 @@ func (m *Manager) runSweep(ctx context.Context) {
 	// the old order these two lines sat below the check, so somebody who never
 	// installed the scanner, or whose database had not downloaded yet, kept
 	// every result for every image they had ever deleted.
-	if !m.Status().Installed || !m.Status().DatabaseReady {
+	if !m.Status().Installed || !m.ensureDatabase(ctx) {
 		return
 	}
 

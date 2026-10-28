@@ -41,6 +41,12 @@ const (
 
 	// How long to wait before double-checking a result that found nothing.
 	emptyRetryDelay = 45 * time.Second
+
+	// How long a database download is given before it is given up on. It is
+	// a few hundred megabytes and takes about a minute; the limit is for the
+	// one that never finishes. One sat on this machine for a week, and since
+	// downloads and scans share a worker, nothing was scanned in that time.
+	databaseTimeout = 20 * time.Minute
 )
 
 // What the background worker is doing, so the UI can say so in one line.
@@ -615,7 +621,10 @@ var percentPattern = regexp.MustCompile(`(\d+(?:\.\d+)?)%`)
 func (m *Manager) updateDatabase(ctx context.Context) error {
 	m.setState(StateUpdatingDB, "Downloading the vulnerability database…", 0)
 
-	cmd := m.runner.Tool(ctx, Formula, "image", "--download-db-only")
+	download, cancel := context.WithTimeout(ctx, databaseTimeout)
+	defer cancel()
+
+	cmd := m.runner.Tool(download, Formula, "image", "--download-db-only")
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -639,12 +648,48 @@ func (m *Manager) updateDatabase(ctx context.Context) error {
 	return nil
 }
 
+// ensureDatabase makes sure Trivy has a database to scan against, downloading
+// it again if it has gone, and says whether there is one.
+//
+// It reads the file rather than Status().DatabaseReady, because that flag is
+// only worked out at startup and after a download. The database lives in
+// ~/Library/Caches, which cleaners and macOS itself are free to empty, and
+// once it went the flag stayed true: every change to the image list set off a
+// sweep, every scan in it died on Trivy's "--skip-db-update cannot be
+// specified on the first run", and each one put up a warning of its own. Only
+// the hourly check would download it again, so that went on for up to an
+// hour.
+//
+// Only a missing database is fetched here. One that is merely past its
+// NextUpdate still scans, and refreshing it is the hourly check's job.
+func (m *Manager) ensureDatabase(ctx context.Context) bool {
+	if _, err := readDatabaseMetadata(); err == nil {
+		return true
+	}
+
+	if err := m.updateDatabase(ctx); err != nil {
+		m.refreshStatus(ctx)
+		m.fail("Could not update the vulnerability database", err)
+		return false
+	}
+
+	// A sweep with nothing left to scan would otherwise leave the download
+	// showing as still under way.
+	m.setState(StateIdle, "", 0)
+
+	return true
+}
+
 func (m *Manager) scan(ctx context.Context, reference string) {
 	digest := m.digestOf(ctx, reference)
 
 	m.mu.Lock()
 	m.status.Target = reference
 	m.mu.Unlock()
+
+	if !m.ensureDatabase(ctx) {
+		return
+	}
 
 	m.setState(StateScanning, fmt.Sprintf("Scanning %s…", reference), 0)
 
