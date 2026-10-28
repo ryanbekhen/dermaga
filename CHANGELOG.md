@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.17.1] — 2026-10-28
 
+This release carries work from @ryanbekhen.
+
 ### Fixed
 
 - **"Could not scan" kept coming back for images that had nothing wrong with them.** Trivy keeps its

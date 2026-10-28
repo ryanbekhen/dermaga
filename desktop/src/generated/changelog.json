@@ -1,5 +1,19 @@
 [
   {
+    "version": "v1.17.1",
+    "date": "2026-10-28",
+    "summary": "This release carries work from @ryanbekhen.",
+    "sections": [
+      {
+        "title": "Fixed",
+        "entries": [
+          "**\"Could not scan\" kept coming back for images that had nothing wrong with them.** Trivy keeps its vulnerability database in `~/Library/Caches`, which cleaners and macOS itself are free to empty. When it went, Dermaga still believed it was there, so every change to the image list set off another round of scans against nothing and another warning for each image. The database is now checked before anything is scanned and downloaded again when it is missing. If that download fails, it is the one thing reported.",
+          "**A database download that never finished stopped scanning altogether.** Downloads and scans take turns on the same worker, and the download had no time limit. One was found still waiting after a week, and nothing had been scanned since. It now gives up after twenty minutes and tries again on the next hourly check."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.17.0",
     "date": "2026-08-30",
     "summary": "This release carries work from @ryanbekhen.",
